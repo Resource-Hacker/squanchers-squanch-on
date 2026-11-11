@@ -1,0 +1,21 @@
+<Bindings>
+  <Binding name="SQMS_EDITLAYOUT" description="Open or close Squancher's move and resize grid." header="SQUANCHERMOUSELOOKSUITE" category="ADDONS">
+    SquancherMouselookSuite.LayoutEditor:Toggle()
+  </Binding>
+  <Binding name="SQMS_INVERTMOUSELOOK" description="Hold to release mouselook; release to lock it again." runOnUp="true" category="ADDONS">
+    if keystate == "down" then
+      SquancherMouselookSuite:InvertMouselook(true)
+    elseif keystate == "up" then
+      SquancherMouselookSuite:InvertMouselook(false)
+    end
+  </Binding>
+  <Binding name="SQMS_TOGGLEMOUSELOOK" description="Toggle the manual mouselook state." category="ADDONS">
+    SquancherMouselookSuite:ToggleMouselook()
+  </Binding>
+  <Binding name="SQMS_LOCKMOUSELOOK" description="Enable the manual mouselook state." category="ADDONS">
+    SquancherMouselookSuite:LockMouselook()
+  </Binding>
+  <Binding name="SQMS_UNLOCKMOUSELOOK" description="Disable the manual mouselook state." category="ADDONS">
+    SquancherMouselookSuite:UnlockMouselook()
+  </Binding>
+</Bindings>

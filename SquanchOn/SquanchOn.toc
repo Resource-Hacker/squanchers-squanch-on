@@ -1,0 +1,59 @@
+## Interface: 16001
+## Title: Squancher's Squanch-On
+## Notes: Native interface styling, unit frames, layout editing and mouselook.
+## Author: Squancher and contributors
+## Version: 0.1.0-alpha
+## SavedVariables: SquanchOnDB
+## OptionalDeps: Plater, DynamicCam
+## X-oUF: SquanchOnUF
+## X-License: MIT; bundled components retain their own licenses
+## X-Website: https://github.com/Resource-Hacker/squanchers-squanch-on
+
+libs/LibStub/LibStub.lua
+libs/LibDispel/LibDispel.lua
+libs/oUF/oUF_Forever.xml
+
+Core.lua
+LayoutEditor.lua
+MouseoverCasting.lua
+MouseoverInteractIcon.lua
+ReticleConfig.lua
+HordeReticle.lua
+CameraFraming.lua
+TargetCrosshairs.lua
+NameplateIndicators.lua
+FriendlyTargetNameplate.lua
+PlaterHealthBarBounds.lua
+WorldModelPicking.lua
+NameplateIndicatorOptions.lua
+NativeText.lua
+OwnedText.lua
+DarkSkin.lua
+TooltipSkin.lua
+NativeControlSkins.lua
+NativeMenuBorders.lua
+NativeWindowBorders.lua
+NativeParchmentSkins.lua
+NativeCollectionSkins.lua
+NativeMacroSkins.lua
+NativeProfessionSkins.lua
+NativeContainerSkins.lua
+ActionButtonBorders.lua
+CompactText.lua
+UnitFrameImport.lua
+UnitFrames.lua
+UnitFrameOptions.lua
+OriginalUnitFrameLighting.lua
+OriginalUnitFrameBorders.lua
+MinimapPanel.lua
+NativeActionBars.lua
+NativeDataBars.lua
+NativeAuraPanels.lua
+NativeMinimapButtons.lua
+PlaterIconSkins.lua
+AuxiliaryLayout.lua
+LayoutTargets.lua
+NativeWindowPlacement.lua
+LayoutWindows.lua
+SocialDrawer.lua
+QuestDrawer.lua

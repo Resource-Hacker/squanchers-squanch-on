@@ -1,0 +1,2 @@
+# Preserve exact upstream/library/notice bytes in source archives.
+* -text

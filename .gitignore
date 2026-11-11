@@ -1,0 +1,10 @@
+dist/
+*.zip
+*.luac
+__pycache__/
+.DS_Store
+# Personal and game state never belongs in this repository.
+WTF/
+SavedVariables/
+private/
+*.log
