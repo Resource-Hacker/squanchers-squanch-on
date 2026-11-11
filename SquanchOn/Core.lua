@@ -222,6 +222,15 @@ function addon:DiscoverMenuFrames()
   for i = 1, _G.NUM_CONTAINER_FRAMES or 7 do self:TrackMenuFrame(_G["ContainerFrame" .. i]) end
   -- The expanded quest tracker is persistent HUD, not a modal window. Keeping
   -- it visible must not hold the cursor after the full map/quest dialog closes.
+  local engine = _G.ElvUI and ElvUI[1]
+  local dialog = engine and engine.Libs and engine.Libs.AceConfigDialog
+  if dialog then
+    if self.menuOptionsOwner ~= dialog then
+      self.menuOptionsOwner = dialog
+      hooksecurefunc(dialog, "Open", function() self:QueueMenuDiscovery() end)
+    end
+    for _, widget in pairs(dialog.OpenFrames or {}) do self:TrackMenuFrame(widget.frame) end
+  end
   self:RefreshMenuSuspension()
 end
 function addon:QueueMenuDiscovery()
@@ -1308,7 +1317,7 @@ function addon:OnEvent(event, ...)
       SquanchOnDB[key] = nil
     end
     self.db = SquanchOnDB
-    self.db.loadedVersion = "0.1.0-alpha"
+    self.db.loadedVersion = "0.2.0-candidate"
     if not self.db.nativeReturnRevision then
       self.db.nativeCombinedClick = false
       self.db.nativeReturnRevision = 1

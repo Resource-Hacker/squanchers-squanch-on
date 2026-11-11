@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Fitted decorative light; Squanch-On owns bars, values and profiles.
+-- Fitted decorative light; original ElvUI owns all bars, values and profiles.
 local _,ns=...
 local Lighting={states={},byBar={}}
 ns.UnitFrameLighting=Lighting
@@ -70,7 +70,7 @@ local function fitPieces(state)
         local included=bar and bar:IsShown() and (key~='Power' or not state.frame.POWERBAR_DETACHED)
         if included then
             -- Missing/unresolved visible geometry fails closed for this pass.
-            local cut=rectangle(bar.backdrop or bar)
+            local cut=rectangle(bar.backdrop)
             if not cut then return end
             local nextRects={}
             for _,rect in ipairs(rects) do subtract(rect,cut,nextRects) end
@@ -192,7 +192,7 @@ local function fitHealthOcclusion(state)
     syncHealthOcclusion(state)
 end
 local function classColor(state)
-    local frame,E=state.frame,ns.UnitFrames and ns.UnitFrames.Engine
+    local frame,E=state.frame,_G.ElvUI and _G.ElvUI[1]
     state.classRGB=nil
     paintPieces(state)
     local unit=frame.__unit or frame.unit
@@ -281,7 +281,7 @@ function Lighting:Attach(frame,panel)
     smoothOffsetShadows(state)
     healthOnlyGlows(frame)
     refreshColors(state)
-    local E=ns.UnitFrames and ns.UnitFrames.Engine
+    local E=_G.ElvUI and _G.ElvUI[1]
     local UF=E and E:GetModule('UnitFrames',true)
     if UF and not self.hooked then
         self.hooked=true

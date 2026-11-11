@@ -1,60 +1,65 @@
-# Compatibility and alpha status
+# Compatibility and candidate status
 
-## Supported release target
+## Client and acceptance
 
-**0.1.0-alpha targets the Forever client with interface number 16001.** Retail,
-other Classic clients and Windows gameplay have not completed acceptance. Editing
-the TOC interface number alone does not establish compatibility.
+**0.2.0-candidate targets Forever interface 16001.** Retail, other Classic
+clients and Windows gameplay have not completed acceptance. Changing a TOC
+number does not establish compatibility.
 
-The reticle/mouselook behavior has been exercised in the author's existing
-Forever gameplay setup. The new single-folder standalone UI consolidation has
-not completed its full live acceptance. Development screenshots are component
-examples from that existing setup, not proof that every standalone screen has
-been accepted. Lua/package checks establish load syntax and artifact integrity,
-not combat, visual or interaction parity.
+The reticle control comes from the author's working gameplay setup. The previous
+0.1.0-alpha unit-frame rewrite was rejected for visual differences. This candidate
+uses the exact original native renderer, full settings schema and options, fonts,
+textures and Benik decoration. Syntax, dependency and hash checks establish
+artifact integrity; fresh in-game comparison is still required before calling
+this candidate equivalent.
 
-## Optional integrations
+## Runtime components
 
-| Component | Integration |
-| --- | --- |
-| Plater | Nameplate behavior and optional icon styling; normally provides LibRangeCheck-3.0. |
-| LibRangeCheck-3.0 | Conservative melee and friendly/NPC proximity checks; cues stay hidden if unavailable. Not bundled. |
-| DynamicCam | Optional camera framing. Explicit setup creates a separate profile; restore returns to the saved source profile. |
+The local assembly contains original-name `ElvUI`, `ElvUI_Libraries`,
+`ElvUI_Options`, `ElvUI_BenikUI`, and `SquanchOn`. It requires the scoped original
+runtime used by this project. A source-only upstream ElvUI ZIP lacks packaged
+external libraries and the project's scope adapters, so it is not a substitute.
+The local assembler validates those inputs and never changes the source install.
 
-oUF, LibDispel, LibStub and the licensed font are included. ElvUI, BenikUI,
-ProjectAzilroka, MoveAny, AddOnSkins, Bagnon, Masque, Pawn and GSE are not required.
-Disable competing owners of the same unit frames, bars or mouselook while trying
-the consolidated addon. Keep their saved settings for rollback.
+ElvUI owns unit frames, secure unit handling, native profiles/movers, filters and
+tooltips. Benik owns its original unit decoration. Squanch-On owns its reticle,
+mouselook, shared borders and native UI adapters. It loads no second oUF tree.
+The full original options addon remains on demand. Other ElvUI owners stay scoped
+off; a stock broad ElvUI activation would conflict with the native surfaces.
 
-## Settings and migration
+Plater and DynamicCam remain optional separate integrations. Plater normally
+provides LibRangeCheck-3.0 for conservative melee/proximity cues; unavailable
+checks hide those cues. Native bags replace Bagnon, while native window, aura
+and minimap adapters replace MoveAny/ProjectAzilroka surfaces. Their detailed
+visual/interaction equivalence is a separate acceptance concern from unit frames.
 
-The package installs as `SquanchOn` and saves to `SquanchOnDB`. Existing `SQMS_*`
-binding identifiers and the `SquancherMouselookSuite` global alias are retained
-for compatibility. Clean installs use project defaults.
+## Settings
 
-Import fields can accept semantic unit-frame, tooltip, window and auxiliary-panel
-settings once; later user edits remain authoritative. Private migration/install
-scripts and personal exports are deliberately outside this repository. The addon
-does not automatically recover an arbitrary ElvUI profile from someone else's setup.
+`SquanchOnDB` stores suite settings. Original `SQMS_*` bindings and the
+`SquancherMouselookSuite` global alias remain compatible. Exact owner migration
+copies the fresh suite database while preserving its receipts and independent
+DynamicCam profile. It leaves native ElvUI databases and profile selection intact.
+There is no reduced alpha schema conversion in the native renderer path.
 
-## Remaining acceptance
+Public source contains no personal profile or private settings export. The
+owner-local assembly can include its existing private presentation seed. Keep
+that assembled archive local. See [licenses](COMPONENT-LICENSES.md) and
+[assembly](LOCAL-ASSEMBLY.md).
 
-- The new original unit-frame editor does not promise every advanced ElvUI or
-  BenikUI feature. Specialized aura predicates/sorting, unused aura-panel bar
-  mode and arbitrary legacy visibility macros need separate acceptance.
-- Range results are guarded; unavailable unit-frame range data leaves a frame
-  visible. Restricted client values are passed to native widgets where supported.
-- Range markers need live cross-class/combat acceptance; native spell checks
-  describe range rather than cooldown, resources, form or line-of-sight readiness.
-- Full combat and held-key focus-loss behavior, Windows input and other clients
-  remain unverified. Native cursor return can leave a small residual rotation.
-- The historical external interact-on-down / target-on-up chord is not included.
-  Native mouselook, the right-held gate and cursor return do not need that helper.
+## Remaining acceptance limits
 
-Game-native art, original geometric markers and licensed PT Sans Narrow replace
-unlicensed legacy media. Typography and some indicator artwork therefore differ
-from the author's older setup. The native warning sound replaces the old audio file.
+- Player, target, pet, target-of-target, casts, auras, borders, text and native
+  options need fresh live comparison with the accepted original runtime.
+- Combat/group/raid and cross-class range behavior require their actual contexts;
+  an out-of-combat solo observation cannot certify them.
+- Input keeps the native hardware cursor and right-held mouseover gate. Physical
+  held-key/focus-loss behavior and Windows input remain separate checks.
+- Range describes reach, not cooldown, resources, form or line of sight.
+- The historical external interact-on-down / target-on-up helper is not included.
+- Independent geometric target markers and the native warning sound retain the
+  public project's licensed replacements. The optional private reticle import
+  preserves the owner's original renderer, textures and warning sound locally.
 
-Report reproducible issues with client build/interface, addon version, optional
-addons, input sequence, expected/observed behavior and a sanitized error or image.
-Do not upload entire `WTF` directories or private account exports.
+Report exact client/interface, version, input sequence, expected/observed behavior
+and a sanitized error/image. Never upload entire WTF directories or private
+assembled archives.

@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0-candidate — unreleased
+
+- Replace the rejected alpha unit-frame rewrite with the original scoped ElvUI
+  renderer, complete native editor, profiles/movers and Benik decoration.
+- Restore original tooltip borders, exact font paths, native layout adapters,
+  options-menu cursor handling and target marker fade ownership.
+- Remove the duplicate oUF/library tree and partial unit-frame editor.
+- Add an offline private local assembler with original identities, load checks,
+  per-file hashes and explicit redistribution boundaries.
+- Preserve existing native frame databases and the suite's current reticle/camera
+  behavior. Live equivalence acceptance is pending.
+
 
 - Restore a visible gold leading border on General and other exposed chat tabs.
 - Strengthen the continuous line beneath the tabs to three physical pixels.

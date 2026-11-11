@@ -1,57 +1,55 @@
 # Third-party notices and provenance
 
-The root MIT license applies to original Squanch-On contributions. It does not
-replace the following component licenses or grant rights to game artwork.
-Complete notices travel with both the source repository and installable addon.
+The MIT license covers original Squanch-On contributions only. It does not
+relicense ElvUI, BenikUI, their libraries, third-party fonts or game resources.
+The public package contains the SquanchOn integration. Its original frame engines
+are required local dependencies, retaining their original names and licenses.
+See [component licenses and local assembly](docs/COMPONENT-LICENSES.md).
 
-| Component | Included version and scope | Author / origin | Terms and notice |
-| --- | --- | --- | --- |
-| oUF | `devel`, exact Forever fork distributed in ElvUI Libraries `v16.01-g9658ff3`; 51 files under `SquanchOn/libs/oUF` | Trond A Ekseth, Val Voronov, Adrian L Lange, Rainrider and contributors; [oUF](https://github.com/oUF-wow/oUF), inherited [ElvUI library fork](https://github.com/tukui-org/ElvUI/tree/main/ElvUI_Libraries/Game/Shared/oUF) | [MIT notice](SquanchOn/libs/oUF/LICENSE.txt); inherited fork changes retained unchanged |
-| LibDispel-1.0 | Minor 33; `SquanchOn/libs/LibDispel` | Copyright 2026 Tukui.org; [ElvUI Libraries](https://github.com/tukui-org/ElvUI/tree/main/ElvUI_Libraries) | [MIT notice](SquanchOn/libs/LibDispel/LICENSE.txt); unchanged |
-| LibStub | Minor 2, SVN source id 103; `SquanchOn/libs/LibStub` | Kaelten, Cladhaire, ckknight, Mikk, Ammo, Nevcairiel, joshborke; [LibStub](https://www.wowace.com/projects/libstub) | Explicit public-domain declaration and credits retained in [source header](SquanchOn/libs/LibStub/LibStub.lua); unchanged |
-| TargetNameplateIndicator code | Compatibility behavior originally ported from v1.67; current `NameplateIndicators.lua` and related adapter | Copyright 2013–2016 Choonster; [upstream](https://github.com/Choonster-WoW-AddOns/TargetNameplateIndicator) | [Full MIT code notice](LICENSES/TargetNameplateIndicator-LICENSE.txt). Ported to the host namespace, native event lifecycle, standalone configuration and new semantic artwork mapping. Former image library is excluded. |
-| PT Sans Narrow Bold | Version 2.003, unmodified `ptsansnarrow_bold.ttf` | Copyright 2010 ParaType Ltd.; designers Alexandra Korolkova, Olga Umpeleva, Vladimir Yefimov; [Google Fonts distribution](https://github.com/google/fonts/tree/main/ofl/ptsansnarrow) | [SIL Open Font License 1.1](LICENSES/PTSansNarrow-OFL.txt), reserved names “PT Sans” and “ParaType”; also included beside the font |
+## Included public material
 
-The vendor [provenance manifest](SquanchOn/libs/provenance.json) records exact
-file hashes and the source distribution. These are the tested local fork bytes,
-not a claim that they equal the latest oUF upstream checkout. Each included library
-has its own distribution notice; no blanket license is inferred for neighboring
-ElvUI files. Original upstream copyright and disclaimer text is preserved.
+| Component | Scope and attribution | Terms |
+| --- | --- | --- |
+| TargetNameplateIndicator compatibility code | Port originally based on v1.67; copyright 2013–2016 Choonster. Adapted namespace, event lifecycle, configuration and artwork mapping. [Upstream](https://github.com/Choonster-WoW-AddOns/TargetNameplateIndicator). | [Full MIT notice](LICENSES/TargetNameplateIndicator-LICENSE.txt). Its historical image library is excluded; the code license does not license those images. |
+| PT Sans Narrow Bold 2.003 | Unmodified `SquanchOn/media/fonts/ptsansnarrow_bold.ttf`; copyright 2010 ParaType Ltd.; Alexandra Korolkova, Olga Umpeleva and Vladimir Yefimov. Exact file matches [this pinned source](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ElvUI/Game/Shared/Media/Fonts/PTSansNarrow.ttf). | [SIL OFL 1.1](LICENSES/PTSansNarrow-OFL.txt), also beside the font. Reserved names PT Sans and ParaType; the font remains OFL. SHA-256 `efc8710f9eb3e41405a7efaf9aba701e41dc0e9bcabd3aa0b08f111441fb247d`. |
 
-## Original artwork and compatibility references
-
-`TargetCrosshairs.lua`, its circles/arrows and their source generator are original
-MIT work. [Provenance](LICENSES/TargetCrosshairs-PROVENANCE.md) describes the
-functional reference and independent numerical construction; this is not a claim
-of a clean-room process. The dashed ring is generated from source as well.
-`media/native-indicators` contains three independently generated polygons with
+`TargetCrosshairs.lua`, its numerical circle/arrow artwork and generator are
+original contributions. [Provenance](LICENSES/TargetCrosshairs-PROVENANCE.md)
+identifies the functional reference without claiming a clean-room process.
+The independently generated polygons in `media/native-indicators` have
 [source and provenance](SquanchOn/asset-source/NATIVE-INDICATORS-PROVENANCE.md).
-Neither set traces or incorporates pixels from the replaced image libraries.
+No historical TNI image library, PowerAuras texture library, exported aura script
+or throwknife audio is distributed here.
 
-Nameplate-indicator code and its historical image library have different rights.
-The retained Choonster notice explicitly separates them. No historical TNI images,
-PowerAuras textures, exported aura scripts or throwknife audio are distributed.
-The previous Expressway, Homizio, Forced Square and Harry P font files are absent.
+## External originals and private local assembly
 
-ElvUI, BenikUI, ProjectAzilroka, MoveAny, Masque, AddOnSkins, Bagnon and Semlar's
-Crosshairs supplied functional or settings references for compatibility work.
-Their restricted addon implementations, options engines and images are not
-repackaged here. The independently licensed library subtrees listed above are the
-specific exceptions; they remain identified and attributed as upstream work.
-GSE, Pawn, BugSack and BugGrabber code is not included.
+ElvUI and its contributors supply the original ElvUI engine, options and library
+integration. Benik supplies BenikUI. The required local core has five sibling
+folders: `SquanchOn`, `ElvUI`, `ElvUI_Libraries`, `ElvUI_Options` and
+`ElvUI_BenikUI`. A user-run assembler works locally with the user's originals;
+its private assembled output is separate from the public SquanchOn package.
 
-## Game resources and optional integrations
+ElvUI's [custom license](https://github.com/tukui-org/ElvUI/blob/main/ElvUI/LICENSE.txt)
+contains a GitHub upload exception, requires retaining its addon/folder name and
+notice, and excludes third-party resources. This is not a blanket MIT license or
+permission to rename ElvUI into SquanchOn. Its libraries retain individual terms.
+BenikUI's [custom license](https://github.com/Benik/BenikUI/blob/development/ElvUI_BenikUI/LICENSE.txt)
+permits private modifications and restricts public redistribution, with no GitHub
+bundle exception. This public integration does not contain either original engine
+or their restricted assets. Local imports do not grant republication rights.
 
-Blizzard resource paths and atlas identifiers refer to assets already installed
-with World of Warcraft. No extracted Blizzard images, fonts, sounds, FrameXML or
-game binaries are included. Blizzard Entertainment retains its rights in those
-resources and trademarks.
+Exact externally supplied fonts, textures and libraries retain their own rights.
+This public package does not supply Expressway, Homizio, Prototype, DOCK11,
+Homespun, Action Man, Forced Square or Harry P files. Blizzard paths reference
+installed game resources; no extracted game images, fonts, sounds, FrameXML or
+binaries are bundled.
 
-Plater and DynamicCam are optional external addons with their own licensing and
-update ownership. Squanch-On's original adapters call their installed interfaces;
-the repository does not include or relicense those addons. Optional libraries
-already provided by other addons are not silently bundled.
+Plater and DynamicCam remain optional external addons with their own authors,
+licenses and update ownership. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
+Bagnon and Semlar's Crosshairs supplied functional/settings references; their
+complete implementations and assets are not part of this public package. Their
+individual licenses differ; this is a statement of package contents, not a blanket
+restriction or permission for those projects.
 
-The names above acknowledge their respective authors. They do not imply
-sponsorship, endorsement, ownership transfer or permission beyond the included
-component licenses.
+All names acknowledge their respective authors and imply no endorsement,
+sponsorship, ownership transfer or additional permissions.

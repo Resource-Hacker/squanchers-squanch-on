@@ -752,7 +752,7 @@ function Skin:Minimap()
         compartment:SetSize(18,18)
         compartment:SetFrameStrata("MEDIUM"); compartment:SetFrameLevel(20)
         if compartment.Text then
-            compartment.Text:SetFont("Interface\\AddOns\\"..addonName.."\\media\\fonts\\ptsansnarrow_bold.ttf",13,"")
+            compartment.Text:SetFont("Interface\\AddOns\\ElvUI\\Game\\Shared\\Media\\Fonts\\Expressway.ttf",13,"")
             compartment.Text:SetShadowColor(0,0,0,1); compartment.Text:SetShadowOffset(1,-1)
         end
     end
@@ -887,7 +887,7 @@ local function nativeTabStyle(tab, selected, joinedLeft)
             if region then region:SetAlpha(0) end
         end
     end
-    tab.Text:SetFont("Interface\\AddOns\\"..addonName.."\\media\\fonts\\ptsansnarrow_bold.ttf",10,"OUTLINE")
+    tab.Text:SetFont("Interface\\AddOns\\ElvUI_BenikUI\\media\\fonts\\homizio_bold.ttf",10,"OUTLINE")
     tab:SetHeight(22)
     tab.Text:ClearAllPoints();tab.Text:SetPoint("CENTER",tab,"CENTER",0,-1)
     local state = chatTabPlates[tab]
@@ -1044,7 +1044,7 @@ function Skin:Chat()
     end
     local panel=self.chatPanel
     local selected=GeneralDockManager and FCFDock_GetSelectedWindow and FCFDock_GetSelectedWindow(GeneralDockManager)
-    local font="Interface\\AddOns\\"..addonName.."\\media\\fonts\\ptsansnarrow_bold.ttf"
+    local font="Interface\\AddOns\\ElvUI_BenikUI\\media\\fonts\\homizio_bold.ttf"
     -- Ordinary chat text shares the owner-requested 8-point body size.
     for i=1,NUM_CHAT_WINDOWS or 10 do
         local chat=_G["ChatFrame"..i]
@@ -1226,8 +1226,45 @@ function Skin:LayoutChat()
     end
 end
 
+-- ElvUI still owns content, placement, fill and the thin quality-color edge.
+-- The shared decorative rim sits just outside that existing tooltip rectangle.
+local tooltipStyleHooked
 function Skin:Tooltips()
-    if ns.TooltipSkin then ns.TooltipSkin:Refresh() end
+    local E=_G.ElvUI and _G.ElvUI[1]
+    local TT=E and E:GetModule("Tooltip",true)
+    if not TT or not TT.Initialized then return end
+    local function style(tt, isEmbedded)
+        if not tt or tt==E.ScanTooltip or isEmbedded or tt.IsEmbedded or tt:IsForbidden() then return end
+        if InCombatLockdown() then self.pending=true;return end
+        local border=self:Panel(tt,"tooltip",0)
+        local spec=self.styles.tooltip
+        self:FitPanelBorder(border,tt,spec)
+        local bar=GameTooltipStatusBar
+        if tt==GameTooltip and bar and bar:IsShown() and TT.db.healthBar.statusPosition=="BOTTOM" then
+            local scale=bar:GetEffectiveScale()/tt:GetEffectiveScale()
+            local extra=E.Spacing*3+bar:GetHeight()*scale
+                +PixelUtil.GetPixelToUIUnitFactor()/tt:GetEffectiveScale()
+            border:SetPoint("BOTTOMRIGHT",tt,"BOTTOMRIGHT",spec.offset,-spec.offset-extra)
+        end
+    end
+    if not tooltipStyleHooked then
+        tooltipStyleHooked=true
+        hooksecurefunc(TT,"SetStyle",function(_,tt,_,isEmbedded) style(tt,isEmbedded) end)
+        hooksecurefunc(TT,"GameTooltip_SetDefaultAnchor",function(_,tt) style(tt) end)
+        if GameTooltipStatusBar then
+            for _,event in ipairs({"OnShow","OnHide","OnSizeChanged"}) do
+                GameTooltipStatusBar:HookScript(event,function() style(GameTooltip) end)
+            end
+        end
+    end
+    for _,name in ipairs({"GameTooltip","ShoppingTooltip1","ShoppingTooltip2",
+        "ItemRefTooltip","ItemRefShoppingTooltip1","ItemRefShoppingTooltip2",
+        "FriendsTooltip","QuickKeybindTooltip","GameSmallHeaderTooltip",
+        "LibDBIconTooltip","SettingsTooltip","WorldMapTooltip"}) do
+        style(_G[name])
+    end
+    style(E.SpellBookTooltip)
+    style(E.ConfigTooltip)
 end
 
 function Skin:Interface()

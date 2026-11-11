@@ -19,9 +19,9 @@ end
 local function hover()
     if not M.bar then return end
     if config().BarMouseOver == false then M.bar:SetAlpha(1); return end
-    local over = MouseIsOver(M.bar)
+    local over = M.bar:IsMouseOver()
     if not over then
-        for button in pairs(M.buttons) do if button:IsShown() and MouseIsOver(button) then over = true; break end end
+        for button in pairs(M.buttons) do if button:IsShown() and button:IsMouseOver() then over = true; break end end
     end
     M.bar:SetAlpha(over and 1 or 0)
 end

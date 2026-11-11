@@ -5,11 +5,22 @@ local _, ns = ...
 local M = { seen = setmetatable({}, { __mode = "k" }), pending = setmetatable({}, { __mode = "k" }) }
 ns.PlaterIconSkins = M
 local events = CreateFrame("Frame")
+local function nativeAura(button)
+    -- Native AuraContainer buttons reject script hooks and expose secret
+    -- visibility. Plater supplies their own borders during initialization,
+    -- before its later auraContainer marker is assigned.
+    return button and (type(button.SetApplicationCount) == "function"
+        or type(button.SetDurationCooldown) == "function")
+end
+local function visible(button)
+    local shown = button:IsVisible()
+    return not (issecretvalue and issecretvalue(shown)) and shown
+end
 local function apply(button)
-    if not button or not button.GetObjectType then return end
+    if not button or not button.GetObjectType or nativeAura(button) then return end
     -- Plater preallocates large hidden pools. Do not build material rims for
     -- those unused objects or force a hidden pool into the render graph.
-    if button.IsVisible and not button:IsVisible() then return end
+    if button.IsVisible and not visible(button) then return end
     local art = button.Icon or button.Texture
     if not art or not art.SetTexCoord then return end
     if InCombatLockdown() then M.pending[button] = true; return end
@@ -21,13 +32,15 @@ local function apply(button)
     M.pending[button] = nil
 end
 function M:Icon(button)
-    if not button or not button.HookScript then return end
+    if not button or not button.HookScript or nativeAura(button) then return end
+    local shown = button:IsVisible()
+    if issecretvalue and issecretvalue(shown) then return end
     if not self.seen[button] then
         self.seen[button] = true
         button:HookScript("OnShow", apply)
         button:HookScript("OnSizeChanged", apply)
     end
-    if button:IsVisible() then apply(button) end
+    if shown then apply(button) end
 end
 function M:Row(row)
     if not row then return end

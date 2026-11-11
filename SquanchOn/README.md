@@ -1,4 +1,4 @@
-# Squancher's Squanch-On — 0.1.0-alpha
+# Squancher's Squanch-On — 0.2.0-candidate
 
 **Keep the camera locked. Open mouseover only when you mean it.**
 
@@ -7,24 +7,29 @@ reticle, then release to close that gate while the camera stays locked. Hold the
 free-cursor key for the interface; release to return to mouselook.
 
 [Project and example images](https://github.com/Resource-Hacker/squanchers-squanch-on)
-· [Reticle guide](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/v0.1.0-alpha/docs/RETICLE.md)
+· [Reticle guide](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/RETICLE.md)
 · [Releases](https://github.com/Resource-Hacker/squanchers-squanch-on/releases)
 
 ## Install
 
-This alpha targets **Forever interface 16001**. The integrated standalone UI is
-still undergoing in-game acceptance. Retail, other Classic clients and Windows
-input are not yet advertised as supported.
+This candidate targets **Forever interface 16001** and restores the actual
+original ElvUI unit-frame engine and native editor. Fresh live equivalence
+acceptance is required before treating it as a finished release.
 
-1. Back up `Interface/AddOns` and `WTF`, and close the game.
-2. Place this exact `SquanchOn` folder in `Interface/AddOns`.
-3. Confirm `Interface/AddOns/SquanchOn/SquanchOn.toc` exists.
-4. Enable Squancher's Squanch-On and disable overlapping UI owners for evaluation.
-   Preserve their saved settings until you accept the replacement.
-5. Review the controls and native mouseover settings before combat.
+This is the public **integration-only** folder. Its runtime requires original-name
+`ElvUI`, `ElvUI_Libraries`, `ElvUI_Options` and `ElvUI_BenikUI`, with this project's
+scoped loaders. The repository's offline `tools/assemble_local.py` combines those
+legitimate local inputs with this package for private use. A stock unscoped ElvUI
+install or upstream source-only ZIP is not an equivalent input.
 
-Saved settings use `SquanchOnDB` in the normal `SavedVariables/SquanchOn.lua` file.
-The download contains no account exports, saved macros or private profiles.
+[Assembly instructions](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/LOCAL-ASSEMBLY.md)
+explain checks and the five-folder output. The assembled original components and
+restricted media must remain private. Preserve the current working installation
+and fresh WTF before a client-stopped switch.
+
+Suite settings use `SquanchOnDB`; unit frames keep original ElvUI databases,
+profiles and movers. Do not replace them with the alpha's reduced import schema.
+The public folder contains no private profile exports.
 
 ## Controls
 
@@ -64,9 +69,10 @@ not healing readiness. Unknown range stays hidden. Range does not guarantee
 resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
 in progress.
 
-Plater and DynamicCam are optional and installed separately. ElvUI, BenikUI,
-ProjectAzilroka, MoveAny, AddOnSkins, Bagnon, Masque, Pawn and GSE are not dependencies.
-[Compatibility and migration limits](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/v0.1.0-alpha/docs/COMPATIBILITY.md).
+Plater and DynamicCam remain optional and installed separately. The four original
+ElvUI/Benik folders above are required. Native adapters replace the other retired
+UI owners; their detailed acceptance remains separate from unit-frame fidelity.
+[Compatibility and migration limits](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
 
 ## Source and attribution
 
@@ -74,8 +80,9 @@ To build **from a source checkout**, install Python 3, Git and Lua 5.1, then run
 `python tools/package.py` in that checkout. Developer tools are intentionally not
 inside this installation package. Packaging checks do not certify game behavior.
 
-Original code and geometric artwork use [MIT](LICENSE). Bundled oUF, LibDispel,
-LibStub and PT Sans keep their own licenses; Choonster's contribution is credited.
+Original Squanch-On code and geometric artwork use [MIT](LICENSE). Bundled PT Sans
+and Choonster's contribution retain their notices. Original runtime dependencies
+keep their separate licenses; this project does not relicense them.
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [reuse-manifest.json](reuse-manifest.json)
 and `LICENSES/`. Game-provided art remains Blizzard's property. This project is
 not endorsed by Blizzard or the referenced addon projects.

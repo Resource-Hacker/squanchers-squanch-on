@@ -20,7 +20,10 @@ python tools/package.py
 
 Only Git-tracked files under `SquanchOn/` enter the package. Stage intentional new
 addon files before building. Documentation and CI stay in the source repository;
-the installation ZIP has one top-level `SquanchOn/` folder.
+the public integration ZIP has one top-level `SquanchOn/` folder. The separate
+local assembler combines it with the four exact original-name runtime folders.
+Those local inputs, assembled archives and private presentation seeds must stay
+outside this repository. See [component licenses](docs/COMPONENT-LICENSES.md).
 
 Use a backed-up game profile for manual validation and report the exact client,
 class and input sequence. Separate source/package checks from actual gameplay
