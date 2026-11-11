@@ -118,6 +118,9 @@ local cornerSpans = {
     BottomLeftCorner = {{4,5,11,12},{5,6,10,13},{6,7,9,14},{7,8,8,15},{8,9,7,16},{9,10,6,26},{10,11,5,26},{11,13,4,26},{13,14,5,26},{14,15,6,26},{15,16,7,26},{16,17,8,26},{17,18,9,26},{18,26,9,18}},
     BottomRightCorner = {{5,6,10,13},{6,7,9,13},{7,8,8,14},{8,9,7,15},{9,10,7,26},{10,11,6,26},{11,13,4,26},{13,14,5,26},{14,15,6,26},{15,16,7,26},{16,17,8,26},{17,18,9,26},{18,26,9,18}},
 }
+-- The native inward elbow contains six gold texels beyond the straight rim.
+-- Restore them only on fitted panels; action slots keep their reference contour.
+local panelCornerElbows = {{18,19,18,21},{19,20,18,20},{20,21,18,19}}
 local function gearBorder(border, size)
     border.cornerSize = size
     local function corner(name, anchor, x1, y1, x2, y2)
@@ -128,7 +131,7 @@ local function gearBorder(border, size)
         cap:SetPoint(anchor, border, anchor)
         local top = anchor:find("TOP") ~= nil
         local left = anchor:find("LEFT") ~= nil
-        for _,span in ipairs(cornerSpans[name]) do
+        local function drawBand(span)
             local yStart,yEnd,xStart,xEnd=span[1]/2,span[2]/2,span[3]/2,span[4]/2
             local strip=cap:CreateTexture(nil,"BORDER")
             atlasSlice(strip,left and x1+xStart or x2-xEnd,top and y1+yStart or y2-yEnd,
@@ -138,6 +141,8 @@ local function gearBorder(border, size)
                 (top and -1 or 1)*size*yStart/13)
             strip:SetSize(size*(xEnd-xStart)/13,size*(yEnd-yStart)/13)
         end
+        for _,span in ipairs(cornerSpans[name]) do drawBand(span) end
+        for _,span in ipairs(panelCornerElbows) do drawBand(span) end
         border[name] = cap
         return cap
     end
