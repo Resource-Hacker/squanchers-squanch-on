@@ -39,6 +39,85 @@ local function spellRange(spellID, fallbackName)
   return result == true or result == 1
 end
 
+-- These are spell families, not assumed distances or proof that a spell is known.
+-- Resolve localized names to learned ranks/overrides once per spellbook change.
+local rangedFamilies = {
+  MAGE = {133, 116, 2136, 5019}, -- Fireball, Frostbolt, Fire Blast, Shoot
+  PRIEST = {585, 589, 8092, 5019}, -- Smite, SW: Pain, Mind Blast, Shoot
+  WARLOCK = {686, 348, 172, 689, 5019}, -- Shadow Bolt, Immolate, Corruption, Drain Life, Shoot
+  DRUID = {5176, 8921}, -- Wrath, Moonfire
+  SHAMAN = {403, 8042}, -- Lightning Bolt, Earth Shock
+  PALADIN = {20271}, -- Judgement
+  ROGUE = {2764}, WARRIOR = {2764}, -- Throw
+}
+local healingFamilies = {
+  DRUID = {5185, 8936, 774}, -- Healing Touch, Regrowth, Rejuvenation
+  PALADIN = {635, 19750}, -- Holy Light, Flash of Light
+  PRIEST = {2050, 2054, 2060, 2061, 139}, -- Lesser Heal, Heal, Greater Heal, Flash Heal, Renew
+  SHAMAN = {331, 8004, 1064}, -- Healing Wave, Lesser Healing Wave, Chain Heal
+}
+local petHealingFamilies = {HUNTER = {136}, WARLOCK = {755}} -- Mend Pet, Health Funnel
+local learnedRanges
+
+local function learnedSpell(baseID)
+  local book = C_SpellBook
+  if not (book and book.FindSpellBookSlotForSpell and Enum and Enum.SpellBookSpellBank) then return end
+  local effective = publicQuery(C_Spell and C_Spell.GetOverrideSpell, baseID, 0, true) or baseID
+  local name = publicQuery(C_Spell and C_Spell.GetSpellName, effective)
+  if type(name) ~= "string" then return end
+  -- Future, hidden/replaced and inactive-spec entries must not authorize a cue.
+  local ok, slot, bank = pcall(book.FindSpellBookSlotForSpell, name, false, false, false, false)
+  if not ok or (issecretvalue and (issecretvalue(slot) or issecretvalue(bank)))
+    or type(slot) ~= "number" or bank ~= Enum.SpellBookSpellBank.Player then return end
+  local info = publicQuery(book.GetSpellBookItemInfo, slot, bank)
+  if type(info) ~= "table" then return end
+  local spellID = publicQuery(function() return info.spellID end)
+  if type(spellID) ~= "number"
+    or publicQuery(function() return info.isPassive end) ~= false
+    or publicQuery(function() return info.isOffSpec end) ~= false
+    or publicQuery(book.IsSpellKnown, spellID, bank) ~= true then return end
+  return {slot = slot, bank = bank, spellID = spellID, name = name}
+end
+
+local function knownRanges()
+  if learnedRanges then return learnedRanges end
+  local _, class = UnitClass("player")
+  local ranges = {ranged = {}, healing = {}, petHealing = {}}
+  for kind, catalog in pairs({ranged = rangedFamilies, healing = healingFamilies, petHealing = petHealingFamilies}) do
+    for _, spellID in ipairs(catalog[class] or {}) do
+      local learned = learnedSpell(spellID)
+      if learned then ranges[kind][#ranges[kind] + 1] = learned end
+    end
+  end
+  learnedRanges = ranges
+  return ranges
+end
+
+local function knownRange(kind)
+  local answer
+  for _, spell in ipairs(knownRanges()[kind]) do
+    local result
+    if C_SpellBook and C_SpellBook.IsSpellBookItemInRange then
+      result = publicQuery(C_SpellBook.IsSpellBookItemInRange, spell.slot, spell.bank, "target")
+    elseif C_Spell and C_Spell.IsSpellInRange then
+      result = publicQuery(C_Spell.IsSpellInRange, spell.spellID, "target")
+    else
+      result = publicQuery(_G.IsSpellInRange, spell.name, "target")
+    end
+    -- An invalid/restricted result does not become an interaction-distance check.
+    if result == true or result == 1 then return true end
+    if result == false or result == 0 then answer = false end
+  end
+  return answer
+end
+
+local function healingRange()
+  if publicQuery(UnitCanAssist, "player", "target") ~= true
+    or publicQuery(UnitIsDeadOrGhost, "target") ~= false then return false end
+  if knownRange("healing") then return true end
+  return publicQuery(UnitIsUnit, "target", "pet") == true and knownRange("petHealing")
+end
+
 local function meleeRange()
   -- Forever's queued Raptor Strike reports true even at Auto Shot distance;
   -- melee Auto Attack has no range verdict. Use Plater's exact five-yard
@@ -54,12 +133,13 @@ end
 -- Check actual abilities, independently of cooldown/resources/proc readiness.
 local function targetRangeMode()
   local _, class = UnitClass("player")
-  if class ~= "HUNTER" then return end
   local attackable = publicQuery(UnitCanAttack, "player", "target")
   local dead = publicQuery(UnitIsDead, "target")
   if (attackable ~= true and attackable ~= 1) or (dead ~= false and dead ~= 0) then return end
   if meleeRange() then return "melee" end
-  if spellRange(75, "Auto Shot") then return "ranged" end
+  if class == "HUNTER" then
+    if spellRange(75, "Auto Shot") then return "ranged" end
+  elseif knownRange("ranged") then return "ranged" end
 end
 
 local function plainFraction()
@@ -152,7 +232,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     texture:SetBlendMode("ADD")
     return texture
   end
-  local ring = image(display, "circle", "OVERLAY")
   local orbit = CreateFrame("Frame", nil, display)
   orbit:SetAllPoints(display)
   orbit:EnableMouse(false)
@@ -179,23 +258,22 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     guides[index] = guide
   end
 
-  -- Friendly targets replace the solid ring with one range-driven dashed ring.
+  -- Both friendly and hostile targets use the same range-driven dashed ring.
   -- Native regions share the marker's existing visibility and health colors.
-  local friendly = CreateFrame("Frame", nil, display)
-  friendly:SetAllPoints(display)
-  friendly:EnableMouse(false)
-  friendly:Hide()
+  local ringFrame = CreateFrame("Frame", nil, display)
+  ringFrame:SetAllPoints(display)
+  ringFrame:EnableMouse(false)
   -- One texture makes the entire dashed circle orbit its common center.
   -- Rotating separate Line regions rotates their individual local axes.
-  local friendlyRing = image(friendly, "circle-dashed", "OVERLAY")
-  local friendlySpin = friendlyRing:CreateAnimationGroup()
-  local friendlyTurn = friendlySpin:CreateAnimation("Rotation")
-  friendlyTurn:SetDegrees(-360)
-  friendlySpin:SetLooping("REPEAT")
+  local ring = image(ringFrame, "circle-dashed", "OVERLAY")
+  local ringSpin = ring:CreateAnimationGroup()
+  local ringTurn = ringSpin:CreateAnimation("Rotation")
+  ringTurn:SetDegrees(-360)
+  ringSpin:SetLooping("REPEAT")
 
   -- Pause the child texture's orbit while its parent pulses the whole ring.
   -- Native scale animations accumulate, so the return multiplies by 1 / 0.75.
-  local clickAnimation = friendly:CreateAnimationGroup()
+  local clickAnimation = ringFrame:CreateAnimationGroup()
   for order, scale in ipairs({0.75, 1 / 0.75}) do
     local resize = clickAnimation:CreateAnimation("Scale")
     resize:SetOrder(order)
@@ -218,10 +296,10 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   end)
   display:HookScript("OnHide", function()
     clearClick()
-    friendlySpin:Stop()
+    ringSpin:Stop()
   end)
 
-  local function friendlyWorldGUID(worldPressValidated)
+  local function worldGUID(worldPressValidated)
     if not settings.enabled or publicQuery(SpellIsTargeting)
       or publicQuery(GetCurrentKeyBoardFocus) then return end
     local input = suite:GetInputState()
@@ -234,20 +312,21 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       end
     end
     -- A click on empty ground must never pulse the previously selected unit.
-    if publicQuery(UnitIsFriend, "player", "mouseover") ~= true then return end
+    if publicQuery(UnitIsFriend, "player", "mouseover") ~= true
+      and publicQuery(UnitCanAttack, "player", "mouseover") ~= true then return end
     local guid = publicQuery(UnitGUID, "mouseover")
     if type(guid) == "string" then return guid end
   end
-  function marker:BeginFriendlyWorldClick()
+  function marker:BeginWorldClick()
     -- Capture before the release can open a menu and clear native mouseover.
-    pressedGUID = friendlyWorldGUID(false)
+    pressedGUID = worldGUID(false)
   end
-  function marker:ObserveFriendlyWorldClick(worldPressValidated)
-    local guid = pressedGUID or friendlyWorldGUID(worldPressValidated)
+  function marker:ObserveWorldClick(worldPressValidated)
+    local guid = pressedGUID or worldGUID(worldPressValidated)
     pressedGUID = nil
-    self:QueueFriendlyClick(guid, "click")
+    self:QueueWorldClick(guid, "click")
   end
-  function marker:QueueFriendlyClick(guid, source)
+  function marker:QueueWorldClick(guid, source)
     if type(guid) ~= "string" then return end
     if clickGUID == guid and self.clickFeedbackActive then return end
     clickGeneration = clickGeneration + 1
@@ -256,11 +335,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       if generation ~= clickGeneration or not settings.enabled
         or publicQuery(UnitGUID, "target") ~= guid then return end
       self:RefreshTarget()
-      if not self.friendly or not display:IsVisible() then return end
+      if not display:IsVisible() then return end
       clearClick()
       clickGUID = guid
       self.clickFeedbackActive = true
-      friendlySpin:Pause()
+      ringSpin:Pause()
       clickAnimation:Play()
       self.lastClickFeedbackSource = source
       self.clickFeedbackCount = (self.clickFeedbackCount or 0) + 1
@@ -299,34 +378,37 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local function applyRange(mode)
     marker.rangeMode = mode
     marker.inRange = mode ~= nil
-    pointers:SetShown(mode == "ranged")
+    pointers:SetShown(mode == "ranged" or mode == "healing")
     for _, rectangle in ipairs(rectangles) do
       rectangle:SetShown(mode == "melee")
       rectangle:SetAlpha(mode == "melee" and alpha or 0)
     end
     orbit:SetAlpha(marker.inRange and alpha or 0)
-    if mode ~= "friendly" and not marker.clickFeedbackActive then friendlySpin:Stop() end
+    if not mode and not marker.clickFeedbackActive then ringSpin:Stop() end
   end
   function marker:RefreshRange()
     if not display:IsVisible() then return end
     local mode
     if self.friendly then
-      local library = LibStub and LibStub("LibRangeCheck-3.0", true)
-      local range = Plater and Plater.RangeCheckRangeFriendly or 40
-      -- Friendly NPCs cannot always receive friendly spells/items. Let the
-      -- library pick the unit-compatible checker, never wider than this range.
-      local checker = library and publicQuery(library.GetSmartMaxChecker, library, range)
-      local result = publicQuery(checker, "target")
-      if result == true or result == 1 then mode = "friendly" end
+      if healingRange() then
+        mode = "healing"
+      elseif publicQuery(UnitIsDeadOrGhost, "target") == false then
+        local library = LibStub and LibStub("LibRangeCheck-3.0", true)
+        local range = Plater and Plater.RangeCheckRangeFriendly or 40
+        -- Keep friendly/NPC proximity separate: it never lights healing arrows.
+        local checker = library and publicQuery(library.GetSmartMaxChecker, library, range)
+        local result = publicQuery(checker, "target")
+        if result == true or result == 1 then mode = "friendly" end
+      end
     else
       mode = targetRangeMode()
     end
     if self.rangeMode ~= mode then applyRange(mode) end
     if not self.clickFeedbackActive then
-      if mode == "friendly" then
-        if not friendlySpin:IsPlaying() then friendlySpin:Play() end
+      if mode then
+        if not ringSpin:IsPlaying() then ringSpin:Play() end
       else
-        friendlySpin:Stop()
+        ringSpin:Stop()
       end
     end
   end
@@ -349,13 +431,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       rectangle:SetVertexColor(red, green, blue)
       rectangle:SetAlpha(marker.rangeMode == "melee" and alpha or 0)
     end
-    ring:SetAlpha(alpha)
     orbit:SetAlpha(marker.inRange and alpha or 0)
     for _, guide in ipairs(guides) do
       guide:SetVertexColor(red, green, blue)
       guide:SetAlpha(opacity)
     end
-    friendlyRing:SetVertexColor(red, green, blue)
   end
 
   local function paintHealth()
@@ -424,9 +504,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if not settings.enabled then self:HideTarget(); return end
     if clickGUID and publicQuery(UnitGUID, "target") ~= clickGUID then clearClick() end
     self.friendly = publicQuery(UnitIsFriend, "player", "target") == true
-    if not self.friendly and self.clickFeedbackActive then clearClick() end
-    friendly:SetShown(self.friendly)
-    ring:SetShown(not self.friendly)
     for _, guide in ipairs(guides) do guide:SetShown(settings.showLines and not self.friendly) end
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit("target")
     if not available(plate) then self:HideTarget(); return end
@@ -478,9 +555,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     visibility:SetSize(size * 1.22, size * 1.22)
     local _, height = GetPhysicalScreenSize()
     local thickness = height and height > 0 and 1536 / height or 1
-    friendly:SetAlpha(alpha)
-    friendlySpin:Stop()
-    friendlyTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
+    ringFrame:SetAlpha(alpha)
+    ringSpin:Stop()
+    ringTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
     for index, guide in ipairs(guides) do
       guide:SetSize(index < 3 and 4000 or thickness, index < 3 and thickness or 4000)
       guide:SetShown(settings.showLines)
@@ -522,19 +599,21 @@ function suite:InitializeTargetCrosshairs(database, legacy)
 
   local events = CreateFrame("Frame")
   events:SetScript("OnEvent", function(_, event, unit)
+    if event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED"
+      or event == "UPDATE_SHAPESHIFT_FORM" then learnedRanges = nil end
     if event == "MERCHANT_SHOW" then
       -- The merchant UI can already own mouse focus when native click hooks
       -- run. The opened shop's own unit token is authoritative for this cue.
       local guid = publicQuery(UnitGUID, "npc")
       if type(guid) == "string" and publicQuery(UnitGUID, "target") == guid
         and publicQuery(UnitIsFriend, "player", "target") == true then
-        marker:QueueFriendlyClick(guid, "merchant")
+        marker:QueueWorldClick(guid, "merchant")
       end
     elseif event == "GLOBAL_MOUSE_DOWN" then
       if unit == "LeftButton" and suite.db and suite.db.nativeCombinedClick
         and suite:IsNativeMouseoverOpen() then
-        marker:BeginFriendlyWorldClick()
-        marker:ObserveFriendlyWorldClick()
+        marker:BeginWorldClick()
+        marker:ObserveWorldClick()
       end
     elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
       if unit == "target" then marker:RefreshTarget() end
@@ -551,7 +630,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   end)
   for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED",
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UNIT_HEALTH", "UNIT_MAXHEALTH",
-    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "UNIT_FACTION", "GLOBAL_MOUSE_DOWN", "MERCHANT_SHOW"}) do events:RegisterEvent(event) end
+    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "UNIT_FACTION", "GLOBAL_MOUSE_DOWN", "MERCHANT_SHOW",
+    "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED", "UPDATE_SHAPESHIFT_FORM"}) do events:RegisterEvent(event) end
   applyRange(nil)
   marker:ApplyStyle()
   return marker

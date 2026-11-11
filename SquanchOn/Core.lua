@@ -908,7 +908,7 @@ function addon:InstallMovementHooks()
       state.cameraOrSelectOrMoveActive = true
       state.cameraMouseOwned = IsMouseButtonDown("LeftButton")
       if state.cameraMouseOwned and addon.TargetCrosshairs then
-        addon.TargetCrosshairs:BeginFriendlyWorldClick()
+        addon.TargetCrosshairs:BeginWorldClick()
       end
       if state.nativeLeftPassthrough and pendingLeftDelta then
         pendingLeftDelta.receipt.nativeCameraStart = cursorReturnSample()
@@ -919,7 +919,7 @@ function addon:InstallMovementHooks()
   if _G.CameraOrSelectOrMoveStop then
     hooksecurefunc("CameraOrSelectOrMoveStop", function()
       if state.cameraMouseOwned and addon.TargetCrosshairs then
-        addon.TargetCrosshairs:ObserveFriendlyWorldClick(state.nativeLeftPassthrough)
+        addon.TargetCrosshairs:ObserveWorldClick(state.nativeLeftPassthrough)
       end
       state.cameraOrSelectOrMoveActive = false
       state.cameraMouseOwned = false

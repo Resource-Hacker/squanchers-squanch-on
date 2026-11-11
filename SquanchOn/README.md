@@ -60,6 +60,21 @@ Mouselook and helper-binding behavior is intentional and configurable through
 the `SquancherMouselookSuite` global alias remain for compatibility. No external
 input daemon, custom mouse firmware or virtual controller is required.
 
+## Target range feedback
+
+The selected visible target uses one dashed ring with a brief whole-ring pulse
+on a validated world click. Static cardinal blocks indicate conservative
+five-yard melee reach; rotating triangles indicate a learned ranged damage
+ability on a hostile target or a learned healing ability on a friendly target.
+Hunter Auto Shot keeps its native range check. Healing candidates resolve to
+actually learned spellbook ranks; Mend Pet and Health Funnel apply only to the
+player's own pet. Spellbook, specialization and form changes refresh the cache.
+
+Friendly ring rotation by itself remains proximity feedback, including NPCs;
+only the triangles indicate healing range. Unknown or restricted range data
+never enables a range marker. These cues describe range, not cooldown, resource,
+form, movement or line-of-sight readiness. Health colors remain independent.
+
 ## Migration and current limits
 
 A local installer can provide semantic unit-frame, tooltip, native-window and
