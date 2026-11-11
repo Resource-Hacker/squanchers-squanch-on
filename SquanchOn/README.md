@@ -1,122 +1,77 @@
-# Squancher's Squanch-On
+# Squancher's Squanch-On — 0.1.0-alpha
 
-A cohesive World of Warcraft interface with native bags, dark translucent panels,
-gold equipment-style borders, configurable unit frames, an adjustable layout grid,
-and addon-only mouselook and target indicators.
+**Keep the camera locked. Open mouseover only when you mean it.**
 
-**Development alpha.** The first package targets the Forever client interface
-`16001`. The integrated replacement is undergoing in-game acceptance; Lua syntax,
-package contents and configuration migration checks do not establish combat,
-visual or interaction parity. Retail and other Classic versions are not yet
-advertised as supported.
+Move the mouse to steer. Hold right mouse to open real WoW mouseover at the
+reticle, then release to close that gate while the camera stays locked. Hold the
+free-cursor key for the interface; release to return to mouselook.
 
-## Features
+[Project and example images](https://github.com/Resource-Hacker/squanchers-squanch-on)
+· [Reticle guide](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/v0.1.0-alpha/docs/RETICLE.md)
+· [Releases](https://github.com/Resource-Hacker/squanchers-squanch-on/releases)
 
-- Native Blizzard inventory and bank windows with shared panel and item styling.
-  Blizzard continues to own item use, search, sorting, deposits and tooltips.
-- Unit frames built on the bundled oUF library, with portraits, health and power,
-  casts, aura icons, group headers, profiles and original configuration controls.
-- Native action bars, pet bar, minimap, chat, quest and social drawers, menus,
-  professions, collections and other native windows using the same theme.
-- `/sqedit` for moving and resizing supported components, a centered alignment
-  grid, width controls and session undo. Layout changes defer during combat.
-- Hardware-cursor mouselook, mouseover casting, a Horde reticle, target markers and
-  nameplate indicators using native game APIs and original geometric artwork.
-- Native aura panels and a minimap launcher strip. Plater icons can use the same
-  skin while Plater retains nameplate policy and behavior.
+## Install
 
-Plater and DynamicCam are optional, separately installed integrations. They are
-not bundled or relicensed. ElvUI, BenikUI, ProjectAzilroka, MoveAny, AddOnSkins,
-Bagnon, Masque, Pawn and GSE are not dependencies.
+This alpha targets **Forever interface 16001**. The integrated standalone UI is
+still undergoing in-game acceptance. Retail, other Classic clients and Windows
+input are not yet advertised as supported.
 
-## Install and configure
+1. Back up `Interface/AddOns` and `WTF`, and close the game.
+2. Place this exact `SquanchOn` folder in `Interface/AddOns`.
+3. Confirm `Interface/AddOns/SquanchOn/SquanchOn.toc` exists.
+4. Enable Squancher's Squanch-On and disable overlapping UI owners for evaluation.
+   Preserve their saved settings until you accept the replacement.
+5. Review the controls and native mouseover settings before combat.
 
-1. Back up your current `Interface/AddOns` and `WTF` directories.
-2. Close the game before installing or replacing addon folders.
-3. Copy **`SquanchOn`**, with that exact folder name, into `Interface/AddOns`.
-4. Enable Squancher's Squanch-On. Disable overlapping UI owners before evaluating
-   the replacement; do not erase their saved settings before accepting migration.
+Saved settings use `SquanchOnDB` in the normal `SavedVariables/SquanchOn.lua` file.
+The download contains no account exports, saved macros or private profiles.
 
-The folder name is a loading and asset-path identity; the display name is
-**Squancher's Squanch-On**. Configuration is saved in `SquanchOnDB` in the game's
-normal `SavedVariables/SquanchOn.lua` file. The repository ships no account data,
-character export, saved macros, private profiles or existing saved variables.
+## Controls
 
-| Command | Purpose |
+| Control | Behavior |
 | --- | --- |
-| `/squanchon` or `/squancher` | Unit-frame settings and profiles |
-| `/sqedit` or `/squanchon edit` | Move and resize the interface |
-| `/squanchon tooltip` | Tooltip text, opacity and anchor options |
-| `/sqms` | Native controls and mouselook status/help |
-| `/sqms nameplates` | Nameplate-indicator settings |
-| `/sqms crosshairs` | Target-crosshair settings |
-| `/sqms camera` | DynamicCam framing status |
-| `/sqms camera setup` | Explicitly create a separate zoom-framing profile |
-| `/sqms camera restore` | Return to the saved source camera profile |
-| `/sqms off` | Disable Squanch-On mouselook control |
+| Right mouse held | Open centered mouseover while mouselook continues. |
+| Right mouse released | Close centered mouseover without unlocking the camera. |
+| Free-cursor key held (default Caps Lock / Up) | Temporarily use the native hardware cursor. |
+| Free-cursor key released | Return to the center and resume mouselook. |
+| `/sqms` / `/sqms off` | Mouselook help and status / disable control. |
+| `/sqms nameplates` / `/sqms crosshairs` | Indicator settings. |
+| `/squanchon` | Unit-frame settings and profiles. |
+| `/sqedit` | Move and resize supported interface components. |
+| `/squanchon tooltip` | Tooltip settings. |
+| `/sqms camera` | Optional DynamicCam framing status. |
 
-Mouselook and helper-binding behavior is intentional and configurable through
-`/sqms` and the native Key Bindings panel. Existing `SQMS_*` binding identifiers and
-the `SquancherMouselookSuite` global alias remain for compatibility. No external
-input daemon, custom mouse firmware or virtual controller is required.
+First-use setup enables native mouseover casting with no modifier and preserves
+later user changes. Explicit-unit macros retain their targets. The gate does not
+cast a spell or select a hard target. Native mouselook, the held mouseover gate and
+cursor return need no external input helper. The author's historical combined-click
+interact-on-down / target-on-up helper is not bundled.
 
-## Target range feedback
+## Range and integrations
 
-The selected visible target uses one dashed ring with a brief whole-ring pulse
-on a validated world click. Static cardinal blocks indicate conservative
-five-yard melee reach; rotating triangles indicate a learned ranged damage
-ability on a hostile target or a learned healing ability on a friendly target.
-Hunter Auto Shot keeps its native range check. Healing candidates resolve to
-actually learned spellbook ranks; Mend Pet and Health Funnel apply only to the
-player's own pet. Spellbook, specialization and form changes refresh the cache.
+The selected-target nameplate uses a dashed ring. Cardinal blocks indicate
+conservative five-yard melee reach; rotating triangles indicate a learned damage
+or healing spell in range. Mend Pet and Health Funnel apply only to your own pet.
 
-Friendly ring rotation by itself remains proximity feedback, including NPCs;
-only the triangles indicate healing range. Unknown or restricted range data
-never enables a range marker. These cues describe range, not cooldown, resource,
-form, movement or line-of-sight readiness. Health colors remain independent.
+**LibRangeCheck-3.0**, normally provided by optional **Plater**, is needed for
+five-yard melee and friendly/NPC proximity checks. It is not bundled; without it,
+those cues stay hidden. Friendly ring rotation alone is proximity feedback,
+not healing readiness. Unknown range stays hidden. Range does not guarantee
+resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
+in progress.
 
-## Migration and current limits
+Plater and DynamicCam are optional and installed separately. ElvUI, BenikUI,
+ProjectAzilroka, MoveAny, AddOnSkins, Bagnon, Masque, Pawn and GSE are not dependencies.
+[Compatibility and migration limits](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/v0.1.0-alpha/docs/COMPATIBILITY.md).
 
-A local installer can provide semantic unit-frame, tooltip, native-window and
-auxiliary-panel settings to the documented import fields. Imports run once and
-later edits remain authoritative. Personal export and installation scripts are
-not part of the public addon. A clean install starts with project defaults.
+## Source and attribution
 
-The new unit-frame editor is original code. It does not embed ElvUI's editor or
-promise every advanced ElvUI/Benik feature. Specialized aura predicates and sorting,
-unused aura-panel status-bar mode and arbitrary legacy visibility macros require
-separate acceptance. Spell-range fading uses configured, actually known player spells and native range
-results; an unavailable range result stays fully visible. Restricted client values are passed to native widgets where
-supported; inaccessible classifications do not become guessed values.
+To build **from a source checkout**, install Python 3, Git and Lua 5.1, then run
+`python tools/package.py` in that checkout. Developer tools are intentionally not
+inside this installation package. Packaging checks do not certify game behavior.
 
-The unlicensed legacy image packs and fonts are deliberately absent. Horde artwork
-comes from the installed game, markers are original geometric drawings, and the
-bundled font is PT Sans Narrow Bold. These replacements change typography and
-some indicator artwork. The native warning sound replaces the former audio file.
-
-## Build a package
-
-Python 3 and Lua 5.1's `luac5.1` are needed for the local package check:
-
-```sh
-python tools/package.py
-```
-
-The command checks Lua syntax and TOC/XML dependencies, then writes a ZIP and its
-SHA-256 digest in `dist/`. It does not launch the game or certify runtime behavior.
-Artwork source and notices are included in the package.
-
-## License and credits
-
-Original Squanch-On code and artwork use the [MIT license](LICENSE). Included
-third-party components keep their own licenses, copyright notices and source
-credits. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the
-[file manifest](reuse-manifest.json) for exact included components and hashes.
-
-Thanks to oUF's authors and contributors, LibDispel and LibStub's authors,
-Choonster for TargetNameplateIndicator code, and ParaType's designers for PT Sans
-Narrow. ElvUI, BenikUI, MoveAny, ProjectAzilroka, Masque, Bagnon and Crosshairs
-informed compatibility goals; their restricted implementation and artwork are not
-included under this project's license. World of Warcraft and game-provided art
-remain Blizzard's property. This project is not endorsed by those projects or
-Blizzard Entertainment.
+Original code and geometric artwork use [MIT](LICENSE). Bundled oUF, LibDispel,
+LibStub and PT Sans keep their own licenses; Choonster's contribution is credited.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [reuse-manifest.json](reuse-manifest.json)
+and `LICENSES/`. Game-provided art remains Blizzard's property. This project is
+not endorsed by Blizzard or the referenced addon projects.
