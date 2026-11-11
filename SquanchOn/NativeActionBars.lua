@@ -251,6 +251,7 @@ function Bars:LayoutBags()
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if KeyRingButton then KeyRingButton:Hide() end
     self.bagLayout = false
+    if ns.DarkSkin and ns.DarkSkin.BarControls then ns.DarkSkin:BarControls() end
 end
 
 function Bars:LayoutCastAndExtras()

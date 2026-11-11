@@ -118,10 +118,24 @@ local function uniformMicroOpacity(button)
     button:SetAlpha(1)
 end
 
+local function fitMicroBackground(texture, rim, bagRim)
+    Skin:FitPanelBackground(texture, rim)
+    if not bagRim or not bagRim:GetTop() or not rim:GetBottom() then return end
+    -- The bag row owns the shared bevel. End at its painted upper edge,
+    -- accounting for the different scales of the two rows.
+    local scale = texture:GetParent():GetEffectiveScale()
+    local seam = (bagRim:GetTop() - bagRim.cornerSize * 4.5 / 13) * bagRim:GetEffectiveScale()
+    local inset = rim.cornerSize * 9 / 13 * rim:GetEffectiveScale() / scale
+    local bottom = (seam - rim:GetBottom() * rim:GetEffectiveScale()) / scale
+    texture:SetPoint("BOTTOMRIGHT", rim, "BOTTOMRIGHT", -inset, bottom)
+end
+
 -- Individual controls belong to the combined minimap panel, not the old
 -- fixed-width overlay which extended past the map and missed their own edges.
 function Skin:BarControls()
     if not CharacterMicroButton then return end
+    local bagStyles = self.byFrame[MainMenuBarBackpackButton]
+    local bagRim = bagStyles and bagStyles.icon
     if MicroMenu and MicroMenu.GenerateButtonInfos then
         local infos = MicroMenu:GenerateButtonInfos()
         local first, last
@@ -142,11 +156,14 @@ function Skin:BarControls()
                 for _, key in ipairs({"Background", "PushedBackground"}) do
                     local texture = button[key]
                     if texture then
-                        texture:SetColorTexture(0, 0, 0, key == "PushedBackground" and 0.65 or 0.35)
-                        if rim then self:FitPanelBackground(texture, rim) end
+                        -- Native SetNormal shows Background again; keep its pixel
+                        -- transparent so only the shared fill darkens the resting cell.
+                        texture:SetColorTexture(0, 0, 0, key == "PushedBackground" and 0.65 or 0)
+                        if rim then fitMicroBackground(texture, rim, bagRim) end
                     end
                 end
                 if rim and not InCombatLockdown() then
+                    fitMicroBackground(self:BagSlotFill(rim, button), rim, bagRim)
                     -- The bag row owns this seam. Omit only the micro row's
                     -- lower bevel; let its vertical dividers reach the seam.
                     rim.BottomEdge:Hide()

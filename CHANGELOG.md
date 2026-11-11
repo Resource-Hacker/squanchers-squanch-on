@@ -5,6 +5,9 @@
 - Restore a visible gold leading border on General and other exposed chat tabs.
 - Strengthen the continuous line beneath the tabs to three physical pixels.
   Both changes were visually checked after reload in the existing Forever setup.
+- Match minimap menu-icon backgrounds to the shared translucent panel fill,
+  preserving native hover and pressed feedback. Fit their lower edge to the bag
+  row's painted border so the differently scaled rows meet without a bright gap.
 
 ## 0.1.0-alpha — 2026-11-10
 
