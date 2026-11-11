@@ -14,7 +14,7 @@
 <text x="640" y="226" fill="#f1eee7" font-size="22" font-weight="bold">Melee reach</text>
 <text x="1067" y="226" fill="#f1eee7" font-size="22" font-weight="bold">Spell range</text>
 <text x="213" y="256" fill="#afbbc0" font-size="16">Dashed ring on its visible nameplate</text>
-<text x="640" y="256" fill="#afbbc0" font-size="16">Cardinal blocks · conservative 5 yards</text>
+<text x="640" y="256" fill="#afbbc0" font-size="16">Hostile melee · conservative 5 yards</text>
 <text x="1067" y="256" fill="#afbbc0" font-size="16">Triangles · learned damage or heal</text>
 </g>
 <text x="32" y="300" fill="#8c9a9f" font-size="13">Range cues require an affirmative compatible check. Proximity alone does not indicate healing range or cast readiness.</text>

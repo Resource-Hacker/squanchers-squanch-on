@@ -33,7 +33,7 @@ mouselook still active. You decide when aiming should affect a mouseover ability
 | **Hold right mouse** | **Open true mouseover at the reticle, keeping the camera locked.** |
 | Press an ability while holding | WoW's native mouseover casting can use that unit, subject to the ability's normal rules. |
 | **Release right mouse** | **Close centered mouseover immediately; keep steering.** |
-| Hold the free-cursor key | Use the native hardware cursor for the interface. Default bindings are Caps Lock / Up and are configurable. |
+| Hold the free-cursor key | Use the native hardware cursor for the interface. Default preset: Caps Lock / Up; [rebinding instructions](docs/RETICLE.md#getting-the-cursor-back). |
 | Release the free-cursor key | Return the cursor to the center and resume mouselook. |
 
 First-use setup enables native mouseover casting with no modifier; later user
@@ -65,7 +65,7 @@ not demonstrate the hold/release transition or certify the new standalone UI.
 ![Range legend: cardinal blocks for melee reach; triangles for a learned ranged damage or healing spell; a dashed ring identifies the selected target.](docs/images/range-guide.svg)
 
 The selected visible target has a dashed ring and a brief whole-ring click pulse.
-Cardinal blocks indicate conservative five-yard melee reach. Rotating triangles
+Cardinal blocks indicate conservative five-yard melee reach on hostile targets. Rotating triangles
 indicate a learned ranged damage ability against a hostile target, or a learned
 healing ability against a friendly target. Hunter Auto Shot keeps its native
 range check; Mend Pet and Health Funnel apply only to the player's own pet.

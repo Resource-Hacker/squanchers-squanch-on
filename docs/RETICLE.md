@@ -32,8 +32,10 @@ Hold the free-cursor binding to temporarily release mouselook and use the UI.
 Release that binding to return to the center and relock. The default override
 bindings are **Caps Lock and Up**, including their modifier combinations.
 The native Key Bindings panel exposes the free-cursor action and manual
-toggle/lock/unlock actions. `/sqms` shows controls and status; `/sqms off` turns
-off this mouselook controller.
+toggle/lock/unlock actions. To replace the Caps Lock/Up preset, run **`/sqms bindings off`**,
+then assign **Hold to release mouselook** in WoW's Key Bindings. This removes the
+preset overrides, including the historical F8/F9 helper bindings. `/sqms` shows
+controls and status; `/sqms off` turns off this mouselook controller.
 
 Supported menus, layout editing, text entry and ground-targeted abilities suspend
 or defer the lock as appropriate. Reopening the lock starts with mouseover closed;
@@ -57,7 +59,7 @@ visible and adds range feedback.
 | Marker | Meaning | Evidence needed |
 | --- | --- | --- |
 | Dashed ring | The selected target's visible nameplate; validated world clicks briefly pulse the whole ring. | Current target and matching visible nameplate. |
-| Cardinal blocks | Conservative five-yard melee reach. | An affirmative compatible LibRangeCheck-3.0 check. |
+| Cardinal blocks | Conservative five-yard melee reach on living hostile targets. | An affirmative compatible LibRangeCheck-3.0 check. |
 | Rotating triangles, hostile | A learned ranged damage ability is in range. | Native spell range; Hunter Auto Shot retains its own check. |
 | Rotating triangles, friendly | A learned healing ability is in range. | A known spellbook rank with an affirmative native range result. |
 | Friendly ring rotation without triangles | Proximity feedback, also usable for compatible NPCs. | A compatible proximity check within the configured threshold. |

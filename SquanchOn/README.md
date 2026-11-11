@@ -41,6 +41,10 @@ The download contains no account exports, saved macros or private profiles.
 | `/squanchon tooltip` | Tooltip settings. |
 | `/sqms camera` | Optional DynamicCam framing status. |
 
+To replace the Caps Lock/Up preset, run `/sqms bindings off`, then assign
+**Hold to release mouselook** in WoW's Key Bindings. This also removes the
+historical F8/F9 helper overrides.
+
 First-use setup enables native mouseover casting with no modifier and preserves
 later user changes. Explicit-unit macros retain their targets. The gate does not
 cast a spell or select a hard target. Native mouselook, the held mouseover gate and
@@ -50,7 +54,7 @@ interact-on-down / target-on-up helper is not bundled.
 ## Range and integrations
 
 The selected-target nameplate uses a dashed ring. Cardinal blocks indicate
-conservative five-yard melee reach; rotating triangles indicate a learned damage
+conservative five-yard hostile melee reach; rotating triangles indicate a learned damage
 or healing spell in range. Mend Pet and Health Funnel apply only to your own pet.
 
 **LibRangeCheck-3.0**, normally provided by optional **Plater**, is needed for
