@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Restore a visible gold leading border on General and other exposed chat tabs.
+- Strengthen the continuous line beneath the tabs to three physical pixels.
+  Both changes were visually checked after reload in the existing Forever setup.
+
 ## 0.1.0-alpha — 2026-11-10
 
 First packaged public developer alpha for Forever interface 16001.

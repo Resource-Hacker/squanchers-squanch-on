@@ -867,8 +867,9 @@ local function fitChatTabBorder(tab, state)
     end
     for _, side in ipairs({"Left", "Right"}) do
         local edge = border[side.."Edge"]
-        if side == "Left" then atlasSlice(edge, 5, 13, 9, 42)
-        else atlasSlice(edge, 46, 13, 50, 42) end
+        -- The native left slice collapses to shadow at two physical pixels.
+        -- Use the visible right bevel on both sides of these thin tab rims.
+        atlasSlice(edge, 46, 13, 50, 42)
         local inset = side == "Left" and 0 or -width
         edge:ClearAllPoints()
         edge:SetPoint("TOPLEFT", tab, "TOP"..side:upper(), inset, -width)
@@ -1118,12 +1119,16 @@ function Skin:Chat()
     end
     if dock and not self.chatTabDivider then
         local line = panel:CreateTexture(nil, "BORDER")
-        -- Exact lower-edge sample, palette and thickness used by the tab rim.
-        atlasSlice(line, 13, 46, 42, 50)
-        line:SetAlpha(BORDER_ALPHA)
-        line:SetHeight(chatBorderWidth(panel))
-        line:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", -1, 0)
-        line:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 1, 0)
+        -- Three physical pixels, with the extra pixel below the tab faces.
+        -- Keep the top aligned with the vertical rims so the corners stay closed.
+        -- A solid gold rule avoids dark bands from the compressed atlas strip.
+        line:SetColorTexture(BORDER_R * .5, BORDER_G * .5, BORDER_B * .5, 1)
+        self:TintChrome(line)
+        local width = chatBorderWidth(panel)
+        line:SetAlpha(1)
+        line:SetHeight(width * 1.5)
+        line:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", -1, -width * .5)
+        line:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 1, -width * .5)
         self.chatTabDivider = line
     end
     -- Keep the original native voice action in the tab row; remove its default
