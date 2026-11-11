@@ -209,6 +209,19 @@ local function styleWindowHeader(skin, frame)
     fitWindowPortrait(frame)
 end
 
+-- GameDialog uses one full-frame border atlas in BG.Top, not NineSlice edges.
+-- Remove that exact decorative layer; native dialog controls and content stay owned.
+local function styleStaticPopup(skin, frame, border)
+    if frame ~= StaticPopup1 and frame ~= StaticPopup2 and frame ~= StaticPopup3 and frame ~= StaticPopup4 then return end
+    local background = frame.BG
+    if not background then return end
+    if background.Top and background.Top.GetAtlas
+        and background.Top:GetAtlas() == "UI-DiamondDialogBox-Border" then
+        background.Top:SetAlpha(0)
+    end
+    if background.Bottom then skin:StylePanelBackground(background.Bottom, border) end
+end
+
 local function applyWindow(frame)
     if InCombatLockdown() then pending = true; return end
     local skin = ns.DarkSkin
@@ -218,6 +231,7 @@ local function applyWindow(frame)
     local owner = frame == WorldMapFrame and frame.BorderFrame or frame
     hideNativeEdges(owner)
     local border = skin:Panel(owner, "dialog", 0)
+    styleStaticPopup(skin, frame, border)
     if frame==LootFrame then styleLootWindow(skin,frame,border) end
     -- Shared native panel Bg is decorative rock/marble, never the map/model
     -- content. Keep one chat-matched fill while child insets remain transparent.
