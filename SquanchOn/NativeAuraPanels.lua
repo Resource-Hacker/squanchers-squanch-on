@@ -16,7 +16,10 @@ local specs = {
     FocusBuffs = { "focus", "HELPFUL", "TOPRIGHT", -53, 53 },
     FocusDebuffs = { "focus", "HARMFUL", "TOPRIGHT", -53, 53 },
 }
-local unitFrameOwned = { Buffs = true, RaidDebuffs = true, TargetDebuffs = true, FocusBuffs = true, FocusDebuffs = true }
+-- All separate panels are off: auras live on the unit frames and the buff/debuff
+-- bars, and the cooldown tracker listed one spell several times (owner, 2026-11-11).
+local unitFrameOwned = { Buffs = true, RaidDebuffs = true, TargetDebuffs = true, FocusBuffs = true, FocusDebuffs = true,
+    Procs = true, Enhancements = true, Cooldowns = true, ItemCooldowns = true }
 local function public(v) return not (issecretvalue and issecretvalue(v)) end
 local function number(v) return public(v) and type(v) == "number" end
 local function option(t, key, default)
