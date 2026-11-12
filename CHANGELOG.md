@@ -1,7 +1,21 @@
 # Changelog
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-11-12
 
+- An action-MMO setup first, made for a Horde Hunter: the README and reticle
+  documentation now say so up front, and explain what sets the reticle apart.
+- Reticle: the red dot sits on the client's mouseover pick point (measured to
+  within a quarter of a pixel) and the Horde emblem is placed so its diamond
+  surrounds it; one piece of code now positions the emblem. The round in-range
+  glow is back. `/run SquanchOn.HordeReticle:Test()` previews dot and glow.
+- The mouseover gate reaches the nameplates on the press itself, so mouseover
+  feedback starts on the first frame the game reports a unit.
+- Friendly mouseover ring: 0.2 s fade in and out, also when a unit walks under
+  a held-open gate.
+- Nameplate names get a clean dark edge from offset copies; the vector outline
+  left spikes and nicks on letters such as U, Y and B.
+- The small border is used on the game's own controls too: edit boxes,
+  dropdowns, checkboxes, sliders, scrollbars, close buttons, insets and cards.
 - Efficiency sweep: the target ring and nameplates are event-driven, aura updates are coalesced and refits gated.
 - Removed the old unit-frame, nameplate-indicator and tooltip option windows (their last functions moved to the `/squanchon` pages), the retired aura panels, the unloaded LibRangeCheck-3.0 source file and the unused dashed ring art.
 - The player frame fades out when idle: out of combat, full health, no target, no cast (setting under Unit Frames).

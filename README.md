@@ -2,12 +2,25 @@
 
 ![Squanch-On: keep the camera locked, open mouseover only when you mean it. Steer, hold right mouse, release.](docs/images/reticle-control.svg)
 
-**Keep the camera locked. Open mouseover only when you mean it.**
+**An action-MMO setup for World of Warcraft. Horde first. Hunter first.**
 
-Squanch-On builds a World of Warcraft interface around a deliberate reticle control:
-move the mouse to steer, **hold right mouse to open real mouseover at the reticle**,
-then release to close mouseover while the camera stays locked. Hold the free-cursor
-key when you need the interface; release it to return to mouselook.
+Squanch-On plays WoW like a third-person action game. The camera is always
+locked to the mouse, a fixed Horde reticle sits in the middle of the screen,
+and the unit under its dot is the unit your abilities hit, but only while you
+hold right mouse. The interface (unit frames, nameplates, chat, bags, damage
+meter, camera) is built around keeping your eyes on that reticle.
+
+It is made by a Horde Hunter for that character, and it shows:
+
+- **Horde first.** The reticle is the Horde emblem; friendly nameplates carry
+  the Horde crest, and the target ring hugs it. Alliance players can use
+  everything, but the art and defaults are Horde.
+- **Hunter first.** The reticle's red dot and in-range glow follow Hunter Auto
+  Shot range. Other classes get the full mouselook, gate, target ring and range
+  cues (melee blocks, ranged and healing triangles); the dot and glow on the
+  reticle itself are Hunter-only today.
+- **Action first.** Steering, aiming and casting never leave mouselook. You get
+  a cursor only when you hold a key for it.
 
 [**Install**](docs/LOCAL-ASSEMBLY.md)
 · [How the reticle works](docs/RETICLE.md)
@@ -20,63 +33,51 @@ Everything is in one `SquanchOn/` folder: mouselook and reticle, camera, unit
 frames, nameplates, buff and debuff bars, chat, drawers, a bag window, a damage
 meter, tooltip presentation, one settings window, profiles, fonts and textures.
 No other addon is required; the author runs it without Plater or DynamicCam. The
-author has checked it live only solo and out of combat on the Forever client.
+author has checked it live mostly solo and out of combat on the Forever client.
 Combat (including nameplates on hostile mobs, their cast bars, auras and threat
 colours), hostile-target debuffs, pet/party/raid frames, profile switching and
 import, theme recolouring, the camera while mounted or in combat and most bag
 interactions have not been verified. See [compatibility](docs/COMPATIBILITY.md#verification-status).
 
-## What it looks like
+## A reticle no other addon has
 
-![The layout editor over the whole interface: chat with the menu icons in its header, the character sheet opened as a drawer above the chat, unit frames, action bars, the bag window left of the minimap and the damage meter on its right.](docs/images/ui-layout-editor.png)
+Action-combat setups for WoW usually do one of three things:
 
-*The layout editor (`/sqedit`) over the whole interface: every element can be dragged and resized on a 10-pixel grid.*
+- **Soft targeting.** The game picks a unit from a cone in front of your
+  character. What you hit is the game's guess, not your aim.
+- **Mouseover left on at the screen centre.** Every mouseover ability fires at
+  whatever drifts under the crosshair, whether you meant it or not.
+- **Help from outside the game.** Key remappers, controller emulation or
+  gamepad mode do the work the addon can't.
 
-| One settings window (`/squanchon`) | Unit frames, per unit |
+Squanch-On does none of these, and we know of no other addon that works the
+way it does:
+
+| | |
 | --- | --- |
-| ![Settings window with the category tree, search box and the Tooltip page.](docs/images/ui-settings-window.png) | ![Unit Frames, Player page with frame and portrait settings.](docs/images/ui-settings-unit-frames.png) |
+| **The dot is the game's own pick point.** | While the camera is locked, WoW picks the mouseover unit at one exact spot on screen. The reticle's red dot is drawn on that spot (measured in game to within a quarter of a pixel), and the Horde emblem is built around the dot. What is under the dot is what you will hit: no cone, no guess. |
+| **Mouseover is closed until you ask for it.** | Normal steering never feeds a mouseover ability. Hold right mouse and true mouseover opens at the dot; release and it closes at once. The camera stays locked either way. |
+| **It tells you before you press.** | On a hostile unit under the open gate, the dot lights; within Auto Shot range it glows. The selected target's ring shows melee reach as blocks and ranged or healing reach as rotating triangles, and a friendly ring lights up under the reticle. |
+| **Pure addon, ordinary keyboard and mouse.** | Native bindings only. No key remapper, virtual controller, gamepad mode or helper program. |
+| **The cursor comes home.** | Hold Caps Lock (or Up) for the hardware cursor; release it and the cursor returns to the dot and mouselook relocks, without turning the camera. |
 
-| Camera with zoom curves | Chat header with the menu icons |
-| --- | --- |
-| ![Camera, Shoulder offset page showing the offset curve by zoom distance.](docs/images/ui-settings-camera.png) | ![Chat tabs, volume control, menu icons and Friends in one header strip.](docs/images/ui-chat-header.png) |
+<p align="center"><img src="docs/images/reticle-dot-closeup.png" alt="Close-up of the Horde reticle: the red mouseover dot sits in the emblem's diamond, with the in-range glow around it." width="240"></p>
 
-![Rows of preview nameplates: enemy and friendly NPCs and players, casts, elite and rare units, threat states, a quest unit and a selected friendly player with the target ring.](docs/images/ui-nameplate-preview.png)
-
-*Squanch-On's nameplates in the `/sqplates test on` preview. The units are made up by the preview; this is not live combat.*
-
-| Bags, quests, minimap and damage meter | Character sheet as a chat drawer |
-| --- | --- |
-| ![Bag window left of the minimap, quest drawer above it and the damage meter table on its right, each with a raised title.](docs/images/ui-bags-minimap-meter.png) | ![The character sheet opened above the chat at the chat's width.](docs/images/ui-character-drawer.png) |
-
-![Chat, player and target frames, action bars, minimap and damage meter along the bottom of an ultrawide screen.](docs/images/ui-hud-strip.png)
-
-*The bottom strip in play. Out of combat at full health with no target, the player frame steps aside.*
-
-| Graphics sliders past the game's top level |
-| --- |
-| ![Squanch-On Graphics page: ground clutter, view distance and environment detail on a 1 to 20 scale.](docs/images/ui-settings-graphics.png) |
-
-## The reticle is the control
-
-Normal locked mouselook keeps centered mouseover **closed**. Holding right mouse
-temporarily makes the unit under the aim center available to WoW's actual
-`mouseover` system. Releasing right mouse closes that gate immediately, with
-mouselook still active. You decide when aiming should affect a mouseover ability.
+<p align="center"><em>The reticle with the gate open on a hostile unit in range (preview, enlarged): the dot in the emblem's diamond, with the glow around it.</em></p>
 
 | What you do | What happens |
 | --- | --- |
-| Move the mouse | Steer the camera with the native cursor hidden; centered mouseover stays closed. |
-| **Hold right mouse** | **Open true mouseover at the reticle, keeping the camera locked.** |
+| Move the mouse | Steer the camera with the native cursor hidden; mouseover at the reticle stays closed. |
+| **Hold right mouse** | **Open true mouseover at the dot, keeping the camera locked.** |
 | Press an ability while holding | WoW's native mouseover casting can use that unit, subject to the ability's normal rules. |
-| **Release right mouse** | **Close centered mouseover immediately; keep steering.** |
+| **Release right mouse** | **Close mouseover immediately; keep steering.** |
 | Hold the free-cursor key | Use the native hardware cursor for the interface. Default preset: Caps Lock / Up; [rebinding instructions](docs/RETICLE.md#getting-the-cursor-back). |
-| Release the free-cursor key | Return the cursor to the center and resume mouselook. |
+| Release the free-cursor key | Return the cursor to the dot and resume mouselook. |
 
 First-use setup enables native mouseover casting with no modifier; later user
 changes are preserved. Explicit-unit macros retain their own targeting rules.
 Opening the gate does not cast a spell or automatically select a hard target.
-The native mouselook, hold-to-open mouseover and cursor-return features run inside
-the addon. [Controls, safeguards and implementation details →](docs/RETICLE.md)
+[Controls, safeguards and implementation details →](docs/RETICLE.md)
 
 ## In game
 
@@ -120,6 +121,36 @@ item-range checks; its item list derives from LibRangeCheck-3.0 (MIT). A cue sta
 Friendly ring rotation alone is proximity feedback; healing range uses the
 triangles. Range feedback does not guarantee mana, cooldown, form or line of
 sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-feedback).
+
+## What it looks like
+
+![The layout editor over the whole interface: chat with the menu icons in its header, the character sheet opened as a drawer above the chat, unit frames, action bars, the bag window left of the minimap and the damage meter on its right.](docs/images/ui-layout-editor.png)
+
+*The layout editor (`/sqedit`) over the whole interface: every element can be dragged and resized on a 10-pixel grid.*
+
+| One settings window (`/squanchon`) | Unit frames, per unit |
+| --- | --- |
+| ![Settings window with the category tree, search box and the Tooltip page.](docs/images/ui-settings-window.png) | ![Unit Frames, Player page with frame and portrait settings.](docs/images/ui-settings-unit-frames.png) |
+
+| Camera with zoom curves | Chat header with the menu icons |
+| --- | --- |
+| ![Camera, Shoulder offset page showing the offset curve by zoom distance.](docs/images/ui-settings-camera.png) | ![Chat tabs, volume control, menu icons and Friends in one header strip.](docs/images/ui-chat-header.png) |
+
+![Rows of preview nameplates: enemy and friendly NPCs and players, casts, elite and rare units, threat states, a quest unit and a selected friendly player with the target ring.](docs/images/ui-nameplate-preview.png)
+
+*Squanch-On's nameplates in the `/sqplates test on` preview. The units are made up by the preview; this is not live combat.*
+
+| Bags, quests, minimap and damage meter | Character sheet as a chat drawer |
+| --- | --- |
+| ![Bag window left of the minimap, quest drawer above it and the damage meter table on its right, each with a raised title.](docs/images/ui-bags-minimap-meter.png) | ![The character sheet opened above the chat at the chat's width.](docs/images/ui-character-drawer.png) |
+
+![Chat, player and target frames, action bars, minimap and damage meter along the bottom of an ultrawide screen.](docs/images/ui-hud-strip.png)
+
+*The bottom strip in play. Out of combat at full health with no target, the player frame steps aside.*
+
+| Graphics sliders past the game's top level |
+| --- |
+| ![Squanch-On Graphics page: ground clutter, view distance and environment detail on a 1 to 20 scale.](docs/images/ui-settings-graphics.png) |
 
 ## An interface built around that playstyle
 

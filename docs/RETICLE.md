@@ -88,12 +88,32 @@ player's own pet. Spellbook, specialization and form changes refresh the cache.
 This is range feedback, not a promise that a spell is currently castable. Class
 coverage in source is not a completed in-game acceptance matrix.
 
-## What makes this control scheme distinctive
+## Why no other addon works like this
 
-The important combination is **persistent native mouselook + a deliberately held
-real-mouseover gate + native mouseover casting**. That is the project's focus.
-The broader addon ecosystem already has camera, crosshair and targeting tools,
-and Squanch-On does not claim to be the first or only reticle addon.
+Plenty of addons have crosshairs, camera control or targeting help. None we
+have found combines these:
+
+1. **Persistent native mouselook.** The camera never unlocks for aiming or
+   casting; you get a cursor only while you hold the free-cursor key.
+2. **A held gate on real mouseover.** Mouseover at the reticle is closed while
+   you steer and opens only while right mouse is held. It is WoW's real
+   `mouseover` unit, used by native mouseover casting, not a macro layer and not
+   soft targeting.
+3. **The dot on the game's pick point.** The reticle's red dot is drawn where the
+   client picks that mouseover unit (`GetCursorCenterPosition`); measured in game,
+   its centre lies within a quarter of a pixel of that point. The Horde emblem is
+   placed so its diamond surrounds the dot. So the dot shows exactly what the gate
+   will hand to your ability.
+4. **Feedback before you press.** The dot lights on a hostile unit under the
+   open gate and glows within Hunter Auto Shot range; the selected target's ring
+   shows melee and ranged or healing reach.
+5. **Addon only.** Ordinary keyboard and mouse, native bindings. No key
+   remapper, virtual controller, gamepad mode or helper program.
+
+It is a Horde Hunter's setup first: the reticle is the Horde emblem, and its dot
+and glow follow Auto Shot range. Other classes keep the mouselook, the gate, the
+target ring and its range cues; the reticle's own dot and glow are Hunter-only
+for now.
 
 A source comparison on 2026-11-10 found that Action Combat Mode's inspected
 reticle preset disables native mouseover casting and uses soft targeting, with a
@@ -116,7 +136,10 @@ for selected-target nameplate visibility. These links are context, not bundled d
 - [`MouseoverCasting.lua`](../SquanchOn/MouseoverCasting.lua) owns one-time native
   casting settings; it does not dispatch spells.
 - [`HordeReticle.lua`](../SquanchOn/HordeReticle.lua) renders feedback from current
-  state; it does not choose units.
+  state; it does not choose units. It draws the dot and glow on the aim point.
+  `Core.lua`'s `UpdateAimPoint` alone positions the emblem, so that its diamond
+  surrounds that point. `/run SquanchOn.HordeReticle:Test()` previews the dot and
+  glow without a target.
 - [`TargetCrosshairs.lua`](../SquanchOn/TargetCrosshairs.lua) owns the separate
   selected-target range markers.
 - [`Range.lua`](../SquanchOn/Range.lua) answers the distance questions those
