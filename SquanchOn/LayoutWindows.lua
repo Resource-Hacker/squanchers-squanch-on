@@ -248,7 +248,15 @@ function module:Apply(id, frame)
         if chat then
             -- Width-match by scale; cap so the window fits the room above chat
             -- (rect.y is the physical-pixel distance from the screen top).
-            local ratio = math.min(target.w / rect.w, math.max(1, target.y - 12) / rect.h)
+            -- The character sheet matches chat with its stats sidebar closed; an
+            -- open sidebar extends past the chat at that same scale.
+            local width = rect.w
+            if frame == CharacterFrame and frame.Expanded then
+                local full = frame:GetWidth()
+                local closed = PANEL_DEFAULT_WIDTH or 338
+                if full and full > closed then width = rect.w * closed / full end
+            end
+            local ratio = math.min(target.w / width, math.max(1, target.y - 12) / rect.h)
             if math.abs(ratio - 1) > 0.0005 then frame:SetScale(frame:GetScale() * ratio) end
             frame:ClearAllPoints()
             frame:SetPoint('BOTTOMLEFT', chat, 'TOPLEFT', 0, 0)
