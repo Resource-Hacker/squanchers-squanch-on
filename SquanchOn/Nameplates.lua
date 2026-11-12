@@ -218,6 +218,10 @@ function NP:Font(object, name, size, outline)
   if not object:SetFont(path, size, outline == 'NONE' and '' or outline or '') then
     object:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', size, outline == 'NONE' and '' or outline or '')
   end
+  -- The previous plates drew every text with a black one-unit drop shadow; it
+  -- is what keeps a bar from showing through the hollows of the digits.
+  object:SetShadowColor(0, 0, 0, 1)
+  object:SetShadowOffset(1, -1)
 end
 
 function NP:PlaterLoaded()
