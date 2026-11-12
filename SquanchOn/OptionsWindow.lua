@@ -519,7 +519,7 @@ local function createResultHeader()
     control:SetSize(CONTENT_W, 20)
     control.text = widgets():Label(control, '', 10, widgets().headerText[1], widgets().headerText[2], widgets().headerText[3]); control.text:SetPoint('LEFT', 0, 0)
     control:SetScript('OnEnter', function(self) self.text:SetTextColor(1, .85, .55) end)
-    control:SetScript('OnLeave', function(self) self.text:SetTextColor(widgets().headerText[1], widgets().headerText[2], widgets().headerText[3]) end)
+    control:SetScript('OnLeave', function(self) self.text:SetTextColor(widgets().headerText[1], widgets().headerText[2], widgets().headerText[3], widgets().headerText[4]) end)
     control:SetScript('OnMouseDown', function(self) self.text:SetPoint('LEFT', 1, -1) end)
     control:SetScript('OnMouseUp', function(self) self.text:SetPoint('LEFT', 0, 0) end)
     control:SetScript('OnClick', function(self) Window:Jump(self.category) end)
@@ -635,7 +635,7 @@ function Window:DrawTree()
         row.text:ClearAllPoints(); row.text:SetPoint('LEFT', row.indent, 0); row.text:SetPoint('RIGHT', -22, 0)
         row.text:SetText(category.title)
         local selected = not searching and category.id == self.category
-        if selected then row.text:SetTextColor(W.headerText[1], W.headerText[2], W.headerText[3]) else row.text:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]) end
+        if selected then row.text:SetTextColor(W.headerText[1], W.headerText[2], W.headerText[3], W.headerText[4]) else row.text:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]) end
         row.bar:SetShown(selected)
         row.chevron:SetShown(children)
         if children then

@@ -22,8 +22,9 @@ Skin.themeDefaults = {
     inner = { r = 0.70, g = 0.532, b = 0.294 },
     fill = { r = 0.054901964962482, g = 0.054901964962482, b = 0.054901964962482 }, fillAlpha = 0.66216158866882,
     buttonBrightness = 1,
-    -- Heading text is the rim gold at the strength an unselected chat tab shows it.
-    headerText = { r = 0.55, g = 0.42, b = 0.23 }, bodyText = { r = 0.9, g = 0.9, b = 0.86 },
+    -- Heading text is drawn exactly like an unselected chat tab's label: this
+    -- gold at Skin.headerTextColor[4] opacity, in the tab font with an outline.
+    headerText = { r = 0.902, g = 0.686, b = 0.376 }, bodyText = { r = 0.9, g = 0.9, b = 0.86 },
 }
 Skin.chatDefaults = {
     tabFont = "Bui Homizio", tabSize = 10, tabHeight = 22,
@@ -39,7 +40,9 @@ Skin.rimColor = { 0.90, 0.684, 0.378 }
 -- scaled per channel with theme.inner, about inner * (0.34 / 0.70).
 local LINE_DEFAULT = { 0.34, 0.26, 0.145 }
 Skin.lineColor = { 0.34, 0.26, 0.145 }
-Skin.headerTextColor = { 0.55, 0.42, 0.23 }
+Skin.headerTextColor = { 0.902, 0.686, 0.376, 0.6 }
+-- The same heading as one opaque colour, for native regions whose alpha the client owns.
+Skin.headerTextFlat = { 0.55, 0.42, 0.23 }
 Skin.bodyTextColor = { 0.9, 0.9, 0.86 }
 Skin.themeListeners = {}
 local function stored(area, defaults, key)
@@ -74,6 +77,8 @@ local function loadTheme()
     FACE_BRIGHTNESS = tonumber(Skin:Theme("buttonBrightness")) or 1
     local header, body = Skin.headerTextColor, Skin.bodyTextColor
     header[1], header[2], header[3] = themeColor("headerText")
+    local flat = Skin.headerTextFlat
+    flat[1], flat[2], flat[3] = header[1] * 0.61, header[2] * 0.61, header[3] * 0.61
     body[1], body[2], body[3] = themeColor("bodyText")
 end
 -- What ApplyTheme revisits. Weak keys: released pool textures drop out.
@@ -1020,11 +1025,10 @@ local function nativeTabStyle(tab, selected, joinedLeft)
     if not title or issecretvalue and issecretvalue(title) then return end
     -- The raised face carries selection; native docking, alerts and input stay intact.
     tab.Text:SetText(title)
-    -- The client shows an unselected tab at 0.6 alpha; lift the heading colour
-    -- by that so the tab reads at exactly the heading strength used elsewhere.
+    -- An unselected tab is this heading gold under the client's own 0.6 tab alpha.
     if selected then tab.Text:SetTextColor(1,1,1) else
         local h=Skin.headerTextColor
-        tab.Text:SetTextColor(math.min(1,h[1]/0.61),math.min(1,h[2]/0.61),math.min(1,h[3]/0.61))
+        tab.Text:SetTextColor(h[1],h[2],h[3])
     end
 end
 
@@ -1631,3 +1635,9 @@ events:SetScript("OnEvent", function(_, event)
     end
     if Skin.started then Skin:Interface() end
 end)
+
+-- The heading look, literally the unselected chat tab's label: tab font and
+-- size family, outline, heading gold at the tab's opacity.
+function Skin:HeadingFont(size)
+    return ns.Media:Resolve("font", self:ChatSetting("tabFont")), size or self:ChatSetting("tabSize"), "OUTLINE"
+end

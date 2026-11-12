@@ -427,7 +427,7 @@ end
 -- Options text: soft off-white body, gold headings. Native white (selected),
 -- grey (disabled/unbound) and red (warning) colours keep their meaning.
 -- The theme's live colour tables; the copies are what regions currently show.
-local BODY_TEXT, HEADER_TEXT = ns.DarkSkin.bodyTextColor, ns.DarkSkin.headerTextColor
+local BODY_TEXT, HEADER_TEXT = ns.DarkSkin.bodyTextColor, ns.DarkSkin.headerTextFlat
 local shownBody, shownHeader = { unpack(BODY_TEXT) }, { unpack(HEADER_TEXT) }
 local settingsColorHooks = setmetatable({}, { __mode = "k" })
 local settingsFonts, settingsFontCount = {}, 0

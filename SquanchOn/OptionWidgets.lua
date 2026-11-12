@@ -51,9 +51,17 @@ function W:Label(parent, text, size, r, g, b)
     local font = parent:CreateFontString(nil, 'OVERLAY')
     font:SetFont(fontPath(), size or 10, '')
     font:SetShadowColor(0, 0, 0, 1); font:SetShadowOffset(1, -1)
-    followers[font] = r and near(r, g, b, HEADING) and HEAD_LABEL or BODY_LABEL
+    local heading = r and near(r, g, b, HEADING)
+    followers[font] = heading and HEAD_LABEL or BODY_LABEL
     if not r then r, g, b = TEXT[1], TEXT[2], TEXT[3] end
-    font:SetTextColor(r, g, b)
+    if heading then
+        -- Headings are drawn exactly like an unselected chat tab's label.
+        local path = Skin:HeadingFont(size or 10)
+        font:SetFont(path, size or 10, 'OUTLINE')
+        font:SetTextColor(r, g, b, HEADING[4])
+    else
+        font:SetTextColor(r, g, b)
+    end
     font:SetJustifyH('LEFT'); font:SetText(text or '')
     return font
 end
@@ -266,7 +274,7 @@ function W:Chevron(parent, size)
         function frame:SetDirection(direction) text:SetText(direction == 'right' and '>' or direction == 'up' and '^' or 'v') end
         function frame:SetColor(r, g, b2) text:SetTextColor(r, g, b2) end
     end
-    frame:SetColor(HEADING[1], HEADING[2], HEADING[3]); frame:SetDirection('down')
+    frame:SetColor(HEADING[1], HEADING[2], HEADING[3], HEADING[4]); frame:SetDirection('down')
     return frame
 end
 
@@ -796,7 +804,7 @@ function W:Section(parent, width)
     local function hover()
         local over = control:IsMouseOver()
         if over then control.title:SetTextColor(HOVER[1], HOVER[2], HOVER[3]); control.chevron:SetColor(HOVER[1], HOVER[2], HOVER[3])
-        else control.title:SetTextColor(HEADING[1], HEADING[2], HEADING[3]); control.chevron:SetColor(HEADING[1], HEADING[2], HEADING[3]) end
+        else control.title:SetTextColor(HEADING[1], HEADING[2], HEADING[3], HEADING[4]); control.chevron:SetColor(HEADING[1], HEADING[2], HEADING[3], HEADING[4]) end
         reset:SetAlpha(over and control.canReset and 1 or 0)
         if reset:IsMouseOver() and control.canReset then reset.text:SetTextColor(HOVER[1], HOVER[2], HOVER[3])
         else reset.text:SetTextColor(GREY[1], GREY[2], GREY[3]) end
@@ -838,7 +846,7 @@ function W:Segmented(parent)
             end
             button:ClearAllPoints(); button:SetPoint('LEFT', (index - 1) * width + 3, 0)
             button:SetWidth(width - 6); button:SetText(label)
-            if index == selected then button.text:SetTextColor(HEADING[1], HEADING[2], HEADING[3])
+            if index == selected then button.text:SetTextColor(HEADING[1], HEADING[2], HEADING[3], HEADING[4])
             else button.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3]) end
             button:Show()
         end

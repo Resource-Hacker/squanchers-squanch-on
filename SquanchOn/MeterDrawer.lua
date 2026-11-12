@@ -43,12 +43,12 @@ local HEADER, PAD, THROTTLE, MIN_WIDTH = 18, 6, .25, 40
 -- The table under the title strip: a row of column names, then the rows.
 -- Widths in interface units; the name column takes what is left and the
 -- optional columns go (share, second value, rank) before it gets under NAME_MIN.
-local COLUMNS, CELL, NAME_MIN = 13, 3, 40
+local COLUMNS, CELL, NAME_MIN = 13, 3, 34
 local ORDER = { 'rank', 'name', 'value', 'rate', 'percent' }
 -- Sized for the drawer beside the minimap (about 157 units inside): all four
 -- fixed columns leave the name some 45 units, enough for a first name.
 local WIDTH = { rank = 14, value = 38, rate = 32, percent = 28 }
-local ALIGN = { rank = 'CENTER', name = 'LEFT', value = 'RIGHT', rate = 'RIGHT', percent = 'RIGHT' }
+local ALIGN = { rank = 'CENTER', name = 'CENTER', value = 'CENTER', rate = 'CENTER', percent = 'CENTER' }
 local VALUE_TITLE = {
     DamageDone = 'Damage', Dps = 'DPS', HealingDone = 'Healing', Hps = 'HPS', Absorbs = 'Absorbs',
     DamageTaken = 'Taken', AvoidableDamageTaken = 'Avoided', EnemyDamageTaken = 'Taken',
@@ -712,6 +712,7 @@ function Meter:Initialize()
     self.head, self.titles, self.rules, self.dividers = head, {}, {}, {}
     for _, key in ipairs(ORDER) do
         local title = label(head, 8)
+        title:SetFont(skin:HeadingFont(8))
         title:SetJustifyH(ALIGN[key]); title:SetWordWrap(false)
         self.titles[key] = title
     end
@@ -737,8 +738,8 @@ function Meter:Initialize()
     self.grid = grid
     local function theme()
         local color = skin.headerTextColor
-        for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3]) end
-        modeBox.text:SetTextColor(color[1], color[2], color[3])
+        for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3], color[4]) end
+        modeBox.text:SetTextColor(color[1], color[2], color[3], color[4])
         for _, rule in ipairs(self.rules) do paintRule(rule) end
         for _, line in ipairs(self.dividers) do paintRule(line) end
         for _, row in ipairs(self.rows or {}) do if row.line then paintRule(row.line) end end
