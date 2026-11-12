@@ -27,7 +27,7 @@ local function skinCard(card)
     end
     background:SetDesaturated(true)
     background:SetVertexColor(0.8, 0.8, 0.8, backgrounds[background] * 0.35)
-    ns.DarkSkin:Panel(card, "inner", 0)
+    ns.DarkSkin:SmallBox(card)
 end
 
 function module:Apply()

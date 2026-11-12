@@ -96,12 +96,8 @@ function W:Button(parent, text, width, callback, height, style)
 end
 -- Boxes (inputs, checks, swatches): the small border starting where the thin
 -- gear rim's gold used to start, with the dark face filling it to its edge.
-local BOX_INSET = Skin.styles.inner.edge * 4.5 / 13 - Skin.styles.inner.offset
 local function box(control, face)
-    local border = Skin:SmallBorder(control)
-    border:ClearAllPoints()
-    border:SetPoint('TOPLEFT', control, 'TOPLEFT', BOX_INSET, -BOX_INSET)
-    border:SetPoint('BOTTOMRIGHT', control, 'BOTTOMRIGHT', -BOX_INSET, BOX_INSET)
+    local border = Skin:SmallBox(control)
     face:ClearAllPoints(); face:SetAllPoints(border)
     return border
 end

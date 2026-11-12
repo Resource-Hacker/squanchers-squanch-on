@@ -241,7 +241,7 @@ function Controls:FinishChrome(frame)
     local normal = frame.GetNormalTexture and frame:GetNormalTexture()
     if normal and closeAtlases[normal:GetAtlas()] then
         finishChromeButton(frame, "close")
-        ns.DarkSkin:Panel(frame, "inner", 0)
+        ns.DarkSkin:SmallBox(frame)
     end
     -- Minimal/WowTrim scrollbars are EventFrames with EventButton steppers and
     -- a split thumb, not Slider objects. Restrict this adapter to their schema.
@@ -258,7 +258,7 @@ function Controls:FinishChrome(frame)
     finishChromeButton(frame.Back, "scroll")
     finishChromeButton(frame.Forward, "scroll")
     finishChromeButton(thumb, "scroll")
-    ns.DarkSkin:Panel(frame, "inner", 0)
+    ns.DarkSkin:SmallBox(frame)
 end
 
 function Controls:Style(frame, explicit)
@@ -269,7 +269,7 @@ function Controls:Style(frame, explicit)
     if frame.layoutType == "InsetFrameTemplate" then
         hideTrim(frame)
         if frame.Bg then frame.Bg:SetAlpha(0) end
-        ns.DarkSkin:Panel(frame, "inner", 0)
+        ns.DarkSkin:SmallBox(frame)
         return
     end
     local kind = frame:GetObjectType()
@@ -299,7 +299,7 @@ function Controls:Style(frame, explicit)
     if dropdown then finishChromeButton(frame, "dropdown") end
     if styled[frame] then return end
     styled[frame] = true
-    local border = raised and ns.DarkSkin:RaisedButton(frame, "inner") or ns.DarkSkin:Panel(frame, "inner", 0)
+    local border = raised and ns.DarkSkin:RaisedButton(frame, "inner") or ns.DarkSkin:SmallBox(frame)
     border.ignoreInLayout = true
     frame:HookScript("OnShow", function(self) Controls:Style(self, explicit) end)
 end
@@ -481,6 +481,10 @@ local function settingsRim(frame)
     skin:FitPanelBorder(border, frame, skin.styles.inner)
     if border.raisedFace then skin:FitPanelBackground(border.raisedFace, border) end
     return border
+end
+-- Boxes there (list, page, tab) wear the small border, inset in screen units.
+local function settingsBox(frame)
+    return ns.DarkSkin:SmallBox(frame, UIParent:GetEffectiveScale() / frame:GetEffectiveScale())
 end
 -- One small-border rule on the owner's bottom edge.
 local settingsRules = setmetatable({}, { __mode = "k" })
@@ -686,8 +690,7 @@ local function finishSettingsTab(tab)
         -- The fill is a region of the tab, so the native label stays above it.
         state.fill = tab:CreateTexture(nil, "BACKGROUND")
         state.fill:SetTexture([[Interface\Buttons\WHITE8X8]])
-        local border = settingsRim(state.holder)
-        ns.DarkSkin:FitPanelBackground(state.fill, border)
+        state.fill:SetAllPoints(settingsBox(state.holder))
         for _, method in ipairs({ "UpdateAtlas", "SetSelected" }) do
             if type(tab[method]) == "function" then hooksecurefunc(tab, method, refreshSettingsTab) end
         end
@@ -888,12 +891,12 @@ function Controls:FinishWindow(frame)
                 local normal = button and button:GetNormalTexture()
                 if normal and modelAtlases[normal:GetAtlas()] then
                     finishChromeButton(button, "model")
-                    ns.DarkSkin:Panel(button, "inner", 0)
+                    ns.DarkSkin:SmallBox(button)
                 end
             end
         end
         local right = frame.RightPaneHost
-        if right then hideTexture(right.StoneBg); ns.DarkSkin:Panel(right, 'inner', 0) end
+        if right then hideTexture(right.StoneBg); ns.DarkSkin:SmallBox(right) end
         local player, pet = _G.CharacterStatsPaneScrollBox, _G.CharacterStatsPanePetScrollBox
         finishList(player and player.ScrollBox, characterCategory)
         finishList(pet and pet.ScrollBox, characterCategory)
@@ -902,8 +905,8 @@ function Controls:FinishWindow(frame)
         settingsDraggable(frame)
         finishSettingsBackground(frame)
         local categories, container = frame.CategoryList, frame.Container
-        if categories then settingsRim(categories) end
-        if container then settingsRim(container) end
+        if categories then settingsBox(categories) end
+        if container then settingsBox(container) end
         finishList(categories and categories.ScrollBox, settingsCategory)
         local list = container and container.SettingsList
         local header = list and list.Header

@@ -348,6 +348,7 @@ end
 -- unit frames' inner border above; other modules use only these three.
 --   Skin:SmallBorderWidth(frame)        its thickness in the frame's own units
 --   Skin:SmallBorder(frame[, width])    an outline round the frame; returns its host
+--   Skin:SmallBox(frame[, unit])        that outline placed as a box/control rim
 --   Skin:SmallRule(texture[, vertical[, width]])  one free-standing line
 -- The unit frames draw it 1 / effective scale thick, so the default width
 -- weighs the same on screen whatever scale the owner has. Colour follows the
@@ -387,6 +388,25 @@ function Skin:SmallBorder(frame, width)
     end
     host.smallWidth = width
     fitSmallBorder(host)
+    return host
+end
+-- A box's small border (inputs, checks, insets, cards, native controls): its
+-- outer edge sits where the thin gear rim's gold began. `unit` converts that
+-- inset for a frame drawn at another scale. A frame that wears a raised
+-- 'inner' face keeps that rim alone; it is returned instead.
+local BOX_INSET = styles.inner.edge * 4.5 / 13 - styles.inner.offset
+function Skin:SmallBox(frame, unit)
+    if not frame then return end
+    local raised = self.byFrame[frame] and self.byFrame[frame].inner
+    if raised then return raised end
+    local host = self:SmallBorder(frame)
+    local inset = BOX_INSET * (unit or 1)
+    if host.boxInset ~= inset then
+        host.boxInset = inset
+        host:ClearAllPoints()
+        host:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
+        host:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -inset, inset)
+    end
     return host
 end
 
@@ -786,6 +806,8 @@ end
 function Skin:RaisedPlate(frame, style)
     local border = self:Panel(frame, style or "inner", 0)
     if border.raisedPaint then return border.raisedPaint, border end
+    -- A control boxed before it became a raised button keeps one rim.
+    if smallBorders[frame] and (style or "inner") == "inner" then smallBorders[frame]:Hide() end
     local face = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
     face:SetTexture(WHITE)
     self:FitPanelBackground(face, border)

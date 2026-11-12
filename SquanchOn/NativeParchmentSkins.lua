@@ -255,7 +255,7 @@ function module:MapQuest()
     if rewards then
         for _, key in ipairs({'Top','Bottom','Background'}) do suppress(rewards[key]) end
     end
-    ns.DarkSkin:Panel(root, 'inner', 0)
+    ns.DarkSkin:SmallBox(root)
     for _, name in ipairs(questBody) do watchText(_G[name], root) end
     for _, name in ipairs(questTitles) do watchText(_G[name], root, 1,.82,.2) end
     local objectives = QuestInfoObjectivesFrame and QuestInfoObjectivesFrame.Objectives

@@ -30,7 +30,7 @@ function Macros:Apply()
         -- The root's single theme fill shows through; no stacked editor fill.
         hideRim(editor.NineSlice)
         hideTexture(editor.NineSlice and editor.NineSlice.Center)
-        skin:Panel(editor, "inner", 0)
+        skin:SmallBox(editor)
     end
 
     local native = MacroHorizontalBarLeft
@@ -66,7 +66,7 @@ function Macros:Apply()
             hideTexture(name.IconSelectorPopupNameLeft)
             hideTexture(name.IconSelectorPopupNameMiddle)
             hideTexture(name.IconSelectorPopupNameRight)
-            skin:Panel(name, "inner", 0)
+            skin:SmallBox(name)
         end
         if ns.NativeControlSkins then
             ns.NativeControlSkins:Style(box.OkayButton, true)

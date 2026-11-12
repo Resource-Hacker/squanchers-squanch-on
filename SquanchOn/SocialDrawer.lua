@@ -15,8 +15,9 @@ end
 -- Decorate only FriendsListSocialCardTemplate; keep its native art and input.
 function Drawer:StyleFriendCard(card)
  if not card or not card.PartyButton or not card.InitializeBackground then return end
- local rim=ns.DarkSkin:Panel(card,'inner',0)
- if card.Background then ns.DarkSkin:FitPanelBackground(card.Background,rim) end
+ local rim=ns.DarkSkin:SmallBox(card)
+ -- The card's own fill runs to the border's outer edge, under it.
+ if card.Background then card.Background:ClearAllPoints();card.Background:SetAllPoints(rim) end
 end
 function Drawer:StyleFriendCards()
  local list=SocialUIFrame and SocialUIFrame.FriendsList
@@ -39,14 +40,10 @@ function Drawer:FitTabSpine(tabs)
   host:EnableMouseWheel(false)
   host.ignoreInLayout=true
   host:SetWidth(5)
-  local rim=ns.DarkSkin:Panel(host,'inner',0)
-  -- Reuse just the material's vertical edge: no extra panel fill or box.
-  for _,key in ipairs({'TopLeftCorner','TopRightCorner','BottomLeftCorner','BottomRightCorner','TopEdge','BottomEdge','RightEdge'}) do
-   rim[key]:Hide()
-  end
-  local edge=rim.LeftEdge
-  local outer=rim.cornerSize*4.5/13
-  edge:ClearAllPoints()
+  -- One small-border rule where the thin rim's left edge was painted.
+  local edge=host:CreateTexture(nil,'BORDER')
+  ns.DarkSkin:SmallRule(edge,true)
+  local outer=ns.DarkSkin.styles.inner.edge*4.5/13
   edge:SetPoint('TOPLEFT',host,'TOPLEFT',outer,0)
   edge:SetPoint('BOTTOMLEFT',host,'BOTTOMLEFT',outer,0)
   self.tabSpine=host

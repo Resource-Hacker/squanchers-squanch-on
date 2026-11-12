@@ -33,7 +33,7 @@ local function canvas(frame)
     if frame.NineSlice then
         for _, key in ipairs(edges) do hideTexture(frame.NineSlice[key]) end
     end
-    ns.DarkSkin:Panel(frame, "inner", 0)
+    ns.DarkSkin:SmallBox(frame)
 end
 
 function Collections:Apply()
