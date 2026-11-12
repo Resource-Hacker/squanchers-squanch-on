@@ -1038,6 +1038,75 @@ function Skin:PinChatFriends(width, height, cellScale)
     friends:SetFrameStrata("LOW")
     friends:SetFrameLevel(self.chatPanel:GetFrameLevel() + 8)
     friends.squancherPinning = nil
+    self:FitChatToasts()
+end
+
+-- Friend-online and quick-join toasts sit as one compact strip on the chat
+-- panel's top edge: 70% of native size, painted rims aligned with the panel's
+-- left rim and a 2-unit gap above its top rim. Native icon, text, click, sound
+-- and fade animations stay with the toast; only its anchor, scale and chrome
+-- change. DIALOG (BNToastFrame's native strata) keeps the transient toast
+-- above any drawer window opened on the same edge.
+local CHAT_TOAST_SCALE, CHAT_TOAST_GAP, CHAT_TOAST_TEXT = 0.7, 2, 8
+function Skin:FitChatToast(toast)
+    local panel = self.chatPanel
+    if not toast or not panel or toast.squancherToastFitting then return end
+    toast.squancherToastFitting = true
+    local parent = toast:GetParent() or UIParent
+    local panelScale, parentScale = panel:GetEffectiveScale(), parent:GetEffectiveScale()
+    local width = toast:GetWidth()
+    local scale = CHAT_TOAST_SCALE
+    if width > 0 then scale = math.min(scale, panel:GetWidth() / width) end
+    toast:SetScale(scale * panelScale / parentScale)
+    local ratio = panelScale / toast:GetEffectiveScale()
+    local border = self:Panel(toast, "compact", 0)
+    -- The rim keeps the panel's own thickness instead of shrinking with the toast.
+    border:SetScale(ratio)
+    self:FitPanelBorder(border, toast, styles.compact)
+    if not toast.squancherToastFill then
+        toast.squancherToastFill = toast:CreateTexture(nil, "BACKGROUND", nil, -8)
+        if toast.NineSlice then toast.NineSlice:SetAlpha(0) end
+        if toast.GetBackdrop and toast:GetBackdrop() then
+            toast:SetBackdropColor(0, 0, 0, 0);toast:SetBackdropBorderColor(0, 0, 0, 0)
+        end
+        if toast.Background then toast.Background:SetAlpha(0) end
+        local name = toast:GetName()
+        local glow = toast.glowFrame or name and _G[name .. "GlowFrame"]
+        if glow then glow:SetAlpha(0) end
+    end
+    self:StylePanelBackground(toast.squancherToastFill, border)
+    -- Body text keeps at least the shared 8-unit size after scaling.
+    local floor = CHAT_TOAST_TEXT * ratio
+    for _, region in ipairs({ toast:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            local file, size, flags = region:GetFont()
+            if file and size and size < floor - 0.01 then region:SetFont(file, floor, flags) end
+        end
+    end
+    toast:SetFrameStrata("DIALOG")
+    -- Both rims paint (edge*2/13 - offset) outside their frames, in panel units.
+    local paint = styles.compact.offset - styles.compact.edge * 2 / 13
+    toast:ClearAllPoints()
+    toast:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", 0, (2 * paint + CHAT_TOAST_GAP) * ratio)
+    toast.squancherToastFitting = nil
+end
+
+function Skin:FitChatToasts()
+    local friends = QuickJoinToastButton
+    -- Any of these may be absent on this client; a table would stop at a gap.
+    local function own(toast)
+        if type(toast) ~= "table" or not toast.SetPoint then return end
+        if not toast.squancherToastHooked then
+            toast.squancherToastHooked = true
+            local function fit() Skin:FitChatToast(toast) end
+            -- Blizzard's UpdateAnchor and toast animations re-anchor via SetPoint.
+            hooksecurefunc(toast, "SetPoint", fit)
+            toast:HookScript("OnShow", fit)
+        end
+        self:FitChatToast(toast)
+    end
+    own(BNToastFrame)
+    if friends then own(friends.Toast);own(friends.Toast2) end
 end
 
 -- Rename the existing primary window once; its normal conversation/reward
@@ -1327,7 +1396,9 @@ function Skin:Interface()
     self:Menu()
     self:Tooltips()
     -- Native visibility controls hide/show attached decorative borders.
-    for _, name in ipairs({ "StaticPopup1", "StaticPopup2", "BNToastFrame", "QueueStatusFrame" }) do
+    -- BNToastFrame is fitted and rimmed by FitChatToasts.
+    self:FitChatToasts()
+    for _, name in ipairs({ "StaticPopup1", "StaticPopup2", "QueueStatusFrame" }) do
         local frame = _G[name]
         if frame then self:Panel(frame, "dialog", 0) end
     end

@@ -138,7 +138,12 @@ function Drawer:Initialize()
  if not frame or not ns.DarkSkin.chatPanel or self.initialized then return end
  if InCombatLockdown() then self.pending=true;return end
  self.initialized=true;self.scrollHooks=setmetatable({}, {__mode='k'})
- frame:HookScript('OnShow',function() self:Queue();ns.DrawerMotion:Open(frame,ns.DarkSkin.chatPanel) end)
+ -- Fit in the same frame as the show so the drawer is already on the chat when
+ -- its open motion checks the anchor; a later queued fit settles list heights.
+ frame:HookScript('OnShow',function()
+  if not InCombatLockdown() then pcall(self.Fit,self);self.fitting=nil end
+  self:Queue();ns.DrawerMotion:Open(frame,ns.DarkSkin.chatPanel)
+ end)
  frame:HookScript('OnSizeChanged',function() self:Queue() end)
  for _,method in ipairs({'SetPoint','SetScale','RefreshTabs','SelectTab','TryRefreshUIPanelPositions'}) do
   if frame[method] then hooksecurefunc(frame,method,function() self:Queue() end) end

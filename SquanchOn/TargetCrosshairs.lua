@@ -372,6 +372,58 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   pulse:SetLooping("REPEAT")
 
   local bound, boundPlate, maps, cutoff, alpha
+  local anchored, fitted, baseSize
+  -- Friendly targets: fit the ring around Plater's nameplate indicator icon
+  -- (class icon when enabled, otherwise the faction emblem). Plater reuses
+  -- these textures, so record which one it assigned to each plate.
+  -- circle-dashed.tga paints radii 87.5..96.5 of its 128px half-width.
+  local RING_INNER, ICON_CLEARANCE = 0.684, 1.5
+  local plateIcons = setmetatable({}, { __mode = "k" })
+  local iconHooks, refitQueued = false, false
+  local function hookIcons()
+    if iconHooks or not (Plater and Plater.AddIndicator and Plater.ClearIndicators) then return end
+    iconHooks = true
+    local function refit(plate)
+      if plate ~= boundPlate or refitQueued then return end
+      refitQueued = true
+      C_Timer.After(0, function() refitQueued = false; marker:RefreshTarget() end)
+    end
+    hooksecurefunc(Plater, "ClearIndicators", function(plate)
+      if not plate then return end
+      plateIcons[plate] = nil
+      refit(plate)
+    end)
+    hooksecurefunc(Plater, "AddIndicator", function(plate, indicator)
+      local list = plate and plate.IconIndicators
+      local icon = list and list[(list.Next or 1) - 1]
+      local kind = indicator == "classicon" and "class"
+        or (indicator == "Horde" or indicator == "Alliance") and "faction"
+      if not icon or not kind then return end
+      plateIcons[plate] = plateIcons[plate] or {}
+      plateIcons[plate][kind] = icon
+      refit(plate)
+    end)
+  end
+  local function iconFit(plate)
+    if not marker.friendly or publicQuery(UnitCanAttack, "player", "target") ~= false then return end
+    local icons = plateIcons[plate]
+    if not icons then return end
+    for _, kind in ipairs({"class", "faction"}) do
+      local icon = icons[kind]
+      if available(icon) and icon:IsVisible() then
+        local width = publicQuery(icon.GetWidth, icon)
+        local height = publicQuery(icon.GetHeight, icon)
+        local scale = publicQuery(icon.GetEffectiveScale, icon)
+        local own = publicQuery(display.GetEffectiveScale, display)
+        if not (width and height and scale and own) or width <= 0 or height <= 0
+          or scale <= 0 or own <= 0 then return end
+        -- Class tiles are square (clear their corners); faction emblems are round.
+        local radius = kind == "class" and math.sqrt(width * width + height * height) / 2
+          or math.max(width, height) / 2
+        return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER, baseSize, 1, 2048)
+      end
+    end
+  end
   local watched = setmetatable({}, { __mode = "k" })
   local deferred = false
   local healthMode = "unknown"
@@ -479,6 +531,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   function marker:HideTarget()
     bound = nil
     boundPlate = nil
+    anchored = nil
     applyRange(nil)
     warningState(false)
     display:Hide()
@@ -507,7 +560,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     for _, guide in ipairs(guides) do guide:SetShown(settings.showLines and not self.friendly) end
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit("target")
     if not available(plate) then self:HideTarget(); return end
-    if boundPlate ~= plate then bound = nil end
+    if boundPlate ~= plate then bound, anchored = nil, nil end
     boundPlate = plate
     watchVisibility(plate)
     if not plate:IsShown() or not plate:IsVisible() then
@@ -518,11 +571,20 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local unit = plate.unitFrame or plate.UnitFrame
     local destination = unit and unit.healthBar
     if not available(destination) then destination = plate end
-    if destination ~= bound then
+    hookIcons()
+    -- Hostile and icon-less targets keep the configured size on the health bar.
+    local icon, size = iconFit(plate)
+    local anchor = icon or destination
+    size = size or baseSize
+    if size ~= fitted then
+      display:SetSize(size, size)
+      fitted = size
+    end
+    if destination ~= bound or anchor ~= anchored then
       display:ClearAllPoints()
-      local ok = pcall(display.SetPoint, display, "CENTER", destination, "CENTER", 0, 0)
+      local ok = pcall(display.SetPoint, display, "CENTER", anchor, "CENTER", 0, 0)
       if not ok then self:HideTarget(); return end
-      bound = destination
+      bound, anchored = destination, anchor
     end
     watchVisibility(destination)
     if not destination:IsShown() or not destination:IsVisible() then
@@ -542,6 +604,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     cutoff = limit(settings.killShotThreshold, 0.20, 0, 1)
     maps = healthMaps(cutoff)
     display:SetSize(size, size)
+    baseSize, fitted = size, size
     for index, rectangle in ipairs(rectangles) do
       local horizontal = index < 3
       local direction = index % 2 == 1 and -1 or 1
