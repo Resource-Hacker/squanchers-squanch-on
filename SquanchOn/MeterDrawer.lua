@@ -288,13 +288,14 @@ end
 -- Columns ------------------------------------------------------------------
 -- Internal lines share the unit frames' inner outline as it appears on screen
 -- (Skin.lineColor: the flat equivalent of that tinted outline art).
+-- Column dividers are the unit frames' inner border too: the vertical strip of
+-- the same bevel, as wide as the border drawn round the header and the bars.
 local function paintRule(line)
-    local color = ns.DarkSkin.lineColor
-    line:SetColorTexture(color[1], color[2], color[3], 1)
+    local skin = ns.DarkSkin
+    if skin.UnitOutlineStrip then skin:UnitOutlineStrip(line, true)
+    else local color = skin.lineColor; line:SetColorTexture(color[1], color[2], color[3], 1) end
 end
-local function ruleWidth(frame)
-    return 2 * PixelUtil.GetPixelToUIUnitFactor() / frame:GetEffectiveScale()
-end
+local function ruleWidth() return 1 end
 -- Each cell is as wide as its column less the padding, so a long name is cut
 -- inside the name column and numbers end on their column's right edge.
 local function placeCells(cells, parent, columns)

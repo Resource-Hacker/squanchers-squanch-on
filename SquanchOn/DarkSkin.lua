@@ -278,6 +278,14 @@ function Skin:SetUnitOutlineOccluded(frame, active)
         for _,texture in ipairs(pieces) do texture:SetAlpha(active and 1 or 0) end
     end
 end
+-- One strip of that same bevel for a free-standing line (a table divider):
+-- the vertical or horizontal slice of the material, with the inner tint.
+function Skin:UnitOutlineStrip(texture, vertical)
+    if vertical then atlasSlice(texture, 5, 13, 9, 42) else atlasSlice(texture, 13, 5, 42, 9) end
+    texture:SetSnapToPixelGrid(false); texture:SetTexelSnappingBias(0)
+    texture:SetVertexColor(unpack(Skin.innerBorderColor))
+    innerTinted[texture] = true
+end
 function Skin:TexturedUnitOutline(frame, width, exclusion)
     local textures=frame.unitInnerTextures
     if not textures then
