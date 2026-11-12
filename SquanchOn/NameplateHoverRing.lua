@@ -239,7 +239,86 @@ local function show(ring, frame)
 end
 
 -- Called with every mouseover change of a plate, and when the target changes.
+-- Motion: the ring and emblem appear over 0.1 s and leave over 0.25 s; the name
+-- glides between its two places instead of jumping. Alpha and Translation
+-- animations only: nothing is measured and nothing runs per frame in Lua.
+local APPEAR, LEAVE = 0.1, 0.25
+local function alphaAnim(region, key)
+  local group = region[key]
+  if not group then
+    group = region:CreateAnimationGroup()
+    group.fade = group:CreateAnimation('Alpha')
+    group:SetToFinalAlpha(true)
+    region[key] = group
+  end
+  return group
+end
+local function fade(region, from, to, seconds, done)
+  local group = alphaAnim(region, 'sqHoverFade')
+  group:Stop()
+  group.fade:SetFromAlpha(from); group.fade:SetToAlpha(to); group.fade:SetDuration(seconds)
+  group:SetScript('OnFinished', done)
+  group:Play()
+end
+-- How far the name sits above its name-only place while the ring shows: from
+-- the layout's own numbers (bar height, name offset, font size, lines).
+local function nameRise(frame)
+  local settings = NP:Settings()
+  local config = settings.types[frame.npKind]
+  if not config then return 0 end
+  local size = tonumber(config.name.size) or 10
+  local lines = config.guild and 2 or 1
+  return (tonumber(frame.npBarHeight) or 5) / 2 + (tonumber(config.name.y) or 0) + size * lines / 2 - 10
+end
+local function glide(frame, seconds, down)
+  local name = frame.Name
+  if not name or not name.CreateAnimationGroup then return end
+  local group = name.sqHoverGlide
+  if not group then
+    group = name:CreateAnimationGroup()
+    group.move = group:CreateAnimation('Translation')
+    group.move:SetSmoothing('OUT')
+    name.sqHoverGlide = group
+  end
+  group:Stop()
+  local rise = nameRise(frame)
+  -- Up: laid out high already, so it starts `rise` lower and travels to rest.
+  -- Down: still laid out high; it travels down and the layout takes over there.
+  group.move:SetOffset(0, -rise)
+  group.move:SetDuration(seconds)
+  if down then group:Play() else group:Play(true) end
+end
+
+local function teardown(ring, frame)
+  ring.display:Hide()
+  ring.leaving = nil
+  if frame.sqHoverRing == ring then
+    frame.sqHoverRing = nil
+    frame.npHoverRing = nil
+    if frame.Name and frame.Name.sqHoverGlide then frame.Name.sqHoverGlide:Stop() end
+    if NP.active[frame] then relayout(frame) else ns.NameplateStyle:Indicators(frame) end
+    if frame.Faction then frame.Faction:SetAlpha(1) end
+  end
+end
+
+-- Two rings: one for the plate under the mouse, one still fading on the plate
+-- the mouse just left.
+local pool = {}
+local function freeRing()
+  for _, ring in ipairs(pool) do if not ring.display:IsShown() then return ring end end
+  if #pool < 3 then pool[#pool + 1] = build(); return pool[#pool] end
+  -- All busy: finish the oldest fade now.
+  for _, ring in ipairs(pool) do
+    if ring.leaving then teardown(ring, ring.leaving); return ring end
+  end
+end
+
+Hover.builds = 0
 function Hover:Set(frame, shown)
+  -- A plate that left the screen while its ring was fading loses it at once.
+  if not shown and frame and frame ~= current and frame.sqHoverRing and not NP.active[frame] then
+    teardown(frame.sqHoverRing, frame)
+  end
   if not shown and frame ~= current then return end
   if shown and frame == current and current and eligible(frame) then return end
   local wanted = shown and frame and eligible(frame) and frame or nil
@@ -248,20 +327,39 @@ function Hover:Set(frame, shown)
     return
   end
   if current then
-    local left = current
-    current = nil
+    local left, ring = current, live
+    current, live = nil, nil
     events:UnregisterAllEvents()
-    live.display:Hide()
-    left.npHoverRing = nil
-    relayout(left)
+    -- Selected or gone: the target ring takes over at once. Otherwise fade.
+    if NP.active[left] and eligible(left) and ring.display:IsShown() then
+      ring.leaving = left
+      fade(ring.display, ring.display:GetAlpha(), 0, LEAVE, function() teardown(ring, left) end)
+      if left.Faction then fade(left.Faction, 1, 0, LEAVE) end
+      glide(left, LEAVE, true)
+    else
+      teardown(ring, left)
+    end
   end
   if not wanted then return end
-  live = live or build()
-  if show(live, wanted) then
-    current = wanted
-    events:RegisterUnitEvent('UNIT_HEALTH', wanted.unit)
-    events:RegisterUnitEvent('UNIT_MAXHEALTH', wanted.unit)
+  -- Hovered again while its ring was still fading out: take that ring back.
+  local ring = wanted.sqHoverRing
+  if ring and ring.leaving == wanted then
+    ring.leaving = nil
+    if wanted.Name and wanted.Name.sqHoverGlide then wanted.Name.sqHoverGlide:Stop() end
+  else
+    ring = freeRing()
+    if not ring then return end
+    self.builds = self.builds + 1
+    if not show(ring, wanted) then return end
+    wanted.sqHoverRing = ring
+    ring.display:SetAlpha(0)
+    glide(wanted, APPEAR, false)
   end
+  fade(ring.display, ring.display:GetAlpha(), 1, APPEAR)
+  if wanted.Faction then fade(wanted.Faction, 0, 1, APPEAR) end
+  live, current = ring, wanted
+  events:RegisterUnitEvent('UNIT_HEALTH', wanted.unit)
+  events:RegisterUnitEvent('UNIT_MAXHEALTH', wanted.unit)
 end
 
 -- Settings edit: refit and repaint the ring on screen.
