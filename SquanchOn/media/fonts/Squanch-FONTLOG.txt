@@ -1,0 +1,48 @@
+FONTLOG for the Squanch layout fonts
+====================================
+
+Squanch Highway, Squanch Round, Squanch Square, Squanch Bolt and Squanch Comic
+are Modified Versions of openly licensed fonts, made for the Squanch-On addon
+so its shipped layout keeps the text sizes and spacing it was designed with.
+Each remains under the SIL Open Font License 1.1; the license text of each
+upstream font sits beside the font (Squanch<Name>-OFL.txt). None uses a
+Reserved Font Name of its upstream.
+
+They are built by SquanchOn/asset-source/build-fonts.py from the unmodified
+upstream files and nothing else. For every face the script
+  - instantiates the variable font at one weight (where upstream is variable),
+  - scales the outlines so capital height, x-height and ascender height take
+    given values and each Basic Latin glyph takes a given advance width
+    (other glyphs follow their base letter or the face's overall factor),
+  - sets the line metrics (hhea, OS/2), converts to 1000 units per em,
+  - removes TrueType hinting, scales GPOS kerning, and renames the font.
+The given values are layout measurements (heights, widths, line metrics) only.
+No outline, hinting, table or name of any other font is contained.
+
+Face              Upstream (version, weight)                      Further changes
+Squanch Highway   Red Hat Display 1.030, wght 900                 none
+Squanch Round     Red Hat Display 1.030, wght 700                 none
+Squanch Square    Orbitron 2.001, wght 900                        upstream's alternate I, J, V, W, Y, w
+                                                                  selected; caret drawn by its circumflex
+Squanch Bolt      Amarante 1.001 Regular                          each letter leaned and lifted by a
+                                                                  fixed pseudo-random amount
+Squanch Comic     Comic Neue 2.003 Bold Italic                    lowercase drawn as capitals
+
+Upstream
+  Red Hat Display  Copyright 2024 The Red Hat Project Authors
+                   https://github.com/RedHatOfficial/RedHatFont
+  Orbitron         Copyright 2018 The Orbitron Project Authors, Reserved Font Name "Orbitron"
+                   https://github.com/theleagueof/orbitron
+  Amarante         Copyright (c) 2012 by Sorkin Type Co, Reserved Font Name "Amarante"
+                   https://github.com/google/fonts/tree/main/ofl/amarante
+  Comic Neue       Copyright 2014 The Comic Neue Project Authors
+                   https://github.com/crozynski/comicneue
+Files were taken from https://github.com/google/fonts/tree/main/ofl/
+(redhatdisplay, orbitron, amarante, comicneue).
+
+Coverage: Basic Latin and Latin-1, except that Squanch Square lacks
+U+00A4-A7, A9-AC, AE, B1-B3, B5, B7, B9-BE, D0, D8, DE, F0, F8, FE (absent
+upstream). No Cyrillic in any of the five.
+
+Changelog
+  2026-11-11  Squanch-On contributors  Version 1.000, first build.

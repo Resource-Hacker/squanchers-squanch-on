@@ -44,11 +44,14 @@ add('barHeight', { type = 'slider', label = 'Bar height', section = 'Bars', orde
     min = 8, max = 40, step = 1, integer = true, keywords = 'row size height' })
 add('classColors', { type = 'toggle', label = 'Class colours', section = 'Bars', order = 30,
     desc = 'Off: every bar uses the theme gold.', keywords = 'class color colour' })
-add('showRank', { type = 'toggle', label = 'Rank number', section = 'Bars', order = 40, keywords = 'rank position number' })
-add('showPerSecond', { type = 'toggle', label = 'Second value in brackets', section = 'Bars', order = 50,
+add('showRank', { type = 'toggle', label = 'Rank column', section = 'Bars', order = 40, keywords = 'rank position number' })
+add('firstNames', { type = 'toggle', label = 'First names only', section = 'Bars', order = 45,
+    desc = 'Shows the first word of each name, without the realm. The tooltip keeps the full name.',
+    keywords = 'name first short realm surname' })
+add('showPerSecond', { type = 'toggle', label = 'Second value column', section = 'Bars', order = 50,
     desc = 'The per-second rate beside a total, or the total beside a rate.', keywords = 'per second dps hps total' })
-add('showPercent', { type = 'toggle', label = 'Share of the total', section = 'Bars', order = 60,
-    desc = 'Appears out of combat only (the game hides the amounts from addons while you fight), and only on rows with room for it.',
+add('showPercent', { type = 'toggle', label = 'Share column', section = 'Bars', order = 60,
+    desc = "Each source's share of the total. Filled out of combat only (the game hides the amounts from addons while you fight).",
     keywords = 'percent percentage share' })
 
 add('hideNative', { type = 'toggle', label = "Hide the game's own meter", section = 'Game meter', order = 10,

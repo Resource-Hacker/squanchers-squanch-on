@@ -63,8 +63,9 @@ engine licenses remain attached to those separate originals; neither engine is
 renamed or distributed here.
 
 The fonts the author's original setup used (Expressway, Homizio, Forced Square,
-Harry P) and the original ElvUI/BenikUI textures are not distributed; the
-bundled fonts and textures described below take their place. Blizzard paths
+Harry P, Action Man) and the original ElvUI/BenikUI textures are not distributed:
+none of those fonts' licenses permits redistribution. The bundled fonts and
+textures described below take their place. Blizzard paths
 reference installed game resources, including the ready-check icons; no
 extracted Blizzard images, fonts, sounds, FrameXML or binaries are bundled.
 
@@ -93,12 +94,27 @@ no separate per-file authorship or license statement for them.
 
 ## Bundled layout fonts (SIL OFL 1.1)
 
-Besides PT Sans Narrow Bold above, the shipped layout's text uses four freely
-licensed fonts in `SquanchOn/media/fonts`, each beside its own license text: Overpass
-Bold, Afacad Medium, Oxanium Bold (static instances cut from the projects'
-variable fonts) and Almendra Bold (unmodified). They stand in for the
-differently licensed fonts the author's original setup used, so text shapes are
-close to, not identical with, that setup.
+Besides PT Sans Narrow Bold above, the shipped layout's text uses five fonts in
+`SquanchOn/media/fonts` that are Modified Versions of openly licensed fonts. They are
+built by `SquanchOn/asset-source/build-fonts.py` from the unmodified upstream files alone:
+outlines rescaled and respaced to the heights, advance widths and line metrics
+the layout was designed with, hinting removed, renamed. They contain no outline,
+hinting, table or name of the differently licensed fonts the author's original
+setup used; letter shapes are those of the upstream fonts, so they resemble
+that setup without reproducing it. `SquanchOn/media/fonts/Squanch-FONTLOG.txt` records
+the changes. Hashes are in `reuse-manifest.json`.
+
+| Font | Upstream, copyright and changes | Terms |
+| --- | --- | --- |
+| Squanch Highway 1.000 | [Red Hat Display](https://github.com/RedHatOfficial/RedHatFont) 1.030 at weight 900; Copyright 2024 The Red Hat Project Authors. [File](https://github.com/google/fonts/tree/main/ofl/redhatdisplay). | SIL OFL 1.1, `SquanchOn/media/fonts/SquanchHighway-OFL.txt`. No Reserved Font Name. |
+| Squanch Round 1.000 | Red Hat Display 1.030 at weight 700; as above. | SIL OFL 1.1, `SquanchOn/media/fonts/SquanchRound-OFL.txt`. No Reserved Font Name. |
+| Squanch Square 1.000 | [Orbitron](https://github.com/theleagueof/orbitron) 2.001 at weight 900, with its own alternate I, J, V, W, Y and w; Copyright 2018 The Orbitron Project Authors. [File](https://github.com/google/fonts/tree/main/ofl/orbitron). | SIL OFL 1.1, `SquanchOn/media/fonts/SquanchSquare-OFL.txt`. Reserved Font Name "Orbitron", not used. |
+| Squanch Bolt 1.000 | [Amarante](https://github.com/google/fonts/tree/main/ofl/amarante) 1.001 Regular, each letter leaned and lifted by a fixed amount; Copyright 2012 Sorkin Type Co. | SIL OFL 1.1, `SquanchOn/media/fonts/SquanchBolt-OFL.txt`. Reserved Font Name "Amarante", not used. |
+| Squanch Comic 1.000 | [Comic Neue](https://github.com/crozynski/comicneue) 2.003 Bold Italic, lowercase drawn as capitals; Copyright 2014 The Comic Neue Project Authors. [File](https://github.com/google/fonts/tree/main/ofl/comicneue). | SIL OFL 1.1, `SquanchOn/media/fonts/SquanchComic-OFL.txt`. No Reserved Font Name. |
+
+Overpass Bold, Afacad Medium, Oxanium Bold (static instances cut from the
+projects' variable fonts) and Almendra Bold (unmodified), which earlier releases
+used in their place, stay bundled and selectable, each beside its license text.
 
 ## Unit-frame textures
 

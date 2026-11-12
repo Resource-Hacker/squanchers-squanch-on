@@ -37,7 +37,7 @@ local FAKE = {
   UnitIsPlayer = function(f) return f.player or false end,
   UnitCanAttack = function(f) return f.attack or false end,
   UnitCanAssist = function(f) return not f.attack end,
-  UnitIsFriend = function(f) return not f.attack end,
+  UnitIsFriend = function(f) if f.friend ~= nil then return f.friend end return not f.attack end,
   UnitReaction = function(f) return f.reaction or (f.attack and 2 or 5) end,
   UnitClassification = function(f) return f.classification or 'normal' end,
   UnitPlayerControlled = function(f) return f.player or false end,
@@ -58,6 +58,8 @@ local FAKE = {
     return 0, 1, 0, 1
   end,
   UnitIsTrivial = function(f) return f.trivial or false end,
+  UnitEffectiveLevel = function(f) return f.level or 10 end,
+  UnitPowerType = function(f) return f.mana and 0 or 1 end,
 }
 function NP.Unit(name)
   local fake = FAKE[name]
@@ -151,7 +153,13 @@ NP.defaults = {
   },
   barWhenTargetedFaction = 'Horde',
   -- An enemy NPC the player cannot attack shows its name only, in this font.
-  bigName = { font = 'Fonts\\ARIALN.TTF', size = 9, outline = 'OUTLINE' },
+  bigName = { font = 'Expressway', size = 10, outline = 'OUTLINE' },
+  -- Its profession or title line ("<Innkeeper>"), in the name's colour.
+  subtitle = { show = true, font = 'Expressway', size = 10, outline = 'OUTLINE' },
+  -- Cyrillic names in Latin letters.
+  translit = true,
+  -- Friendly plates by kind of zone (out of combat, on zone changes).
+  zoneFriendly = { enabled = true, party = false, raid = false, arena = true, world = true, cities = true },
   power = { height = 1.5, y = -2, text = true, textFont = 'Expressway', textSize = 6 },
   sizeScale = { minor = { 0.5, 0.55 }, pet = { 0.95, 0.95 } },
   colors = {
@@ -161,13 +169,18 @@ NP.defaults = {
     threat = true, role = 'dps',
     dpsAggro = { 1, 0.11, 0 }, dpsPulling = { 1, 0.8, 0 }, dpsNoAggro = { 0.5, 0.5, 1 },
     tankAggro = { 0.5, 0.5, 1 }, tankPulling = { 1, 1, 0 }, tankNoAggro = { 1, 0, 0 },
+    -- Dungeons, raids and scenarios, outside the threat colours.
+    unitType = true, boss = { 0.424, 0.173, 0.69 }, miniboss = { 0.278, 0.259, 1 }, caster = { 0, 0.82, 1 },
     name = { 1, 1, 1 }, friend = { 0.71, 1, 1 }, guild = { 0.498, 1, 0.2 }, friendColors = true,
   },
   cast = {
     texture = 'Squanch Smooth', background = { 0.114, 0.114, 0.114, 0.1 },
     normal = { 1, 0.7, 0, 0.96 }, channel = { 0, 1, 0, 0.96 }, nonInterruptible = { 0.5, 0.5, 0.5, 1 },
     interrupted = { 1, 0.1, 0.1, 1 },
-    spark = true, sparkWidth = 17, icon = true, iconX = -15, shield = true, hold = 0.5, hideNameWhileCasting = true,
+    spark = true, sparkWidth = 17, icon = true, iconX = -15, shield = true, hideNameWhileCasting = true,
+    -- Cast end: a finished cast flashes and fades; an interrupted one stays, then fades.
+    holdInterrupted = 1, fade = 0.5, finishFlash = true, finished = { 0, 1, 0, 1 },
+    textShadow = { 0, 0, 0, 0.5 },
   },
   auras = {
     enabled = true, size = 15, perRow = 8, max = 16, y = 35, alpha = 0.7, timer = true, timerSize = 8, stackSize = 10,
@@ -176,13 +189,16 @@ NP.defaults = {
   target = {
     highlight = { 0.588, 0, 0.118, 0.109 }, highlightHeight = 11, overlayAlpha = 0.6, hoverAlpha = 0.5,
     ornament = true, ornamentColor = { 1, 0, 0, 0.7 }, aggroGlow = true,
+    -- White flash over the bar when a unit turns on a damage dealer or healer.
+    aggroFlash = { enabled = true, instanceOnly = true, duration = 0.2, color = { 1, 1, 1, 1 }, text = true },
     label = { show = true, font = F2002, size = 7, outline = 'OUTLINE', x = 25, y = -10, alpha = 0.66 },
   },
   -- The out-of-range values double as the in-range factor for plates that are
   -- not the target (Plater's "range + non-target" behaviour with division).
   alpha = { inRange = 0.9, outOfRange = 0.9, healthOutOfRange = 0.9, castOutOfRange = 0.5, aurasOutOfRange = 0.9,
     nonTargetMultiplier = 0.5, notInCombatEnabled = true, notInCombat = 0.25, rangeYards = 40 },
-  indicators = { size = 18, x = -0.5, y = -8, friendlyFaction = true, enemyFaction = true, rare = true, raidMark = true },
+  -- Size 12 and offset (-0.5, -8) at the previous 1.5 icon scale.
+  indicators = { size = 18, x = -0.75, y = -12, friendlyFaction = true, enemyFaction = true, rare = true, raidMark = true, quest = true },
   -- Additions over the previous look. All off while classicLook is on.
   enhance = {
     classicLook = true,
@@ -209,18 +225,32 @@ function NP:Settings()
   if not db then return self.defaults end
   local settings = db.nameplates
   if type(settings) ~= 'table' then settings = {}; db.nameplates = settings end
-  if filled ~= settings then fill(settings, self.defaults); filled = settings end
+  if filled ~= settings then
+    -- Revision 2: the interrupt hold became holdInterrupted, and the name-only
+    -- font follows the previous profile; untouched earlier defaults move along.
+    if settings.revision ~= 2 then
+      if type(settings.cast) == 'table' then settings.cast.hold = nil end
+      local big = settings.bigName
+      if type(big) == 'table' and big.font == 'Fonts\\ARIALN.TTF' and big.size == 9 then big.font, big.size = nil, nil end
+      local icons = settings.indicators
+      if type(icons) == 'table' and icons.x == -0.5 and icons.y == -8 then icons.x, icons.y = nil, nil end
+      settings.revision = 2
+    end
+    fill(settings, self.defaults); filled = settings
+  end
   return settings
 end
 
-function NP:Font(object, name, size, outline)
+-- shadow: an {r, g, b, a} override of the black drop shadow.
+function NP:Font(object, name, size, outline, shadow)
   local path = ns.Media and ns.Media:Resolve('font', name) or name
   if not object:SetFont(path, size, outline == 'NONE' and '' or outline or '') then
     object:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', size, outline == 'NONE' and '' or outline or '')
   end
   -- The previous plates drew every text with a black one-unit drop shadow; it
   -- is what keeps a bar from showing through the hollows of the digits.
-  object:SetShadowColor(0, 0, 0, 1)
+  if type(shadow) == 'table' then object:SetShadowColor(shadow[1] or 0, shadow[2] or 0, shadow[3] or 0, shadow[4] or 1)
+  else object:SetShadowColor(0, 0, 0, 1) end
   object:SetShadowOffset(1, -1)
 end
 
@@ -243,6 +273,22 @@ end
 function NP:Fighting(frame)
   if frame and frame.npFake then return frame.npFake.playerCombat or false end
   return self.combat or false
+end
+-- 'party', 'raid', 'scenario', 'pvp', 'arena' or 'none' (previews state theirs).
+function NP:Zone(frame)
+  if frame and frame.npFake then return frame.npFake.zone or 'none' end
+  return self.zone or 'none'
+end
+function NP:ZoneChanged()
+  local ok, _, kind = pcall(IsInInstance or error)
+  local zone = ok and public(kind) and type(kind) == 'string' and kind or 'none'
+  local resting = IsResting and ask(IsResting) == true
+  if zone == self.zone and resting == self.resting then return end
+  local changed = zone ~= self.zone
+  self.zone, self.resting = zone, resting
+  if not self.started then return end
+  if self:Settings().zoneFriendly.enabled then self:ApplyCVars(true) end
+  if changed then self:RefreshAll() end
 end
 function NP:FriendlyRange() return tonumber(self:Settings().alpha.rangeYards) or 40 end
 
@@ -308,6 +354,37 @@ function NP:ImportPlater()
   settings.importVersion = 1
 end
 
+-- /sqplates debug: one line per visible plate. Secrets print as "secret".
+function NP:Debug()
+  local function show(value)
+    if not public(value) then return 'secret' end
+    return tostring(value)
+  end
+  local function fact(fn, ...)
+    if type(fn) ~= 'function' then return 'no-api' end
+    local ok, value = pcall(fn, ...)
+    return ok and show(value) or 'error'
+  end
+  local function text(region, why)
+    if not region then return 'none' end
+    if not region:IsShown() then return 'hidden(' .. why .. ')' end
+    local ok, value = pcall(region.GetText, region)
+    return ok and ('"' .. show(value) .. '"') or 'shown'
+  end
+  print(('Squanch-On plates: started=%s active=%d zone=%s combat=%s'):format(tostring(self.started), self.count, tostring(self.zone), tostring(self.combat)))
+  for frame in pairs(self.active) do
+    local unit = frame.unit
+    local bar = frame.Health and frame.Health:IsShown()
+    local cast = frame.Castbar and frame.Castbar:IsShown()
+    print(('%s oUF=%s kind=%s size=%s class=%s reaction=%s attack=%s player=%s bar=%s colour=%s name=%s level=%s alpha=%s'):format(
+      show(unit), show(frame.__unit), tostring(frame.npKind), tostring(frame.npSize or 'normal'),
+      unit and fact(UnitClassification, unit) or '-', unit and fact(UnitReaction, unit, 'player') or '-',
+      unit and fact(UnitCanAttack, 'player', unit) or '-', unit and fact(UnitIsPlayer, unit) or '-',
+      tostring(bar), tostring(frame.npColorSource or 'unset'),
+      text(frame.Name, cast and 'casting' or 'unknown'), text(frame.Level, bar and 'level off' or 'no bar'), tostring(frame.npAlpha)))
+  end
+end
+
 -- CVars ----------------------------------------------------------------------
 local function same(current, wanted)
   local a, b = tonumber(current), tonumber(wanted)
@@ -315,9 +392,14 @@ local function same(current, wanted)
   return tostring(current) == tostring(wanted)
 end
 -- Previous values are recorded once (an account receipt) and restored on disable.
-function NP:ApplyCVars()
+-- zone: also set the friendly-plates switch for the kind of zone. Only zone
+-- changes, the start and the zone options ask for it, so a key binding that
+-- flips the switch keeps its say until the next zone.
+function NP:ApplyCVars(zone)
+  if zone then self.pendingZone = true end
   if InCombatLockdown() then self.pendingCVars = true; return false end
   self.pendingCVars = nil
+  zone, self.pendingZone = self.pendingZone, nil
   local previous = ns.db.nameplateCVarsPrevious
   if type(previous) ~= 'table' then previous = {}; ns.db.nameplateCVarsPrevious = previous end
   local wanted = {}
@@ -325,6 +407,17 @@ function NP:ApplyCVars()
   local enhance = ns.NameplateEnhance
   if enhance and enhance:On('pointer') and enhance:On('offscreen') then wanted.nameplateShowOffscreen = 1 end
   if enhance and enhance:On('stacking') then wanted.nameplateMotion = 1 end
+  local friendly = self:Settings().zoneFriendly
+  if zone and friendly.enabled then
+    local zone = self.zone
+    local shown
+    if zone == 'party' or zone == 'raid' then shown = friendly[zone]
+    elseif zone == 'arena' or zone == 'pvp' then shown = friendly.arena
+    elseif self.resting then shown = friendly.cities else shown = friendly.world end
+    -- Newer clients split friendly players from the binding-owned master switch.
+    local name = ask(GetCVar, 'nameplateShowFriendlyPlayers') ~= nil and 'nameplateShowFriendlyPlayers' or 'nameplateShowFriends'
+    wanted[name] = shown and 1 or 0
+  end
   for name, value in pairs(wanted) do
     local current = ask(GetCVar, name) -- nil: this client has no such CVar
     if current ~= nil then
@@ -370,6 +463,9 @@ function NP:Tick()
 end
 
 function NP:Added(frame, unit)
+  -- The bundled oUF keeps a plate's token privately (frame.__unit); every
+  -- nameplate module reads frame.unit, so publish it here.
+  frame.unit = unit
   local plate = frame:GetParent()
   -- The record TargetCrosshairs fits the friendly ring to (as Plater's list).
   plate.IconIndicators = frame.npIcons
@@ -383,6 +479,7 @@ function NP:Added(frame, unit)
   if not ticker and C_Timer and C_Timer.NewTicker then ticker = C_Timer.NewTicker(0.2, tick) end
 end
 function NP:Removed(frame)
+  frame.unit = nil
   if self.active[frame] then self.active[frame] = nil; self.count = math.max(0, self.count - 1) end
   if self.targetFrame == frame then self.targetFrame = nil end
   if self.hoverFrame == frame then ns.NameplateStyle:SetHover(frame, false); self.hoverFrame = nil end
@@ -456,7 +553,8 @@ function NP:Start()
   driver.enemyNonInteractible, driver.friendlyNonInteractible = true, true
   local click = settings.clickSpace
   driver:SetSize(tonumber(click[1]) or 100, tonumber(click[2]) or 50)
-  self:ApplyCVars()
+  self.zone = nil; self:ZoneChanged()
+  self:ApplyCVars(true)
   if ns.NameplateEnhance then ns.NameplateEnhance:Listen() end
   -- Plates already on screen (a start delayed by combat) raise no new event.
   local handler = driver:GetScript('OnEvent')
@@ -485,7 +583,7 @@ local function listen()
   if listening then return end
   listening = true
   for _, name in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'UPDATE_MOUSEOVER_UNIT',
-    'QUEST_LOG_UPDATE' }) do
+    'QUEST_LOG_UPDATE', 'PLAYER_ENTERING_WORLD', 'ZONE_CHANGED_NEW_AREA', 'PLAYER_UPDATE_RESTING' }) do
     events:RegisterEvent(name)
   end
 end
@@ -501,6 +599,8 @@ events:SetScript('OnEvent', function(_, event)
   if not NP.started then return end
   if event == 'QUEST_LOG_UPDATE' then
     ns.NameplateStyle:QuestsChanged()
+  elseif event == 'PLAYER_ENTERING_WORLD' or event == 'ZONE_CHANGED_NEW_AREA' or event == 'PLAYER_UPDATE_RESTING' then
+    NP:ZoneChanged()
   elseif event == 'PLAYER_TARGET_CHANGED' then
     NP:TargetChanged()
   elseif event == 'UPDATE_MOUSEOVER_UNIT' then
@@ -518,6 +618,7 @@ events:SetScript('OnEvent', function(_, event)
   else
     -- Combat edge: enemy and friendly NPC bars change height.
     NP.combat = event == 'PLAYER_REGEN_DISABLED'
+    if NP.combat then NP.combatSince = GetTime() end
     NP:RefreshAll()
   end
 end)

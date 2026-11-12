@@ -13,14 +13,15 @@ local defaults = {
     border = root .. 'media\\borders\\border-pixel.tga',
 }
 local function key(value) return value:gsub('/', '\\'):lower() end
--- Bundled, freely licensed stand-ins for the media names a saved layout uses.
--- Matching is by name fragment so legacy addon paths resolve as well.
+-- Bundled, freely licensed fonts and textures for the media names a saved
+-- layout uses. Matching is by name fragment so legacy addon paths resolve as well.
+-- The Squanch fonts are respaced to the metrics those layouts were built with.
 local fonts = root .. 'media\\fonts\\'
 local textures = root .. 'media\\textures\\'
 local bundled = {
-    font = { { 'expressway', fonts .. 'Overpass-Bold.ttf' }, { 'homizio', fonts .. 'Afacad-Medium.ttf' },
-        { 'harry', fonts .. 'Almendra-Bold.ttf' }, { 'forced', fonts .. 'Oxanium-Bold.ttf' },
-        { 'action man', fonts .. 'Overpass-Bold.ttf' }, { 'pt sans narrow', defaults.font } },
+    font = { { 'expressway', fonts .. 'SquanchHighway.ttf' }, { 'homizio', fonts .. 'SquanchRound.ttf' },
+        { 'harry', fonts .. 'SquanchBolt.ttf' }, { 'forced', fonts .. 'SquanchSquare.ttf' },
+        { 'action man', fonts .. 'SquanchComic.ttf' }, { 'pt sans narrow', defaults.font } },
     statusbar = { { 'tukui', textures .. 'bar-smooth.tga' }, { 'flat', 'Interface\\Buttons\\WHITE8X8' },
         { 'skullflower', textures .. 'bar-smooth.tga' } },
     texture = { { 'glowtex', textures .. 'glow-edge.tga' }, { 'roleicons\\tank', textures .. 'role-tank.tga' },
@@ -109,6 +110,9 @@ function Media:Exact()
 end
 
 for _, font in ipairs({
+    { 'Squanch Highway', 'SquanchHighway.ttf' }, { 'Squanch Round', 'SquanchRound.ttf' },
+    { 'Squanch Square', 'SquanchSquare.ttf' }, { 'Squanch Bolt', 'SquanchBolt.ttf' },
+    { 'Squanch Comic', 'SquanchComic.ttf' },
     { 'PT Sans Narrow Bold', 'ptsansnarrow_bold.ttf', true }, { 'Overpass Bold', 'Overpass-Bold.ttf' },
     { 'Afacad Medium', 'Afacad-Medium.ttf' }, { 'Oxanium Bold', 'Oxanium-Bold.ttf' },
     { 'Almendra Bold', 'Almendra-Bold.ttf' }, { 'Barlow Condensed SemiBold', 'BarlowCondensed-SemiBold.ttf' },

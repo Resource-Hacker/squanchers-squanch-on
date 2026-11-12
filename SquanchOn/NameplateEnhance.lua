@@ -224,7 +224,7 @@ local function castRegions(cast)
   cast.npImportant:SetTexture(WHITE); cast.npImportant:SetVertexColor(color[1], color[2], color[3])
   cast.npImportant:SetPoint('TOPLEFT', cast, 'TOPLEFT', -1, 1); cast.npImportant:SetPoint('BOTTOMRIGHT', cast, 'BOTTOMRIGHT', 1, -1)
   cast.npTarget = cast:CreateFontString(nil, 'OVERLAY')
-  cast.npTarget:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 7, 'OUTLINE')
+  NP:Font(cast.npTarget, STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 7, 'OUTLINE')
   cast.npTarget:SetPoint('TOP', cast, 'BOTTOM', 0, -1)
   cast.npYou:SetAlpha(0); cast.npImportant:SetAlpha(0)
 end

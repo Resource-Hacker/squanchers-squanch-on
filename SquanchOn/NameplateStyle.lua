@@ -22,6 +22,7 @@ local UnitReaction, UnitClassification, UnitPlayerControlled, UnitFactionGroup =
 local UnitClass, UnitLevel, UnitIsTapDenied, UnitThreatSituation = NP.Unit('UnitClass'), NP.Unit('UnitLevel'), NP.Unit('UnitIsTapDenied'), NP.Unit('UnitThreatSituation')
 local UnitAffectingCombat, UnitGUID, UnitIsInMyGuild, GetGuildInfo = NP.Unit('UnitAffectingCombat'), NP.Unit('UnitGUID'), NP.Unit('UnitIsInMyGuild'), NP.Unit('GetGuildInfo')
 local UnitHealthPercent, UnitPowerPercent, UnitSelectionColor = NP.Unit('UnitHealthPercent'), NP.Unit('UnitPowerPercent'), NP.Unit('UnitSelectionColor')
+local UnitEffectiveLevel, UnitPowerType = NP.Unit('UnitEffectiveLevel'), NP.Unit('UnitPowerType')
 local FACTION = { Horde = 'Interface\\PVPFrame\\PVP-Currency-Horde', Alliance = 'Interface\\PVPFrame\\PVP-Currency-Alliance' }
 local SIDES = { LEFT = { 'RIGHT', 'LEFT' }, INNERLEFT = { 'LEFT', 'LEFT' }, CENTER = { 'CENTER', 'CENTER' },
   INNERRIGHT = { 'RIGHT', 'RIGHT' }, RIGHT = { 'LEFT', 'RIGHT' } }
@@ -68,14 +69,14 @@ function Style:Classify(frame, unit)
   local kind = self:Kind(unit)
   frame.npKind = kind
   local class = ask(UnitClassification, unit)
-  frame.npRare = class == 'rare' or class == 'rareelite'
+  frame.npRare, frame.npRareElite = class == 'rare' or class == 'rareelite', class == 'rareelite'
   frame.npSize = (class == 'minus' or ns.NameplateEnhance and ns.NameplateEnhance:Trivial(unit)) and 'minor'
     or (kind == 'enemynpc' or kind == 'friendlynpc') and ask(UnitPlayerControlled, unit) == true and 'pet' or nil
   frame.npFaction = (kind == 'enemyplayer' or kind == 'friendlyplayer') and ask(UnitFactionGroup, unit) or nil
   frame.npAttackable = ask(UnitCanAttack, 'player', unit)
   frame.npReaction = ask(UnitReaction, unit, 'player')
   frame.npQuest = (kind == 'enemynpc' or kind == 'friendlynpc') and self:Quest(unit) or false
-  frame.npNoCombat = nil
+  frame.npNoCombat, frame.npAggro = nil, nil
   frame:SetShown(kind ~= 'self')
   local config = NP:Settings().types[kind]
   -- Elements follow the plate's kind; oUF ignores a repeated enable or disable.
@@ -159,7 +160,7 @@ function Style:QuestsChanged()
       local kind = frame.npKind
       if kind == 'enemynpc' or kind == 'friendlynpc' then
         local quest = Style:Quest(frame.unit)
-        if quest ~= frame.npQuest then frame.npQuest = quest; Style:Color(frame) end
+        if quest ~= frame.npQuest then frame.npQuest = quest; Style:Color(frame); Style:Indicators(frame) end
       end
     end
   end)
@@ -169,25 +170,96 @@ end
 -- The bar colour outside the threat rules: class for players, tapped, quest,
 -- then the client's own selection colour (configured reaction colours when
 -- the client gives none).
+-- In dungeons, raids and scenarios an enemy NPC is coloured by what it is:
+-- boss (two levels up, or a skull), miniboss (a level up), caster (uses mana).
+local function typeColor(frame, unit, colors)
+  if not colors.unitType or frame.npKind ~= 'enemynpc' then return end
+  local zone = NP:Zone(frame)
+  if zone ~= 'party' and zone ~= 'raid' and zone ~= 'scenario' then return end
+  local mine = frame.npFake and (frame.npFake.playerLevel or 10) or ask(UnitEffectiveLevel, 'player') or ask(UnitLevel, 'player')
+  local theirs = ask(UnitEffectiveLevel, unit) or ask(UnitLevel, unit)
+  if type(mine) == 'number' and type(theirs) == 'number' then
+    if theirs == mine + 2 or theirs == -1 then return colors.boss, 'boss' end
+    if theirs >= mine + 1 then return colors.miniboss, 'miniboss' end
+  end
+  local class = not frame.npFake and UnitClassBase and ask(UnitClassBase, unit)
+  if class == 'PALADIN' or ask(UnitPowerType, unit) == 0 then return colors.caster, 'caster' end
+end
+-- Always leaves the bar coloured; frame.npColorSource names the rule (/sqplates debug).
 local function baseColor(frame, unit, colors)
   local kind, bar = frame.npKind, frame.Health
   if kind == 'enemyplayer' or kind == 'friendlyplayer' then
     local r, g, b = classRGB(unit)
-    if r then bar:SetStatusBarColor(r, g, b); return end
+    if r then bar:SetStatusBarColor(r, g, b); frame.npColorSource = 'class'; return end
   elseif ask(UnitIsTapDenied, unit) == true then
-    bar:SetStatusBarColor(rgb(colors.tapped)); return
+    bar:SetStatusBarColor(rgb(colors.tapped)); frame.npColorSource = 'tapped'; return
   elseif frame.npQuest then
     local reaction = frame.npReaction
     local color = kind == 'friendlynpc' and colors.questFriendly or reaction == 4 and colors.questNeutral or colors.questHostile
-    bar:SetStatusBarColor(rgb(color)); return
+    bar:SetStatusBarColor(rgb(color)); frame.npColorSource = 'quest'; return
+  else
+    local color, source = typeColor(frame, unit, colors)
+    if color then bar:SetStatusBarColor(rgb(color)); frame.npColorSource = source; return end
   end
   local ok, r, g, b = pcall(UnitSelectionColor, unit)
-  if ok and not (public(r) and r == nil) and pcall(bar.SetStatusBarColor, bar, r, g, b) then return end
+  if ok and not (public(r) and r == nil) and pcall(bar.SetStatusBarColor, bar, r, g, b) then frame.npColorSource = 'selection'; return end
   local reaction = frame.npReaction
   local color
   if type(reaction) == 'number' then color = reaction >= 5 and colors.friendly or reaction == 4 and colors.neutral or colors.hostile
   else color = (kind == 'friendlynpc' or kind == 'friendlyplayer') and colors.friendly or colors.hostile end
-  bar:SetStatusBarColor(rgb(color))
+  bar:SetStatusBarColor(rgb(color)); frame.npColorSource = 'reaction'
+end
+-- The flash when a unit turns on the player (not for tanks): a white wash over
+-- the bar, in and out, with "-AGGRO-". Built on first use.
+function Style:Flash(frame)
+  local settings = NP:Settings().target.aggroFlash
+  local flash = frame.npFlash
+  if not flash then
+    local health = frame.Health
+    flash = CreateFrame('Frame', nil, health)
+    flash:SetFrameLevel(health:GetFrameLevel() + 3)
+    flash:SetAllPoints(health)
+    flash.art = flash:CreateTexture(nil, 'ARTWORK')
+    flash.art:SetAllPoints(flash)
+    flash.art:SetBlendMode('ADD')
+    flash.text = flash:CreateFontString(nil, 'OVERLAY')
+    flash.text:SetPoint('CENTER', flash, 'CENTER', 0, 0)
+    flash.text:SetTextColor(0.7, 0.7, 0.7)
+    local group = flash.art.CreateAnimationGroup and flash.art:CreateAnimationGroup()
+    local rise = group and group.CreateAnimation and group:CreateAnimation('Alpha')
+    local fall = rise and group:CreateAnimation('Alpha')
+    if fall and rise.SetFromAlpha and rise.SetOrder then
+      rise:SetOrder(1); rise:SetFromAlpha(0); rise:SetToAlpha(1)
+      fall:SetOrder(2); fall:SetFromAlpha(1); fall:SetToAlpha(0)
+      group:SetScript('OnFinished', function() flash:Hide() end)
+      flash.group, flash.rise, flash.fall = group, rise, fall
+    end
+    frame.npFlash = flash
+  end
+  local duration = math.max(0.05, tonumber(settings.duration) or 0.2)
+  flash.art:SetColorTexture(rgb(settings.color))
+  NP:Font(flash.text, STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 12, 'NONE')
+  flash.text:SetText(settings.text and '-AGGRO-' or '')
+  flash:Show()
+  if flash.group then
+    flash.group:Stop()
+    flash.rise:SetDuration(duration); flash.fall:SetDuration(duration)
+    flash.group:Play()
+  else
+    C_Timer.After(duration * 2, function() flash:Hide() end)
+  end
+end
+local function aggro(frame, unit, settings)
+  local has = ask(UnitThreatSituation, 'player', unit) == 3
+  local flash = settings.target.aggroFlash
+  if has and frame.npAggro == false and flash.enabled and settings.colors.role ~= 'tank' and frame.Health:IsShown() then
+    local zone = NP:Zone(frame)
+    -- Not in the first five seconds of a fight, when everything turns at once.
+    if (not flash.instanceOnly or zone == 'party' or zone == 'raid') and GetTime() >= (NP.combatSince or 0) + 5 then
+      Style:Flash(frame)
+    end
+  end
+  frame.npAggro = has
 end
 -- Threat applies to enemy NPCs and only while the player is in combat. Sets
 -- frame.npNoCombat for a unit that is outside the fight (dimmed by the alpha
@@ -235,8 +307,11 @@ local function updateColor(frame)
     local enhance = ns.NameplateEnhance
     color = enhance and enhance:Threat(frame, unit) or nil
     if not color then color, glow = threatColor(frame, unit, colors, settings) end
+    aggro(frame, unit, settings)
+  else
+    frame.npAggro = nil
   end
-  if color then frame.Health:SetStatusBarColor(rgb(color)) else baseColor(frame, unit, colors) end
+  if color then frame.Health:SetStatusBarColor(rgb(color)); frame.npColorSource = 'threat' else baseColor(frame, unit, colors) end
   glow = glow and settings.target.aggroGlow and frame.Health:IsShown() or false
   frame.GlowUpper:SetShown(glow); frame.GlowLower:SetShown(glow)
   if wasDimmed ~= frame.npNoCombat and ns.NameplateAuras then ns.NameplateAuras:Alpha(frame, true) end
@@ -277,21 +352,65 @@ local function nameColor(frame, unit, colors, config)
   end
   return rgb(colors.name)
 end
+-- Cyrillic to Latin, letter by letter (two-byte UTF-8 sequences).
+local LATIN = {}
+do
+  local lower = { 'a', 'b', 'v', 'g', 'd', 'e', 'zh', 'z', 'i', 'y', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'kh', 'ts',
+    'ch', 'sh', 'shch', '', 'y', '', 'e', 'yu', 'ya' }
+  for index, latin in ipairs(lower) do
+    -- U+0430.. (lower case) and U+0410.. (upper case)
+    local code = 0x430 + index - 1
+    LATIN[string.char(0xC0 + math.floor(code / 64), 0x80 + code % 64)] = latin
+    code = 0x410 + index - 1
+    LATIN[string.char(0xC0 + math.floor(code / 64), 0x80 + code % 64)] = latin:sub(1, 1):upper() .. latin:sub(2)
+  end
+  LATIN['\209\145'], LATIN['\208\129'] = 'yo', 'Yo'
+end
+local function latin(name)
+  if not name:find('[\208\209]') then return name end
+  return (name:gsub('[\208\209][\128-\191]', LATIN))
+end
+-- An NPC's profession or title: the second tooltip line unless that is its level.
+local function title(frame, unit)
+  if frame.npFake then return frame.npFake.title end
+  if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return end
+  local guid = ask(UnitGUID, unit)
+  if type(guid) ~= 'string' then return end
+  local ok, data = pcall(C_TooltipInfo.GetHyperlink, 'unit:' .. guid)
+  local line = ok and type(data) == 'table' and type(data.lines) == 'table' and data.lines[2 + (tonumber(ask(GetCVar, 'colorblindMode')) or 0)]
+  local text = type(line) == 'table' and line.leftText
+  if not public(text) or type(text) ~= 'string' or text == '' then return end
+  local level = type(UNIT_LEVEL_TEMPLATE) == 'string' and (UNIT_LEVEL_TEMPLATE:lower():gsub('%%d', '.*')) or 'level .*'
+  local fine, found = pcall(string.match, text:lower(), level)
+  if not fine or found then return end
+  return text
+end
 local function updateName(frame)
   local unit, settings = frame.unit, NP:Settings()
   local config = unit and settings.types[frame.npKind]
   if not config then return end
+  local kind = frame.npKind
   local ok, name = pcall(UnitName, unit)
   if ok then
+    if settings.translit and public(name) and type(name) == 'string' then name = latin(name) end
     -- Players carry their guild on a second line, as "<Guild>".
-    local guild = config.guild and (frame.npKind == 'enemyplayer' or frame.npKind == 'friendlyplayer') and ask(GetGuildInfo, unit)
+    local guild = config.guild and (kind == 'enemyplayer' or kind == 'friendlyplayer') and ask(GetGuildInfo, unit)
     if public(name) and type(name) == 'string' and type(guild) == 'string' and guild ~= '' then
       frame.Name:SetText(name .. '\n<' .. guild .. '>')
     else
       frame.Name:SetText(name)
     end
   end
-  frame.Name:SetTextColor(nameColor(frame, unit, settings.colors, config))
+  local r, g, b = nameColor(frame, unit, settings.colors, config)
+  frame.Name:SetTextColor(r, g, b)
+  -- A name-only NPC carries its title underneath, in the name's colour.
+  local line = settings.subtitle.show and (kind == 'enemynpc' or kind == 'friendlynpc') and not frame.Health:IsShown() and title(frame, unit)
+  frame.npTitle = line and true or false
+  if line then
+    frame.Subtitle:SetText('<' .. line .. '>')
+    frame.Subtitle:SetTextColor(r, g, b)
+  end
+  frame.Subtitle:SetShown(frame.npTitle and frame.Name:IsShown())
 end
 local function updateLevel(frame)
   local unit = frame.unit
@@ -338,8 +457,24 @@ local function updateIndicators(frame)
     emblem:SetAlpha(1)
   end
   emblem:SetShown(wanted and true or false)
-  frame.Rare:SetShown(indicators.rare and frame.npRare and bar and not wanted and true or false)
+  local rare = indicators.rare and frame.npRare and bar and not wanted and true or false
+  -- A rare elite carries a gold star before the grey one; a friendly NPC that
+  -- is an objective of one of the player's quests carries the quest badge.
+  -- The first icon takes the anchor, the next ones follow to its right.
+  local previous
+  for _, entry in ipairs({ { emblem, wanted }, { frame.Elite, rare and frame.npRareElite }, { frame.Rare, rare },
+    { frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar } }) do
+    local icon, shown = entry[1], entry[2] and true or false
+    icon:SetShown(shown)
+    if shown then
+      icon:ClearAllPoints()
+      if previous then icon:SetPoint('LEFT', previous, 'RIGHT', 1.5, 0)
+      else icon:SetPoint('BOTTOM', frame.Health, 'TOP', indicators.x or 0, indicators.y or 0) end
+      previous = icon
+    end
+  end
 end
+function Style:Indicators(frame) updateIndicators(frame) end
 
 function Style:SetHover(frame, shown)
   frame.Hover:SetShown(shown and frame.Health:IsShown() or false)
@@ -394,6 +529,10 @@ function Style:Layout(frame)
   place(frame.Percent, config.percent, health)
   frame.Percent:SetAlpha(config.percent.alpha or 1)
   if not bar then frame.Level:Hide(); frame.Percent:Hide() end
+  local sub = settings.subtitle
+  NP:Font(frame.Subtitle, sub.font, sub.size, sub.outline)
+  frame.Subtitle:ClearAllPoints()
+  frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2)
   local label = settings.target.label
   NP:Font(frame.TargetName, label.font, label.size, label.outline)
   frame.TargetName:ClearAllPoints()
@@ -402,12 +541,8 @@ function Style:Layout(frame)
   frame.TargetName:SetShown(label.show and bar and frame.npKind ~= 'friendlyplayer' or false)
 
   local indicators = settings.indicators
-  for _, icon in ipairs({ frame.Faction, frame.Rare }) do
-    icon:SetSize(indicators.size, indicators.size)
-    icon:ClearAllPoints()
-  end
-  frame.Faction:SetPoint('BOTTOM', health, 'TOP', indicators.x or 0, indicators.y or 0)
-  frame.Rare:SetPoint('BOTTOM', health, 'TOP', indicators.x or 0, indicators.y or 0)
+  for _, icon in ipairs({ frame.Faction, frame.Rare, frame.Elite }) do icon:SetSize(indicators.size, indicators.size) end
+  frame.QuestIcon:SetSize(indicators.size * 5 / 6, indicators.size * 5 / 6)
   frame.RaidTargetIndicator:SetShown(indicators.raidMark and true or false)
   frame.RaidTargetIndicator:SetSize(indicators.size, indicators.size)
 
@@ -478,10 +613,12 @@ local handlers = {
   UNIT_THREAT_LIST_UPDATE = updateColor,
   UNIT_FLAGS = updateColor,
   UNIT_CLASSIFICATION_CHANGED = function(frame)
+    if not frame.unit then return end -- a plate off screen still hears its old token
     Style:Classify(frame, frame.unit); Style:Layout(frame); Style:Refresh(frame)
   end,
   -- A duel, a faction flag or mind control turns one kind of plate into another.
   UNIT_FACTION = function(frame)
+    if not frame.unit then return end
     local before = frame.npKind
     Style:Classify(frame, frame.unit)
     if frame.npKind ~= before then Style:Layout(frame) end
@@ -567,13 +704,27 @@ function Style:Build(frame)
   overlay:SetFrameLevel(health:GetFrameLevel() + 4)
   frame.TextLayer = overlay
   frame.Name, frame.Level, frame.Percent, frame.TargetName = fontString(overlay), fontString(overlay), fontString(overlay), fontString(overlay)
+  -- Two lines for players ("<Guild>" underneath); an unwrapped string with a
+  -- line break is cut to "Name...".
+  frame.Name:SetWordWrap(true)
   frame.Faction = overlay:CreateTexture(nil, 'ARTWORK')
   frame.Rare = overlay:CreateTexture(nil, 'ARTWORK')
   -- The star of the game's add-on list icons, grey as a rare marker.
   frame.Rare:SetTexture('Interface\\GLUES\\CharacterSelect\\Glues-AddOn-Icons')
   frame.Rare:SetTexCoord(0.75, 1, 0, 1)
   frame.Rare:SetDesaturated(true)
+  frame.Elite = overlay:CreateTexture(nil, 'ARTWORK')
+  frame.Elite:SetTexture('Interface\\GLUES\\CharacterSelect\\Glues-AddOn-Icons')
+  frame.Elite:SetTexCoord(0.75, 1, 0, 1)
+  frame.Elite:SetVertexColor(1, 0.8, 0)
+  frame.Elite:Hide()
   frame.Rare:Hide(); frame.Faction:Hide()
+  frame.Subtitle = fontString(overlay)
+  frame.Subtitle:Hide()
+  frame.QuestIcon = overlay:CreateTexture(nil, 'ARTWORK')
+  frame.QuestIcon:SetTexture('Interface\\TargetingFrame\\PortraitQuestBadge')
+  frame.QuestIcon:SetTexCoord(2 / 32, 26 / 32, 1 / 32, 31 / 32)
+  frame.QuestIcon:Hide()
   frame.RaidTargetIndicator = overlay:CreateTexture(nil, 'OVERLAY')
   frame.RaidTargetIndicator:SetPoint('RIGHT', health, 'LEFT', -14, 0)
   -- The list the target ring reads to fit a friendly target's emblem.

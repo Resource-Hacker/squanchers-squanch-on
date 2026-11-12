@@ -471,6 +471,102 @@
       ]
     },
     {
+      "name": "Squanch Highway 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/redhatdisplay/RedHatDisplay%5Bwght%5D.ttf",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Red Hat Display 1.030 (sha256 46c9d4c4a2415e7e72020b318f5cda2bcbc9018d78b1a67e480a76d8d6e4b379) at wght 900; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2024 The Red Hat Project Authors. No Reserved Font Name.",
+      "files": [
+        {
+          "path": "media/fonts/SquanchHighway.ttf",
+          "sha256": "15599f98434b0afc7f231c17e5eb106ceae4a1ae089f2167de7d1ca4cde3bade"
+        },
+        {
+          "path": "media/fonts/SquanchHighway-OFL.txt",
+          "sha256": "435fbfb7e66988b2a06686a4cb966faec733f35d8fe100a1601573c27f3e0bb8"
+        }
+      ]
+    },
+    {
+      "name": "Squanch Round 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/redhatdisplay/RedHatDisplay%5Bwght%5D.ttf",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Red Hat Display 1.030 (sha256 46c9d4c4a2415e7e72020b318f5cda2bcbc9018d78b1a67e480a76d8d6e4b379) at wght 700; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2024 The Red Hat Project Authors. No Reserved Font Name.",
+      "files": [
+        {
+          "path": "media/fonts/SquanchRound.ttf",
+          "sha256": "b2e00b61f8de653313c5acc0e7089321c1c89224cc69c3e063fff6bc80660626"
+        },
+        {
+          "path": "media/fonts/SquanchRound-OFL.txt",
+          "sha256": "435fbfb7e66988b2a06686a4cb966faec733f35d8fe100a1601573c27f3e0bb8"
+        }
+      ]
+    },
+    {
+      "name": "Squanch Square 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Orbitron 2.001 (sha256 f42db2dd16e642258e35782916eceb1dcdbea06fb958d77ad71dc5963587e8fd) at wght 900 with its alternate I, J, V, W, Y, w; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2018 The Orbitron Project Authors. Reserved Font Name \"Orbitron\" not used.",
+      "files": [
+        {
+          "path": "media/fonts/SquanchSquare.ttf",
+          "sha256": "4143fe628bf121164855e1cc2d28027137dd7cc14c3f777e41809ed78f282aed"
+        },
+        {
+          "path": "media/fonts/SquanchSquare-OFL.txt",
+          "sha256": "ab609b0e110d622435ff337cdf233288556e011bbf9bd0550be98846c0630819"
+        }
+      ]
+    },
+    {
+      "name": "Squanch Bolt 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/amarante/Amarante-Regular.ttf",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Amarante 1.001 Regular (sha256 de5eb7cc2b13632fe3f9fedbe4dc34571a76758cfb52b71fdace8fc4a7638a2f), letters leaned and lifted by fixed amounts; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2012 Sorkin Type Co. Reserved Font Name \"Amarante\" not used.",
+      "files": [
+        {
+          "path": "media/fonts/SquanchBolt.ttf",
+          "sha256": "239c47e7c2f88ff7f6a9129f137ad5e3ff76a0020d655877c9acf096c10ccbff"
+        },
+        {
+          "path": "media/fonts/SquanchBolt-OFL.txt",
+          "sha256": "89bf0833b785c49b0f271273ab440bdc20c85bf0322537dc901df940bf1579da"
+        }
+      ]
+    },
+    {
+      "name": "Squanch Comic 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/comicneue/ComicNeue-BoldItalic.ttf",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Comic Neue 2.003 Bold Italic (sha256 5c312c2a2fa64eee82f3b87fcfab8f3b12a5e59b043124401d322eb323cfbf16), lowercase drawn as capitals; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2014 The Comic Neue Project Authors. No Reserved Font Name.",
+      "files": [
+        {
+          "path": "media/fonts/SquanchComic.ttf",
+          "sha256": "548e477b38e0a9f09a2a7db540b5df7b3a1b6e6d1befd8e97fdaf06e098b2aa6"
+        },
+        {
+          "path": "media/fonts/SquanchComic-OFL.txt",
+          "sha256": "7c38a22e5878e60fe423360553e63dd7be23d29f1f60336034935dbfc96e8320"
+        }
+      ]
+    },
+    {
+      "name": "Squanch font build script and log",
+      "license": "MIT",
+      "source": "original",
+      "modifications": "Original build script; the log records the changes made to the OFL fonts above.",
+      "files": [
+        {
+          "path": "asset-source/build-fonts.py",
+          "sha256": "706d829aaef4f6d9d9df6517e50449a962e7db173a393f252f9699f746a6885b"
+        },
+        {
+          "path": "media/fonts/Squanch-FONTLOG.txt",
+          "sha256": "06a89e034ce5de6fcb1a79ab96d5ef280237a20de206b8458e05dca88f6ccac1"
+        }
+      ]
+    },
+    {
       "name": "Unit-frame media",
       "license": "MIT",
       "source": "This repository",

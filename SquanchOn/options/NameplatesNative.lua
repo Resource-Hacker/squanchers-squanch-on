@@ -110,6 +110,10 @@ add(ROOT, 'Health bar', {
   { 'power.textSize', 'slider', 'Power percentage size', slider(4, 20, 1, { integer = true }) },
   { 'bigName.font', 'font', 'Name font of an unattackable enemy NPC' },
   { 'bigName.size', 'slider', 'Name size of an unattackable enemy NPC', slider(4, 30, 1, { integer = true }) },
+  { 'subtitle.show', 'toggle', 'Title under a name-only NPC', { desc = 'The profession or title line, as "<Innkeeper>", in the colour of the name.' } },
+  { 'subtitle.font', 'font', 'Title font' },
+  { 'subtitle.size', 'slider', 'Title size', slider(4, 30, 1, { integer = true }) },
+  { 'translit', 'toggle', 'Cyrillic names in Latin letters' },
   { 'sizeScale.minor.1', 'slider', 'Minor unit width', alpha() },
   { 'sizeScale.minor.2', 'slider', 'Minor unit height', alpha() },
   { 'sizeScale.pet.1', 'slider', 'Pet and guardian width', alpha() },
@@ -123,6 +127,11 @@ add(ROOT, 'Target and hover', {
   { 'target.ornament', 'toggle', 'Target ornaments at the bar ends', { desc = 'Shown on bars at least four units high.' } },
   { 'target.ornamentColor', 'color', 'Target ornament colour', { hasAlpha = true } },
   { 'target.aggroGlow', 'toggle', 'Warning glow when about to pull' },
+  { 'target.aggroFlash.enabled', 'toggle', 'Flash when a unit turns on you', { desc = 'A wash over the bar, in and out, when you take aggro as damage dealer or healer. Not in the first five seconds of a fight.' } },
+  { 'target.aggroFlash.instanceOnly', 'toggle', 'Aggro flash in dungeons and raids only' },
+  { 'target.aggroFlash.color', 'color', 'Aggro flash colour', { hasAlpha = true } },
+  { 'target.aggroFlash.duration', 'slider', 'Aggro flash time each way (seconds)', slider(0.05, 1, 0.05) },
+  { 'target.aggroFlash.text', 'toggle', 'Aggro flash shows "-AGGRO-"' },
   { 'target.label.show', 'toggle', "Show the unit's target", { desc = 'The name of whoever the unit is targeting, class coloured, under the bar.' } },
   { 'target.label.font', 'font', "Unit's target font" },
   { 'target.label.size', 'slider', "Unit's target text size", slider(4, 30, 1, { integer = true }) },
@@ -136,7 +145,8 @@ add(ROOT, 'Indicators', {
   { 'indicators.y', 'slider', 'Faction emblem offset Y', slider(-50, 50, 0.5) },
   { 'indicators.friendlyFaction', 'toggle', 'Faction emblem on friendly players' },
   { 'indicators.enemyFaction', 'toggle', 'Faction emblem on enemy players' },
-  { 'indicators.rare', 'toggle', 'Rare marker' },
+  { 'indicators.rare', 'toggle', 'Rare marker', { desc = 'A rare elite carries a gold star beside the grey one.' } },
+  { 'indicators.quest', 'toggle', 'Quest badge on friendly quest NPCs' },
   { 'indicators.raidMark', 'toggle', 'Raid target mark' },
 })
 local function cvar(name, label, min, max, step)
@@ -144,6 +154,14 @@ local function cvar(name, label, min, max, step)
     desc = 'Game setting ' .. name .. '. The value from before Squanch-On took over is restored when these nameplates are turned off.',
     apply = function() if NP:IsActive() then NP:ApplyCVars() end end }) }
 end
+local function zones() if NP:IsActive() then NP:ApplyCVars(true) end end
+local function zone(key, label) return { 'zoneFriendly.' .. key, 'toggle', label, { combatSafe = false, apply = zones } } end
+add(ROOT, 'Friendly plates by zone', {
+  { 'zoneFriendly.enabled', 'toggle', 'Switch friendly plates by zone', { combatSafe = false, apply = zones,
+    desc = 'Sets the game\'s friendly nameplate switch when you change zone, out of combat.' } },
+  zone('party', 'In dungeons'), zone('raid', 'In raids'), zone('arena', 'In arenas and battlegrounds'),
+  zone('world', 'In the open world'), zone('cities', 'In cities and inns'),
+}, 200)
 add(ROOT, 'Game settings', {
   cvar('nameplateMaxDistance', 'Farthest plate (yards)', 10, 100, 1),
   cvar('nameplateTargetBehindMaxDistance', 'Target plate behind you (yards)', 0, 100, 1),
@@ -232,6 +250,12 @@ add(COLORS, 'Reaction', {
   { 'colors.tapped', 'color', "Tapped by someone else" },
   { 'colors.noCombat', 'color', 'Hostile unit outside your fight', { desc = 'While you are in combat, a hostile NPC that is not fighting anyone.' } },
 })
+add(COLORS, 'Dungeons and raids', {
+  { 'colors.unitType', 'toggle', 'Colour enemies by type in instances', { desc = 'In dungeons, raids and scenarios, where no threat colour applies: boss, miniboss, caster.' } },
+  { 'colors.boss', 'color', 'Boss (two levels above you, or a skull)' },
+  { 'colors.miniboss', 'color', 'Miniboss (a level above you)' },
+  { 'colors.caster', 'color', 'Caster (uses mana)' },
+})
 add(COLORS, 'Quest', {
   { 'colors.quest', 'toggle', 'Colour quest units', { desc = 'Outside instances, where the client can tell that a unit belongs to an active quest.' } },
   { 'colors.questHostile', 'color', 'Hostile quest unit' }, { 'colors.questNeutral', 'color', 'Neutral quest unit' },
@@ -262,7 +286,11 @@ add(CAST, 'Cast bar', {
   { 'cast.channel', 'color', 'Channel', { hasAlpha = true } },
   { 'cast.nonInterruptible', 'color', 'Cannot be interrupted', { hasAlpha = true } },
   { 'cast.interrupted', 'color', 'Interrupted or failed', { hasAlpha = true } },
-  { 'cast.hold', 'slider', 'Stay after an interrupt (seconds)', slider(0, 3, 0.1) },
+  { 'cast.holdInterrupted', 'slider', 'Stay after an interrupt (seconds)', slider(0, 3, 0.1) },
+  { 'cast.fade', 'slider', 'Fade out at the end (seconds)', slider(0, 2, 0.1, { desc = 'Zero: the bar disappears at once and a finished cast shows no flash.' }) },
+  { 'cast.finishFlash', 'toggle', 'Flash when a cast finishes' },
+  { 'cast.finished', 'color', 'Finished cast', { hasAlpha = true } },
+  { 'cast.textShadow', 'color', 'Spell name shadow', { hasAlpha = true } },
   { 'cast.spark', 'toggle', 'Spark' },
   { 'cast.sparkWidth', 'slider', 'Spark width', slider(2, 40, 1) },
   { 'cast.icon', 'toggle', 'Spell icon' },

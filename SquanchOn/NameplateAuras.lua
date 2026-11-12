@@ -45,6 +45,7 @@ local function countdown(size)
   if not CreateFont then return end
   countdownFont = countdownFont or CreateFont('SquanchOnNameplateCountdown')
   countdownFont:SetFont(ns.Media and ns.Media:Resolve('font', 'Expressway') or STANDARD_TEXT_FONT, size or 8, 'OUTLINE')
+  countdownFont:SetShadowColor(0, 0, 0, 1); countdownFont:SetShadowOffset(1, -1)
   return 'SquanchOnNameplateCountdown'
 end
 -- Hovering shows the tooltip; clicks always fall through to the world.

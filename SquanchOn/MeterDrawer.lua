@@ -24,7 +24,7 @@ ns.MeterDrawer = Meter
 Meter.defaults = {
     enabled = true, open = false, mode = 'DamageDone', segment = 'current',
     texture = 'Squanch Smooth', barHeight = 14,
-    showRank = true, showPercent = false, showPerSecond = true, classColors = true,
+    showRank = true, showPercent = false, showPerSecond = true, classColors = true, firstNames = true,
     autoOpen = false, autoClose = 10, animate = true, hideNative = true,
 }
 -- Enum.DamageMeterType keys, in menu order.
@@ -40,6 +40,18 @@ local NO_RATE = { Interrupts = true, Dispels = true, Deaths = true }
 -- list show the full name.
 local SHORT = { DamageTaken = 'Dmg taken', AvoidableDamageTaken = 'Avoidable', EnemyDamageTaken = 'Enemy taken' }
 local HEADER, PAD, THROTTLE, MIN_WIDTH = 18, 6, .25, 40
+-- The table under the title strip: a row of column names, then the rows.
+-- Widths in interface units; the name column takes what is left and the
+-- optional columns go (share, second value, rank) before it gets under NAME_MIN.
+local COLUMNS, CELL, NAME_MIN = 13, 3, 60
+local ORDER = { 'rank', 'name', 'value', 'rate', 'percent' }
+local WIDTH = { rank = 20, value = 46, rate = 44, percent = 30 }
+local ALIGN = { rank = 'CENTER', name = 'LEFT', value = 'RIGHT', rate = 'RIGHT', percent = 'RIGHT' }
+local VALUE_TITLE = {
+    DamageDone = 'Damage', Dps = 'DPS', HealingDone = 'Healing', Hps = 'HPS', Absorbs = 'Absorbs',
+    DamageTaken = 'Taken', AvoidableDamageTaken = 'Avoided', EnemyDamageTaken = 'Taken',
+    Interrupts = 'Count', Dispels = 'Count', Deaths = 'Time',
+}
 local WHITE = [[Interface\Buttons\WHITE8X8]]
 local FILL, TRACK, ROW_TEXT = .7, .6, { .93, .93, .9 } -- bar brightness, track alpha, row text
 
@@ -105,6 +117,13 @@ local function rate(value)
     local ok, text = pcall(string.format, '%.1f', value)
     return ok and text or '?'
 end
+-- First word of a readable name, without a "-Realm" suffix. A secret name is
+-- passed on untouched.
+local function shortName(name)
+    if secret(name) or type(name) ~= 'string' then return name end
+    local first = name:match('^[^%s%-]+')
+    return first or name
+end
 local function label(parent, size)
     local widgets = ns.OptionWidgets
     if widgets then return widgets:Label(parent, '', size) end
@@ -166,7 +185,8 @@ function Meter:Layout()
     self.content:SetScale(unit)
     self.inner = width / unit
     self:UpdateHeader()
-    self:LayoutRows(panel:GetHeight() / unit - HEADER - PAD)
+    self:LayoutColumns()
+    self:LayoutRows(panel:GetHeight() / unit - HEADER - COLUMNS - PAD)
     self:PlaceHandle()
 end
 function Meter:QueueLayout()
@@ -234,22 +254,94 @@ local function createRow(list)
     back:SetAllPoints(bar); back:SetColorTexture(0, 0, 0, TRACK)
     local text = CreateFrame('Frame', nil, row)
     text:SetAllPoints(row); text:SetFrameLevel(bar:GetFrameLevel() + 1)
-    local value = label(text, 8)
-    value:SetPoint('RIGHT', text, 'RIGHT', -3, 0); value:SetJustifyH('RIGHT')
-    local name = label(text, 8)
-    name:SetPoint('LEFT', text, 'LEFT', 3, 0); name:SetPoint('RIGHT', value, 'LEFT', -4, 0)
-    name:SetWordWrap(false)
-    for _, text in ipairs({ name, value }) do
-        local path = text:GetFont()
-        if path then text:SetFont(path, 8, 'OUTLINE') end
-        text:SetTextColor(ROW_TEXT[1], ROW_TEXT[2], ROW_TEXT[3])
+    local cells = {}
+    for _, key in ipairs(ORDER) do
+        local cell = label(text, 8)
+        cell:SetJustifyH(ALIGN[key]); cell:SetWordWrap(false)
+        local path = cell:GetFont()
+        if path then cell:SetFont(path, 8, 'OUTLINE') end
+        cell:SetTextColor(ROW_TEXT[1], ROW_TEXT[2], ROW_TEXT[3])
+        cells[key] = cell
     end
     local line = row:CreateTexture(nil, 'ARTWORK')
     line:SetPoint('TOPLEFT', row, 'BOTTOMLEFT'); line:SetPoint('TOPRIGHT', row, 'BOTTOMRIGHT'); line:SetHeight(1)
-    local color = skin.lineColor
-    if ns.OptionWidgets then ns.OptionWidgets:Flat(line, color, 1) else line:SetColorTexture(color[1], color[2], color[3], 1) end
-    row.bar, row.name, row.value = bar, name, value
+    row.line = line
+    local inner = skin.innerBorderColor
+    line:SetColorTexture(inner[1], inner[2], inner[3], 1)
+    row.bar, row.cells = bar, cells
     return row
+end
+
+-- Columns ------------------------------------------------------------------
+-- Internal lines share the unit frames' inner outline colour.
+local function paintRule(line)
+    local color = ns.DarkSkin.innerBorderColor
+    line:SetColorTexture(color[1], color[2], color[3], 1)
+end
+local function ruleWidth(frame)
+    return 2 * PixelUtil.GetPixelToUIUnitFactor() / frame:GetEffectiveScale()
+end
+-- Each cell is as wide as its column less the padding, so a long name is cut
+-- inside the name column and numbers end on their column's right edge.
+local function placeCells(cells, parent, columns)
+    for key, cell in pairs(cells) do
+        local column = columns[key]
+        cell:ClearAllPoints()
+        if column then
+            cell:SetPoint('LEFT', parent, 'LEFT', column.left + CELL, 0)
+            cell:SetWidth(math.max(1, column.width - CELL * 2))
+        end
+        cell:SetShown(column ~= nil)
+    end
+end
+function Meter:LayoutColumns()
+    local settings = self:Settings()
+    local mode, inner = settings.mode, self.inner or 150
+    local width = {
+        rank = settings.showRank and WIDTH.rank or 0,
+        value = math.min(WIDTH.value, inner * .5),
+        rate = settings.showPerSecond and not NO_RATE[mode] and WIDTH.rate or 0,
+        percent = settings.showPercent and mode ~= 'Deaths' and WIDTH.percent or 0,
+    }
+    for _, key in ipairs({ 'percent', 'rate', 'rank' }) do
+        if inner - width.rank - width.value - width.rate - width.percent < NAME_MIN then width[key] = 0 end
+    end
+    width.name = math.max(1, inner - width.rank - width.value - width.rate - width.percent)
+    local columns, left, dividers = {}, 0, 0
+    local thick = ruleWidth(self.grid)
+    for _, key in ipairs(ORDER) do
+        if width[key] > 0 then
+            columns[key] = { left = left, width = width[key] }
+            if left > 0 then
+                dividers = dividers + 1
+                local line = self.dividers[dividers]
+                if not line then
+                    line = self.grid:CreateTexture(nil, 'ARTWORK')
+                    paintRule(line)
+                    self.dividers[dividers] = line
+                end
+                line:ClearAllPoints()
+                line:SetPoint('TOPLEFT', self.grid, 'TOPLEFT', left - thick * .5, 0)
+                line:SetPoint('BOTTOMLEFT', self.grid, 'BOTTOMLEFT', left - thick * .5, 0)
+                line:SetWidth(thick)
+                line:Show()
+            end
+            left = left + width[key]
+        end
+    end
+    for index = dividers + 1, #self.dividers do self.dividers[index]:Hide() end
+    for _, rule in ipairs(self.rules) do rule:SetHeight(thick) end
+    self.columns = columns
+    self.columnStamp = (self.columnStamp or 0) + 1
+    local titles = self.titles
+    titles.rank:SetText('#'); titles.name:SetText('Name'); titles.percent:SetText('%')
+    titles.value:SetText(VALUE_TITLE[mode] or self.modeLabels[mode] or '')
+    titles.rate:SetText(RATE_FIRST[mode] and 'Total' or 'Per sec')
+    placeCells(titles, self.head, columns)
+end
+-- The dividers run from the column names to the last row shown.
+function Meter:SizeGrid(shown)
+    self.grid:SetHeight(COLUMNS + math.max(0, shown) * (self.step or 0))
 end
 
 function Meter:LayoutRows(height)
@@ -266,9 +358,13 @@ function Meter:LayoutRows(height)
         row:SetPoint('TOPRIGHT', self.list, 'TOPRIGHT', 0, -(index - 1) * step)
         row:SetHeight(barHeight)
         if row.texture ~= path then row.texture = path; row.bar:SetStatusBarTexture(path) end
+        if row.columnStamp ~= self.columnStamp then
+            row.columnStamp = self.columnStamp
+            placeCells(row.cells, row, self.columns)
+        end
     end
     for index = visible + 1, #self.rows do self.rows[index]:Hide() end
-    self.visible = visible
+    self.visible, self.step = visible, step
 end
 
 -- Data ---------------------------------------------------------------------
@@ -292,25 +388,24 @@ local function paint(row, src, rank, settings, top, sum)
         local muted = ns.DarkSkin.innerBorderColor
         row.bar:SetStatusBarColor(muted[1] * FILL, muted[2] * FILL, muted[3] * FILL, 1)
     end
-    if settings.showRank then row.name:SetFormattedText('%d. %s', rank, src.name) else row.name:SetText(src.name) end
-    local text
+    -- Every cell is set, shown or not; a hidden column's cell stays hidden.
+    local cells = row.cells
+    cells.rank:SetText(rank)
+    if settings.firstNames then cells.name:SetText(shortName(src.name)) else cells.name:SetText(src.name) end
+    local first, second, share = '', '', nil
     if died then
         local ok, clock = pcall(SecondsToClock, src.deathTimeSeconds)
-        text = ok and clock or ''
+        first = ok and clock or ''
     else
-        local first, second = amount(total), NO_RATE[mode] and '' or rate(perSecond)
+        first, second = amount(total), NO_RATE[mode] and '' or rate(perSecond)
         if RATE_FIRST[mode] then first, second = second, first end
-        text = first
-        if settings.showPerSecond and not NO_RATE[mode] then text = text .. ' (' .. second .. ')' end
-        -- A share needs arithmetic, which secret amounts (in combat) do not
-        -- allow, and is shown only while it leaves the name half the row.
-        if settings.showPercent and not secret(total) and not secret(sum) and type(sum) == 'number' and sum > 0 then
-            row.value:SetText(text .. string.format(' %d%%', total / sum * 100 + .5))
-            local ok, fits = pcall(function() return row.value:GetStringWidth() <= row:GetWidth() * .5 end)
-            if ok and fits then text = nil end
+        -- A share needs arithmetic, which secret amounts (in combat) do not allow.
+        if not secret(total) and not secret(sum) and type(sum) == 'number' and sum > 0 then
+            share = total / sum * 100 + .5
         end
     end
-    if text then row.value:SetText(text) end
+    cells.value:SetText(first); cells.rate:SetText(second)
+    if share then cells.percent:SetFormattedText('%d%%', share) else cells.percent:SetText('') end
     row.index = rank
 end
 local function render(self)
@@ -353,6 +448,7 @@ function Meter:Refresh()
     if not ok or self.count == 0 then
         for _, row in ipairs(self.rows) do row:Hide() end
     end
+    self:SizeGrid(ok and math.min(self.visible, self.count - self.offset) or 0)
     self.notice:SetText(message or '')
     self.notice:SetShown(message ~= nil)
 end
@@ -603,8 +699,26 @@ function Meter:Initialize()
     end
     self.modeBox, self.segmentBox = modeBox, segmentBox
 
+    -- Column names, between two rules; the dividers are on a frame above the
+    -- rows so the bars do not cover them.
+    local head = CreateFrame('Frame', nil, content)
+    head:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -HEADER)
+    head:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 0, -HEADER)
+    head:SetHeight(COLUMNS); head:EnableMouse(false)
+    self.head, self.titles, self.rules, self.dividers = head, {}, {}, {}
+    for _, key in ipairs(ORDER) do
+        local title = label(head, 8)
+        title:SetJustifyH(ALIGN[key]); title:SetWordWrap(false)
+        self.titles[key] = title
+    end
+    for index, edge in ipairs({ 'TOP', 'BOTTOM' }) do
+        local rule = head:CreateTexture(nil, 'ARTWORK')
+        rule:SetPoint(edge .. 'LEFT', head, edge .. 'LEFT'); rule:SetPoint(edge .. 'RIGHT', head, edge .. 'RIGHT')
+        paintRule(rule)
+        self.rules[index] = rule
+    end
     local list = CreateFrame('Frame', nil, content)
-    list:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -HEADER)
+    list:SetPoint('TOPLEFT', head, 'BOTTOMLEFT')
     list:SetPoint('BOTTOMRIGHT', content, 'BOTTOMRIGHT', 0, 0)
     list:EnableMouse(false)
     list:SetScript('OnMouseWheel', function(_, delta)
@@ -612,9 +726,21 @@ function Meter:Initialize()
         if offset ~= self.offset then self.offset = offset; self:Refresh() end
     end)
     self.list = list
-    local rule = content:CreateTexture(nil, 'ARTWORK')
-    rule:SetPoint('BOTTOMLEFT', list, 'TOPLEFT'); rule:SetPoint('BOTTOMRIGHT', list, 'TOPRIGHT'); rule:SetHeight(1)
-    widgets:Flat(rule, skin.lineColor, 1)
+    local grid = CreateFrame('Frame', nil, content)
+    grid:SetPoint('TOPLEFT', head, 'TOPLEFT'); grid:SetPoint('TOPRIGHT', head, 'TOPRIGHT')
+    grid:SetHeight(COLUMNS); grid:EnableMouse(false)
+    grid:SetFrameLevel(list:GetFrameLevel() + 5)
+    self.grid = grid
+    local function theme()
+        local color = skin.headerTextColor
+        for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3]) end
+        modeBox.text:SetTextColor(color[1], color[2], color[3])
+        for _, rule in ipairs(self.rules) do paintRule(rule) end
+        for _, line in ipairs(self.dividers) do paintRule(line) end
+        for _, row in ipairs(self.rows or {}) do if row.line then paintRule(row.line) end end
+    end
+    theme()
+    skin:OnTheme(theme)
     local notice = label(list, 8)
     notice:SetPoint('TOPLEFT', list, 'TOPLEFT', PAD, -PAD); notice:SetPoint('TOPRIGHT', list, 'TOPRIGHT', -PAD, -PAD)
     notice:SetWordWrap(true); notice:Hide()

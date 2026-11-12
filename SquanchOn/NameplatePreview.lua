@@ -30,7 +30,7 @@ local function case(caption, facts, base)
   return copy
 end
 local FRIEND = { name = 'Innkeeper', attack = false, reaction = 5, level = 30 }
-local HORDE = { name = 'Zugzug', guild = 'Guild Name', attack = false, reaction = 5, level = 24, player = true, class = 'HUNTER', faction = 'Horde' }
+local HORDE = { name = 'Zugzug Bonechewer', guild = 'Island Raiders', attack = false, reaction = 5, level = 24, player = true, class = 'HUNTER', faction = 'Horde' }
 local CASES = {
   case('Enemy NPC'),
   case('Target, in combat, debuffs', { target = true, playerCombat = true, combat = true, threat = 3, health = 64,
@@ -46,13 +46,24 @@ local CASES = {
   case('Tapped', { tapped = true }),
   case('Low health', { playerCombat = true, combat = true, threat = 3, health = 15 }),
   case('Quest unit', { quest = true }),
-  case('Enemy player', { name = 'Stabby', guild = 'Other Guild', player = true, class = 'ROGUE', faction = 'Alliance', level = 25, power = 70 }),
+  case('Enemy player', { name = 'Stabby Shadowstep', guild = 'Other Guild', player = true, class = 'ROGUE', faction = 'Alliance', level = 25, power = 70 }),
   case('Friendly NPC', nil, FRIEND),
   case('Friendly NPC, target', { target = true }, FRIEND),
   case('Friendly player', nil, HORDE),
   case('Friendly Horde, target', { target = true }, HORDE),
   case('Other target, out of range', { otherTarget = true, inRange = false }),
+  case('Aggro flash (loops)', { playerCombat = true, combat = true, threat = 3, zone = 'party', aggroLoop = true }),
+  case('Cast finished (flash, fade)', { playerCombat = true, combat = true, threat = 0, cast = { name = 'Fireball', icon = 135812, time = 1.5 } }),
+  case('Interrupted cast', { playerCombat = true, combat = true, threat = 0, cast = { name = 'Heal', icon = 135915, time = 2.5, interrupted = true } }),
+  case('Name-only NPC with title', { name = 'Grimtak', title = 'Butcher', attack = false, friend = false, reaction = 4 }),
+  case('Friendly quest NPC', { quest = true }, FRIEND),
+  case('Rare elite', { classification = 'rareelite', level = 15 }),
+  case('Dungeon boss', { zone = 'party', level = 12, playerLevel = 10, classification = 'elite' }),
+  case('Dungeon miniboss', { zone = 'party', level = 11, playerLevel = 10, classification = 'elite' }),
+  case('Dungeon caster', { zone = 'party', mana = true, level = 10, playerLevel = 10 }),
 }
+local PER_LINE, CELL, LINE = 13, 100, 110
+local CYCLE_GAP = 1.7 -- the interrupt hold and the fade fit in it
 
 local function noop() end
 local function paint(frame, enhanced)
@@ -71,6 +82,7 @@ local function paint(frame, enhanced)
   if facts.cast and frame.npKind ~= 'self' then
     cast.casting, cast.channeling, cast.notInterruptible = not facts.cast.channel, facts.cast.channel or false, facts.cast.locked or false
     cast:SetMinMaxValues(0, facts.cast.time)
+    cast.holdTime, frame.pvEnded = 0, nil
     cast.Icon:SetTexture(facts.cast.icon); cast.Text:SetText(facts.cast.name)
     cast.Shield:SetTexture('Interface\\CastingBar\\UI-CastingBar-Small-Shield')
     cast.Shield:SetAlpha(facts.cast.locked and (cast.Shield.alphaValue or 1) or 0)
@@ -96,10 +108,17 @@ local function build(row, index, facts, enhanced)
     data.auras[position] = copy
   end
   NP.fake[unit] = data
-  NP.fake[unit .. 'target'] = { name = UnitName('player'), class = select(2, UnitClass('player')) }
-  local frame = CreateFrame('Frame', nil, row)
+  -- A unit names its target only while it has one: here, the ones in a fight.
+  if facts.combat then NP.fake[unit .. 'target'] = { name = UnitName('player'), class = select(2, UnitClass('player')) } end
+  -- The plate hangs on an unscaled holder: a selected plate is scaled, and an
+  -- offset on the plate itself would be scaled with it.
+  local holder = CreateFrame('Frame', nil, row)
+  holder:SetSize(1, 1)
+  local column, line = (index - 1) % PER_LINE, math.floor((index - 1) / PER_LINE)
+  holder:SetPoint('CENTER', row, 'TOPLEFT', (column + 0.5) * CELL, -(line + 0.5) * LINE)
+  local frame = CreateFrame('Frame', nil, holder)
   frame:SetSize(1, 1)
-  frame:SetPoint('CENTER', row, 'LEFT', (index - 0.5) * 100, 0)
+  frame:SetPoint('CENTER', holder, 'CENTER', 0, 0)
   frame.unit, frame.__unit, frame.npFake = unit, unit, data
   frame.RegisterEvent, frame.EnableElement, frame.DisableElement = noop, noop, noop
   local Enhance = ns.NameplateEnhance
@@ -110,7 +129,7 @@ local function build(row, index, facts, enhanced)
   frame.Health.ForceUpdate = noop
   local caption = row:CreateFontString(nil, 'OVERLAY')
   caption:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 7, 'OUTLINE')
-  caption:SetPoint('TOP', frame, 'CENTER', 0, -24)
+  caption:SetPoint('TOP', holder, 'CENTER', 0, -30)
   caption:SetWidth(96)
   caption:SetText(facts.caption)
   return frame
@@ -126,10 +145,37 @@ local function animate(row, elapsed)
     local facts, cast = frame.npFake, frame.Castbar
     if facts.cast then
       local time = facts.cast.time
-      local passed = (now - row.started) % (time + 0.6)
-      local left = math.max(0, time - passed)
-      cast:SetValue(facts.cast.channel and left or math.min(time, passed))
-      cast.Time:SetFormattedText('%.1f', left)
+      local stop = facts.cast.interrupted and time * 0.6 or time
+      local passed = (now - row.started) % (time + CYCLE_GAP)
+      if passed < stop then
+        if frame.pvEnded then
+          -- A new cast: what oUF does on the start event.
+          frame.pvEnded, cast.holdTime = nil, 0
+          cast.casting, cast.channeling = not facts.cast.channel, facts.cast.channel or false
+          cast:SetMinMaxValues(0, time); cast.Text:SetText(facts.cast.name)
+          cast.PostCastStart(cast, frame.unit)
+        end
+        local left = math.max(0, time - passed)
+        cast:SetValue(facts.cast.channel and left or passed)
+        cast.Time:SetFormattedText('%.1f', left)
+      elseif not frame.pvEnded then
+        -- The end of the cast: what oUF does on the stop or interrupt event.
+        frame.pvEnded = true
+        cast.Time:SetText('')
+        if facts.cast.interrupted then
+          cast:SetMinMaxValues(0, 1); cast:SetValue(1)
+          cast.Text:SetText(INTERRUPTED or 'Interrupted')
+          cast.PostCastInterrupted(cast, frame.unit)
+        else
+          cast:SetValue(facts.cast.channel and 0 or time)
+          cast.PostCastStop(cast, frame.unit)
+        end
+        cast.casting, cast.channeling = nil, nil
+      end
+    end
+    if facts.aggroLoop and now - (frame.pvFlashed or 0) >= 2 then
+      frame.pvFlashed = now
+      ns.NameplateStyle:Flash(frame)
     end
     local expired = false
     for _, record in ipairs(facts.auras) do
@@ -149,8 +195,8 @@ function Preview:Row(enhanced)
   local row = self.rows[key]
   if row then return row end
   row = CreateFrame('Frame', enhanced and 'SquanchOnPlatePreviewEnhanced' or 'SquanchOnPlatePreview', UIParent)
-  row:SetSize(#CASES * 100, 110)
-  row:SetPoint('CENTER', UIParent, 'CENTER', 0, enhanced and 40 or 180)
+  row:SetSize(math.min(#CASES, PER_LINE) * CELL, math.ceil(#CASES / PER_LINE) * LINE)
+  row:SetPoint('CENTER', UIParent, 'CENTER', 0, enhanced and -80 or 180)
   row:SetFrameStrata('MEDIUM')
   row:SetMovable(true); row:EnableMouse(true); row:RegisterForDrag('LeftButton')
   row:SetScript('OnDragStart', row.StartMoving); row:SetScript('OnDragStop', row.StopMovingOrSizing)
@@ -187,7 +233,8 @@ end
 SLASH_SQUANCHONPLATES1 = '/sqplates'
 SlashCmdList.SQUANCHONPLATES = function(message)
   local word, option = (message or ''):lower():match('^%s*(%S*)%s*(%S*)')
-  if word ~= 'test' then print('/sqplates test [on|off]   preview plates   |   /sqplates test enh   the same row with enhancements'); return end
+  if word == 'debug' then NP:Debug(); return end
+  if word ~= 'test' then print('/sqplates debug   one line per visible plate'); print('/sqplates test [on|off]   preview plates   |   /sqplates test enh   the same row with enhancements'); return end
   local enhanced = option == 'enh'
   local wanted = nil
   if option == 'on' then wanted = true elseif option == 'off' then wanted = false end

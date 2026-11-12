@@ -22,7 +22,82 @@ local function lock(region, value, shown)
   region:SetAlpha(public(value) and value and shown or 0)
 end
 
+-- Cast end -----------------------------------------------------------------
+-- A finished cast turns to the "finished" colour, flashes white and fades; a
+-- failed or interrupted one stays for holdInterrupted seconds, then fades.
+-- oUF keeps the bar up (and full) while element.holdTime runs; the fade is a
+-- client Alpha animation, so nothing ticks in Lua. Channels just end.
+local function restore(element)
+  if element.npFading then
+    element.npFading = nil
+    if element.npFade then element.npFade:Stop() end
+    local frame = element.__owner or element:GetParent()
+    element:SetAlpha(frame.npCastAlpha or 1)
+  end
+  if element.npFlash then
+    if element.npFlash.group then element.npFlash.group:Stop() end
+    element.npFlash:Hide()
+  end
+end
+local function fadeOut(element, hold)
+  local fade = math.max(0, tonumber(NP:Settings().cast.fade) or 0)
+  element.holdTime = hold + fade
+  if fade <= 0 or not element:IsVisible() then return end
+  local group = element.npFade
+  if group == nil then
+    group = element.CreateAnimationGroup and element:CreateAnimationGroup() or false
+    local step = group and group.CreateAnimation and group:CreateAnimation('Alpha')
+    if step and step.SetFromAlpha and step.SetToAlpha and step.SetStartDelay then
+      group.step = step
+      if group.SetToFinalAlpha then group:SetToFinalAlpha(true) end
+    else
+      group = false
+    end
+    element.npFade = group
+  end
+  if not group then return end
+  group:Stop()
+  group.step:SetFromAlpha(element:GetAlpha() or 1); group.step:SetToAlpha(0)
+  group.step:SetDuration(fade); group.step:SetStartDelay(hold)
+  element.npFading = true
+  group:Play()
+end
+local function flash(element)
+  local art = element.npFlash
+  if art == nil then
+    art = element:CreateTexture(nil, 'OVERLAY', nil, 7)
+    art:SetAllPoints(element)
+    art:SetColorTexture(1, 1, 1, 1)
+    art:SetBlendMode('ADD')
+    art:Hide()
+    local group = art.CreateAnimationGroup and art:CreateAnimationGroup()
+    local rise = group and group.CreateAnimation and group:CreateAnimation('Alpha')
+    local fall = rise and group:CreateAnimation('Alpha')
+    if fall and rise.SetFromAlpha and rise.SetOrder then
+      rise:SetOrder(1); rise:SetDuration(0.2); rise:SetFromAlpha(0); rise:SetToAlpha(0.8)
+      fall:SetOrder(2); fall:SetDuration(0.2); fall:SetFromAlpha(1); fall:SetToAlpha(0)
+      group:SetScript('OnFinished', function() art:Hide() end)
+      art.group = group
+    end
+    element.npFlash = art
+  end
+  if not art.group then return end
+  art.group:Stop(); art:Show(); art.group:Play()
+end
+-- Runs before oUF clears the cast's attributes. A stop that follows a failure
+-- (the hold is already running) changes nothing.
+local function stopped(element)
+  if (element.holdTime or 0) > 0 or element.channeling then return end
+  local settings = NP:Settings().cast
+  if (tonumber(settings.fade) or 0) <= 0 then return end
+  element:SetStatusBarColor(rgb(settings.finished))
+  element.Spark:Hide()
+  if settings.finishFlash then flash(element) end
+  fadeOut(element, 0)
+end
+
 local function started(element)
+  restore(element)
   local settings = NP:Settings().cast
   element:SetStatusBarColor(rgb(element.channeling and settings.channel or settings.normal))
   element.Spark:SetShown(settings.spark and true or false)
@@ -48,6 +123,7 @@ local function failed(element, _, _, interruptedBy)
       element.Text:SetText((INTERRUPTED or 'Interrupted') .. ' [' .. name .. ']')
     end
   end
+  fadeOut(element, math.max(0, tonumber(NP:Settings().cast.holdInterrupted) or 0))
 end
 -- Remaining time as "1.2". The value can be secret; the client formats it.
 local function clock(self, elapsed)
@@ -65,7 +141,11 @@ local SIDES = { LEFT = { 'RIGHT', 'LEFT' }, INNERLEFT = { 'LEFT', 'LEFT' }, CENT
   INNERRIGHT = { 'RIGHT', 'RIGHT' }, RIGHT = { 'LEFT', 'RIGHT' } }
 local function nameShown(element, shown)
   local frame = element.__owner or element:GetParent()
-  if shown or NP:Settings().cast.hideNameWhileCasting then frame.Name:SetShown(shown) end
+  if shown then restore(element) end
+  if shown or NP:Settings().cast.hideNameWhileCasting then
+    frame.Name:SetShown(shown)
+    if frame.Subtitle then frame.Subtitle:SetShown(shown and frame.npTitle or false) end
+  end
   if shown and ns.NameplateEnhance then ns.NameplateEnhance:CastStop(element) end
   if ns.NameplateAuras and frame.unit then ns.NameplateAuras:Alpha(frame, true) end
 end
@@ -95,6 +175,7 @@ function Cast:Build(frame)
   cast.PostCastStart = started
   cast.PostCastInterruptible = interruptible
   cast.PostCastFail, cast.PostCastInterrupted = failed, failed
+  cast.PostCastStop = stopped
   cast:HookScript('OnShow', function(self) nameShown(self, false) end)
   cast:HookScript('OnHide', function(self) nameShown(self, true) end)
   frame.Castbar = cast
@@ -113,7 +194,7 @@ function Cast:Style(frame)
   cast.Spark:ClearAllPoints()
   cast.Spark:SetPoint('CENTER', fill or cast, 'RIGHT', 0, 0)
   cast.bg:SetColorTexture(rgb(settings.background))
-  cast.timeToHold = tonumber(settings.hold) or 0
+  cast.timeToHold = math.max(0, tonumber(settings.holdInterrupted) or 0) + math.max(0, tonumber(settings.fade) or 0)
   cast.Icon:SetShown(settings.icon and true or false)
   cast.IconRim:SetShown(settings.icon and true or false)
   local line = ns.DarkSkin and ns.DarkSkin.lineColor or { 0.34, 0.26, 0.145 }
@@ -144,7 +225,7 @@ function Cast:Layout(frame, config, width, height)
   cast.Shield:SetPoint('CENTER', cast.Icon, 'CENTER', 0, 0)
   cast.Shield:SetSize(size * 1.6, size * 1.6)
   cast.Spark:SetSize(settings.sparkWidth or 17, config.cast[2] * 2.6)
-  NP:Font(cast.Text, config.spell.font, config.spell.size, 'OUTLINE')
+  NP:Font(cast.Text, config.spell.font, config.spell.size, 'OUTLINE', settings.textShadow)
   cast.Text:ClearAllPoints()
   cast.Text:SetPoint('CENTER', cast, 'CENTER', 0, config.spell.y or 0)
   local time = config.castTime
@@ -153,5 +234,8 @@ function Cast:Layout(frame, config, width, height)
   cast.Time:ClearAllPoints()
   cast.Time:SetPoint(side[1], cast, side[2], time.x or 0, time.y or 0)
   cast.Time:SetShown(time.show ~= false)
-  if cast:IsShown() and settings.hideNameWhileCasting then frame.Name:Hide() end
+  if cast:IsShown() and settings.hideNameWhileCasting then
+    frame.Name:Hide()
+    if frame.Subtitle then frame.Subtitle:Hide() end
+  end
 end
