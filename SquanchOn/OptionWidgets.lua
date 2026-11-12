@@ -5,10 +5,44 @@ local _, ns = ...
 local W = {}
 ns.OptionWidgets = W
 local WHITE = [[Interface\Buttons\WHITE8X8]]
-local GOLD = { 0.90, 0.684, 0.378 }
--- Flat rules and dividers: tuned to render like the unit frames' textured inner
--- outline (a flat line at the rim colour reads far brighter than that texture).
-local LINE = { 0.34, 0.26, 0.145 }
+-- The theme's live colour tables (DarkSkin updates them in place). Accents
+-- follow the rim, gold text the heading colour, ordinary text the body colour;
+-- LINE is the shared flat-rule colour derived from the inner outline.
+local Skin = ns.DarkSkin
+local GOLD, LINE = Skin.rimColor, Skin.lineColor
+local HEADING, TEXT = Skin.headerTextColor, Skin.bodyTextColor
+local MUTED = Skin.innerBorderColor -- the raised bevel's resting gold
+local function near(r, g, b, color)
+    return type(r) == 'number' and math.abs(r - color[1]) < .004 and math.abs(g - color[2]) < .004 and math.abs(b - color[3]) < .004
+end
+-- Solid textures painted from a theme table: repainted on every theme change.
+local flats = setmetatable({}, { __mode = 'k' })
+local function flat(texture, color, alpha, scale)
+    scale = scale or 1
+    flats[texture] = { color, alpha, scale }
+    texture:SetColorTexture(color[1] * scale, color[2] * scale, color[3] * scale, alpha)
+end
+function W:Flat(texture, color, alpha) flat(texture, color, alpha or 1) end
+-- Text and state-coloured regions (hover, selected, disabled): a theme change
+-- moves only those still showing a theme colour, tried in the listed order.
+local followers = setmetatable({}, { __mode = 'k' })
+local BODY_LABEL = { 'GetTextColor', 'SetTextColor', TEXT, HEADING }
+local HEAD_LABEL = { 'GetTextColor', 'SetTextColor', HEADING, TEXT }
+local ACCENT = { 'GetVertexColor', 'SetVertexColor', GOLD }
+local CHEVRON = { 'GetColor', 'SetColor', HEADING }
+local MUTED_CHEVRON = { 'GetColor', 'SetColor', MUTED }
+local shown = { [GOLD] = { unpack(GOLD) }, [HEADING] = { unpack(HEADING) }, [TEXT] = { unpack(TEXT) }, [MUTED] = { unpack(MUTED) } }
+Skin:OnTheme(function()
+    for texture, spec in pairs(flats) do flat(texture, spec[1], spec[2], spec[3]) end
+    for object, kind in pairs(followers) do
+        local r, g, b, a = object[kind[1]](object)
+        for index = 3, #kind do
+            local color = kind[index]
+            if near(r, g, b, shown[color]) then object[kind[2]](object, color[1], color[2], color[3], a); break end
+        end
+    end
+    for color, copy in pairs(shown) do copy[1], copy[2], copy[3] = color[1], color[2], color[3] end
+end)
 
 local function fontPath()
     return ns.UnitFrames and ns.UnitFrames.db and ns.UnitFrames:Font(ns.UnitFrames.db.font) or STANDARD_TEXT_FONT
@@ -17,19 +51,39 @@ function W:Label(parent, text, size, r, g, b)
     local font = parent:CreateFontString(nil, 'OVERLAY')
     font:SetFont(fontPath(), size or 10, '')
     font:SetShadowColor(0, 0, 0, 1); font:SetShadowOffset(1, -1)
-    font:SetTextColor(r or .9, g or .9, b or .86)
+    followers[font] = r and near(r, g, b, HEADING) and HEAD_LABEL or BODY_LABEL
+    if not r then r, g, b = TEXT[1], TEXT[2], TEXT[3] end
+    font:SetTextColor(r, g, b)
     font:SetJustifyH('LEFT'); font:SetText(text or '')
     return font
 end
 function W:Header(parent, text)
-    return self:Label(parent, text, 12, GOLD[1], GOLD[2], GOLD[3])
+    return self:Label(parent, text, 12, HEADING[1], HEADING[2], HEADING[3])
 end
-function W:Button(parent, text, width, callback, height)
+-- The Escape menu's raised button. 'compact' is the menu's own thick rim: its
+-- gold paints 0.5 outside to 4 inside the frame and its corner diamonds reach 3
+-- outside, so such controls are 20 high and sit 6 apart (26 pitch). 'inner' is
+-- the thin rim the older windows were laid out for.
+local function unsnap(texture)
+    if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(false); texture:SetTexelSnappingBias(0) end
+end
+local function raised(control, style)
+    control:SetHighlightTexture(WHITE)
+    local border = Skin:RaisedButton(control, style)
+    -- The face is placed off the pixel grid (FitPanelBackground). Bevels left on
+    -- the grid land a pixel away from it: a one-pixel top line under a row of
+    -- face and a left line on the rim. Sharing the face's placement keeps them
+    -- two pixels thick on its own first rows.
+    for _, edge in pairs(border.raisedEdges or {}) do unsnap(edge) end
+    local highlight = control:GetHighlightTexture()
+    if highlight and border.raisedFace then highlight:ClearAllPoints(); highlight:SetAllPoints(border.raisedFace); unsnap(highlight) end
+    return border
+end
+function W:Button(parent, text, width, callback, height, style)
     local control = CreateFrame('Button', nil, parent)
     control:SetSize(width, height or 24)
     control.text = self:Label(control, text, 10); control.text:SetPoint('CENTER'); control.text:SetJustifyH('CENTER')
-    control:SetHighlightTexture(WHITE)
-    ns.DarkSkin:RaisedButton(control, 'inner')
+    raised(control, style or 'inner')
     function control:SetText(value) self.text:SetText(value) end
     function control:GetText() return self.text:GetText() end
     control:SetScript('OnClick', callback)
@@ -38,9 +92,11 @@ end
 function W:Edit(parent, width)
     local control = CreateFrame('EditBox', nil, parent)
     control:SetSize(width, 22); control:SetAutoFocus(false)
-    control:SetFont(fontPath(), 10, ''); control:SetTextColor(.9, .9, .86); control:SetTextInsets(6, 6, 0, 0)
-    local face = control:CreateTexture(nil, 'BACKGROUND'); face:SetAllPoints(); face:SetColorTexture(.03, .03, .03, .85)
-    ns.DarkSkin:Panel(control, 'inner', 0)
+    control:SetFont(fontPath(), 10, ''); control:SetTextColor(TEXT[1], TEXT[2], TEXT[3]); control:SetTextInsets(6, 6, 0, 0)
+    followers[control] = BODY_LABEL
+    local face = control:CreateTexture(nil, 'BACKGROUND'); face:SetColorTexture(.03, .03, .03, .85)
+    -- The face ends at the rim's painted inner edge, never outside the gold line.
+    ns.DarkSkin:FitPanelBackground(face, ns.DarkSkin:Panel(control, 'inner', 0))
     control:SetScript('OnEscapePressed', function(self) self:ClearFocus() end)
     control:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
     return control
@@ -48,20 +104,21 @@ end
 function W:Check(parent)
     local control = CreateFrame('CheckButton', nil, parent)
     control:SetSize(20, 20)
-    local face = control:CreateTexture(nil, 'BACKGROUND'); face:SetAllPoints(); face:SetColorTexture(.03, .03, .03, .85)
+    local face = control:CreateTexture(nil, 'BACKGROUND'); face:SetColorTexture(.03, .03, .03, .85)
     local mark = control:CreateTexture(nil, 'ARTWORK')
     mark:SetPoint('TOPLEFT', 4, -4); mark:SetPoint('BOTTOMRIGHT', -4, 4)
-    mark:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+    flat(mark, GOLD, 1)
     control:SetCheckedTexture(mark)
+    ns.DarkSkin:FitPanelBackground(face, ns.DarkSkin:Panel(control, 'inner', 0))
     control:SetHighlightTexture(WHITE); control:GetHighlightTexture():SetVertexColor(1, .78, .42, .08)
-    ns.DarkSkin:Panel(control, 'inner', 0)
+    control:GetHighlightTexture():ClearAllPoints(); control:GetHighlightTexture():SetAllPoints(face)
     return control
 end
 -- A wheel-scrolled body with a slim position marker instead of stock scroll art.
 function W:Scroll(parent)
     local scroll = CreateFrame('ScrollFrame', nil, parent)
     local body = CreateFrame('Frame', nil, scroll); body:SetSize(1, 1); scroll:SetScrollChild(body)
-    local thumb = parent:CreateTexture(nil, 'OVERLAY'); thumb:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], .7); thumb:SetWidth(3)
+    local thumb = parent:CreateTexture(nil, 'OVERLAY'); flat(thumb, GOLD, .7); thumb:SetWidth(3)
     local function refresh()
         local range, height = scroll:GetVerticalScrollRange(), scroll:GetHeight()
         if range <= 0 or height <= 0 then thumb:Hide(); return end
@@ -93,7 +150,7 @@ function W:Window(name, width, height, title)
     -- Settings need a readable backing; the shared translucent fill gets a darker underlay.
     local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, 0) -- owner: same body as the chat panel
     frame.title = self:Header(frame, title); frame.title:SetPoint('TOPLEFT', 18, -16)
-    local rule = frame:CreateTexture(nil, 'ARTWORK'); rule:SetColorTexture(LINE[1], LINE[2], LINE[3], 1)
+    local rule = frame:CreateTexture(nil, 'ARTWORK'); flat(rule, LINE, 1)
     rule:SetHeight(1); rule:SetPoint('TOPLEFT', 14, -38); rule:SetPoint('TOPRIGHT', -14, -38)
     frame.close = self:Button(frame, 'x', 22, function() frame:Hide() end, 22)
     frame.close:SetPoint('TOPRIGHT', -12, -10)
@@ -107,13 +164,15 @@ end
 -- ---------------------------------------------------------------------------
 -- Controls for the unified settings window (OptionsWindow.lua). Everything
 -- below is additive; the functions above keep their signatures and behaviour.
--- Shared conventions: body text 8, headers 10, controls 16 high; every control
+-- Shared conventions: body text 8, headers 10, boxes 16 high, raised buttons
+-- and dropdowns 20 high with the Escape menu's rim; every control
 -- has SetDisabled(flag) and reports through plain fields (onCommit, onPreview)
 -- so pooled rows need no per-redraw closures.
 local BODY, HEAD, DIM = 8, 10, 0.4
 local HOVER = { 1, 0.85, 0.55 }
 local GREY = { 0.62, 0.62, 0.6 }
 W.bodySize, W.headerSize, W.gold, W.line = BODY, HEAD, GOLD, LINE
+W.headerText, W.bodyText = HEADING, TEXT
 
 local function rim(frame, style)
     local skin = ns.DarkSkin
@@ -121,7 +180,10 @@ local function rim(frame, style)
 end
 local function face(frame)
     local texture = frame:CreateTexture(nil, 'BACKGROUND')
-    texture:SetAllPoints(); texture:SetColorTexture(.03, .03, .03, .85)
+    texture:SetColorTexture(.03, .03, .03, .85)
+    -- End at the rim's painted inner edge so no dark margin shows outside the gold line.
+    local border = rim(frame)
+    if border and ns.DarkSkin.FitPanelBackground then ns.DarkSkin:FitPanelBackground(texture, border) else texture:SetAllPoints() end
     return texture
 end
 local function dim(control, disabled)
@@ -129,13 +191,20 @@ local function dim(control, disabled)
     control:SetAlpha(disabled and DIM or 1)
 end
 
-function W:SmallButton(parent, text, width, callback)
-    local control = self:Button(parent, text, width, callback, 16)
-    control.text:SetFont(fontPath(), BODY, '')
-    function control:SetDisabled(disabled)
-        if disabled then self:Disable() else self:Enable() end
-        dim(self, disabled)
+-- Disabled raised controls keep their rim, like the Escape menu's: the skin
+-- darkens the face and bevel, and only the contents fade.
+local function disableRaised(control, disabled)
+    control.disabled = disabled and true or false
+    if disabled then control:Disable() else control:Enable() end
+    local alpha = disabled and DIM or 1
+    for _, key in ipairs({ 'text', 'chevron', 'strip', 'sample' }) do
+        if control[key] then control[key]:SetAlpha(alpha) end
     end
+end
+function W:SmallButton(parent, text, width, callback)
+    local control = self:Button(parent, text, width, callback, 20, 'compact')
+    control.text:SetFont(fontPath(), BODY, '')
+    control.SetDisabled = disableRaised
     return control
 end
 
@@ -185,13 +254,19 @@ function W:Chevron(parent, size)
                 b:SetStartPoint('CENTER', self, 0, -quarter * sign); b:SetEndPoint('CENTER', self, half, quarter * sign)
             end
         end
-        function frame:SetColor(r, g, b2) a:SetColorTexture(r, g, b2, 1); b:SetColorTexture(r, g, b2, 1) end
+        local color = {}
+        function frame:SetColor(r, g, b2)
+            color[1], color[2], color[3] = r, g, b2
+            a:SetColorTexture(r, g, b2, 1); b:SetColorTexture(r, g, b2, 1)
+        end
+        function frame:GetColor() return color[1], color[2], color[3] end
+        followers[frame] = CHEVRON
     else
         local text = W:Label(frame, '', BODY); text:SetPoint('CENTER')
         function frame:SetDirection(direction) text:SetText(direction == 'right' and '>' or direction == 'up' and '^' or 'v') end
         function frame:SetColor(r, g, b2) text:SetTextColor(r, g, b2) end
     end
-    frame:SetColor(GOLD[1], GOLD[2], GOLD[3]); frame:SetDirection('down')
+    frame:SetColor(HEADING[1], HEADING[2], HEADING[3]); frame:SetDirection('down')
     return frame
 end
 
@@ -220,10 +295,10 @@ end
 function W:Describe(owner, option, ctx, note)
     if not GameTooltip or not option then return end
     GameTooltip:SetOwner(owner, 'ANCHOR_RIGHT')
-    GameTooltip:SetText(option.label or '', GOLD[1], GOLD[2], GOLD[3], 1, true)
+    GameTooltip:SetText(option.label or '', HEADING[1], HEADING[2], HEADING[3], 1, true)
     local desc = option.desc
     if type(desc) == 'function' then desc = desc(ctx) end
-    if desc and desc ~= '' then GameTooltip:AddLine(desc, .9, .9, .86, true) end
+    if desc and desc ~= '' then GameTooltip:AddLine(desc, TEXT[1], TEXT[2], TEXT[3], true) end
     local registry = ns.Options
     if registry and option.type ~= 'action' and option.type ~= 'note' and registry:HasDefault(option) then
         local text = self:FormatValue(option, registry:Default(option, ctx), ctx)
@@ -281,13 +356,14 @@ function W:Slider(parent, width)
     track:SetColorTexture(.03, .03, .03, .85); track:SetHeight(4)
     track:SetPoint('LEFT', 0, 0); track:SetPoint('RIGHT', 0, 0)
     local edge = slider:CreateTexture(nil, 'BACKGROUND', nil, -1)
-    edge:SetColorTexture(GOLD[1] * .55, GOLD[2] * .55, GOLD[3] * .55, .9)
+    flat(edge, GOLD, .9, .55)
     edge:SetPoint('TOPLEFT', track, -1, 1); edge:SetPoint('BOTTOMRIGHT', track, 1, -1)
     local thumb = slider:CreateTexture(nil, 'OVERLAY')
     thumb:SetColorTexture(1, 1, 1, 1); thumb:SetSize(6, 12); thumb:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+    followers[thumb] = ACCENT
     slider:SetThumbTexture(thumb)
     local fill = slider:CreateTexture(nil, 'ARTWORK')
-    fill:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], .6); fill:SetHeight(4)
+    flat(fill, GOLD, .6); fill:SetHeight(4)
     fill:SetPoint('LEFT', track, 'LEFT'); fill:SetPoint('RIGHT', thumb, 'CENTER')
     local edit = self:ValueEdit(holder, 44)
     edit:SetPoint('RIGHT', 0, 0); edit:SetJustifyH('RIGHT')
@@ -434,7 +510,8 @@ end
 local function paintPreview(row, kind, item, size)
     local label = row.label or row.text
     local path = not item.plain and kind and W:MediaPath(kind, item.value) or nil
-    local offset = 6
+    local pad = row.pad or 6
+    local offset = pad
     if row.strip then row.strip:Hide() end
     if row.sample then row.sample:Hide() end
     -- A font file that fails to load leaves the default in place.
@@ -443,21 +520,21 @@ local function paintPreview(row, kind, item, size)
     if kind == 'statusbar' and path then
         row.strip = row.strip or row:CreateTexture(nil, 'ARTWORK')
         row.strip:SetTexture(path); row.strip:SetVertexColor(classColor())
-        row.strip:ClearAllPoints(); row.strip:SetPoint('LEFT', 6, 0); row.strip:SetSize(row.stripWidth or 110, size)
-        row.strip:Show(); offset = 12 + (row.stripWidth or 110)
+        row.strip:ClearAllPoints(); row.strip:SetPoint('LEFT', pad, 0); row.strip:SetSize(row.stripWidth or 110, size)
+        row.strip:Show(); offset = pad + 6 + (row.stripWidth or 110)
     elseif kind == 'border' and path then
         if not row.sample then
             row.sample = CreateFrame('Frame', nil, row, BackdropTemplateMixin and 'BackdropTemplate' or nil)
-            row.sample:SetPoint('LEFT', 6, 0); row.sample:SetSize(60, 14)
+            row.sample:SetPoint('LEFT', pad, 0); row.sample:SetSize(60, 12)
         end
         if row.sample.SetBackdrop then
             row.sample:SetBackdrop({ edgeFile = path, edgeSize = 8 })
             row.sample:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
-            row.sample:Show(); offset = 72
+            row.sample:Show(); offset = pad + 66
         end
     end
-    label:ClearAllPoints(); label:SetPoint('LEFT', offset, 0); label:SetPoint('RIGHT', -14, 0)
-    if item.missing then label:SetTextColor(1, .35, .3) else label:SetTextColor(.9, .9, .86) end
+    label:ClearAllPoints(); label:SetPoint('LEFT', offset, 0); label:SetPoint('RIGHT', -(row.padRight or 14), 0)
+    if item.missing then label:SetTextColor(1, .35, .3) else label:SetTextColor(TEXT[1], TEXT[2], TEXT[3]) end
     label:SetText(item.label or tostring(item.value))
 end
 local function popupRefresh()
@@ -517,7 +594,7 @@ local function buildPopup()
     popup.filter:SetScript('OnEscapePressed', function() popup:Hide() end)
     popup.filter:SetScript('OnEditFocusLost', nil)
     popup.empty = W:Label(popup, 'Nothing matches.', BODY, GREY[1], GREY[2], GREY[3]); popup.empty:SetPoint('BOTTOMLEFT', 8, 10)
-    popup.thumb = popup:CreateTexture(nil, 'OVERLAY'); popup.thumb:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], .7); popup.thumb:SetWidth(3)
+    popup.thumb = popup:CreateTexture(nil, 'OVERLAY'); flat(popup.thumb, GOLD, .7); popup.thumb:SetWidth(3)
     popup.rows, popup.view, popup.offset = {}, {}, 0
     for index = 1, POPUP_ROWS do
         local row = CreateFrame('Button', nil, popup)
@@ -525,7 +602,7 @@ local function buildPopup()
         row:SetHighlightTexture(WHITE); row:GetHighlightTexture():SetVertexColor(1, .78, .42, .12)
         row:SetPushedTexture(WHITE); row:GetPushedTexture():SetVertexColor(1, .78, .42, .22)
         row.label = W:Label(row, '', HEAD); row.label:SetWordWrap(false)
-        row.mark = row:CreateTexture(nil, 'OVERLAY'); row.mark:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+        row.mark = row:CreateTexture(nil, 'OVERLAY'); flat(row.mark, GOLD, 1)
         row.mark:SetSize(4, 4); row.mark:SetPoint('RIGHT', -10, 0)
         row:SetScript('OnClick', function(self)
             local owner, item = popup.owner, self.item
@@ -563,7 +640,7 @@ function W:OpenPopup(owner, items, current, kind, width)
         if item.value == current then popup.offset = index - math.ceil(POPUP_ROWS / 2); break end
     end
     popupRefresh()
-    popup:ClearAllPoints(); popup:SetPoint('TOPLEFT', owner, 'BOTTOMLEFT', 0, -3)
+    popup:ClearAllPoints(); popup:SetPoint('TOPLEFT', owner, 'BOTTOMLEFT', 0, -6)
     popup:Show()
 end
 function W:ClosePopup()
@@ -578,12 +655,15 @@ end
 -- kind makes it a media picker whose face and rows preview the item.
 function W:Dropdown(parent, width, kind)
     local control = CreateFrame('Button', nil, parent)
-    control:SetSize(width, 16)
-    control:SetHighlightTexture(WHITE)
-    if ns.DarkSkin and ns.DarkSkin.RaisedButton then ns.DarkSkin:RaisedButton(control, 'inner') end
+    control:SetSize(width, 20)
+    raised(control, 'compact')
+    -- Contents start inside the rim's 4-unit paint.
+    control.pad, control.padRight = 9, 20
     control.text = self:Label(control, '', BODY); control.text:SetWordWrap(false)
-    control.text:SetPoint('LEFT', 6, 0); control.text:SetPoint('RIGHT', -14, 0)
-    control.chevron = self:Chevron(control, 8); control.chevron:SetPoint('RIGHT', -4, 0)
+    control.text:SetPoint('LEFT', control.pad, 0); control.text:SetPoint('RIGHT', -control.padRight, 0)
+    control.chevron = self:Chevron(control, 8); control.chevron:SetPoint('RIGHT', -8, 0)
+    control.chevron:SetColor(MUTED[1], MUTED[2], MUTED[3])
+    if followers[control.chevron] then followers[control.chevron] = MUTED_CHEVRON end
     control.kind, control.stripWidth = kind, 48
     local shown = {}
     function control:SetValue(value, label, missing)
@@ -591,16 +671,13 @@ function W:Dropdown(parent, width, kind)
         shown.value, shown.label, shown.missing, shown.plain = value, label or (value ~= nil and tostring(value) or ''), missing, value == nil
         paintPreview(self, self.kind, shown, BODY)
     end
-    function control:SetDisabled(disabled)
-        if disabled then self:Disable() else self:Enable() end
-        dim(self, disabled)
-    end
+    control.SetDisabled = disableRaised
     control:SetScript('OnClick', function(self)
         if W:PopupOwner() == self then W:ClosePopup(); return end
         local items = self.getItems and self:getItems() or self.items
         if items then W:OpenPopup(self, items, self.value, self.kind) end
     end)
-    control:SetScript('OnHide', function(self) if W:PopupOwner() == self then W:ClosePopup() end end)
+    control:HookScript('OnHide', function(self) if W:PopupOwner() == self then W:ClosePopup() end end)
     return control
 end
 function W:MediaPicker(parent, kind, width)
@@ -671,7 +748,7 @@ end
 function W:Swatch(parent)
     local control = CreateFrame('Button', nil, parent)
     control:SetSize(16, 16)
-    face(control)
+    local dark = face(control)
     -- Checker underlay, visible through a translucent colour.
     for index = 0, 3 do
         local check = control:CreateTexture(nil, 'BORDER')
@@ -683,7 +760,9 @@ function W:Swatch(parent)
     paint:SetPoint('TOPLEFT', 2, -2); paint:SetPoint('BOTTOMRIGHT', -2, 2)
     control:SetHighlightTexture(WHITE); control:GetHighlightTexture():SetVertexColor(1, .78, .42, .18)
     control:SetPushedTexture(WHITE); control:GetPushedTexture():SetVertexColor(0, 0, 0, .25)
-    rim(control)
+    for _, tint in ipairs({ control:GetHighlightTexture(), control:GetPushedTexture() }) do
+        tint:ClearAllPoints(); tint:SetAllPoints(dark)
+    end
     function control:Paint(color)
         paint:SetColorTexture(color.r or 1, color.g or 1, color.b or 1, self.hasAlpha and (color.a or 1) or 1)
     end
@@ -706,18 +785,18 @@ function W:Section(parent, width)
     local control = CreateFrame('Button', nil, parent)
     control:SetSize(width, 20)
     control.chevron = self:Chevron(control, 8); control.chevron:SetPoint('LEFT', 2, 0)
-    control.title = self:Label(control, '', HEAD, GOLD[1], GOLD[2], GOLD[3]); control.title:SetPoint('LEFT', 16, 0)
+    control.title = self:Label(control, '', HEAD, HEADING[1], HEADING[2], HEADING[3]); control.title:SetPoint('LEFT', 16, 0)
     local reset = CreateFrame('Button', nil, control)
     reset:SetSize(34, 16); reset:SetPoint('RIGHT', 0, 0)
     reset.text = self:Label(reset, 'Reset', BODY, GREY[1], GREY[2], GREY[3]); reset.text:SetPoint('RIGHT', -2, 0)
     local rule = control:CreateTexture(nil, 'ARTWORK')
-    rule:SetColorTexture(LINE[1], LINE[2], LINE[3], 1); rule:SetHeight(1)
+    flat(rule, LINE, 1); rule:SetHeight(1)
     rule:SetPoint('LEFT', control.title, 'RIGHT', 8, 0); rule:SetPoint('RIGHT', reset, 'LEFT', -6, 0)
     control.reset = reset
     local function hover()
         local over = control:IsMouseOver()
         if over then control.title:SetTextColor(HOVER[1], HOVER[2], HOVER[3]); control.chevron:SetColor(HOVER[1], HOVER[2], HOVER[3])
-        else control.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3]); control.chevron:SetColor(GOLD[1], GOLD[2], GOLD[3]) end
+        else control.title:SetTextColor(HEADING[1], HEADING[2], HEADING[3]); control.chevron:SetColor(HEADING[1], HEADING[2], HEADING[3]) end
         reset:SetAlpha(over and control.canReset and 1 or 0)
         if reset:IsMouseOver() and control.canReset then reset.text:SetTextColor(HOVER[1], HOVER[2], HOVER[3])
         else reset.text:SetTextColor(GREY[1], GREY[2], GREY[3]) end
@@ -740,10 +819,11 @@ function W:Section(parent, width)
     return control
 end
 
--- A row of abutting buttons with one selected (gold text). onPick(control, index).
+-- A row of buttons with one selected (gold text); each takes `width` including
+-- the 6 between neighbouring rims. onPick(control, index).
 function W:Segmented(parent)
     local holder = CreateFrame('Frame', nil, parent)
-    holder:SetSize(1, 16)
+    holder:SetSize(1, 20)
     holder.buttons = {}
     function holder:SetOptions(labels, selected, width)
         width = width or 64
@@ -754,12 +834,12 @@ function W:Segmented(parent)
                     if holder.onPick then holder.onPick(holder, pressed.index) end
                 end)
                 button.index = index
-                button:SetPoint('LEFT', (index - 1) * width, 0)
                 self.buttons[index] = button
             end
-            button:SetWidth(width); button:SetText(label)
-            if index == selected then button.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-            else button.text:SetTextColor(.9, .9, .86) end
+            button:ClearAllPoints(); button:SetPoint('LEFT', (index - 1) * width + 3, 0)
+            button:SetWidth(width - 6); button:SetText(label)
+            if index == selected then button.text:SetTextColor(HEADING[1], HEADING[2], HEADING[3])
+            else button.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3]) end
             button:Show()
         end
         for index = #labels + 1, #self.buttons do self.buttons[index]:Hide() end
@@ -835,7 +915,7 @@ function W:Curve(parent, width)
             local row = self.rows[index]
             if not row then
                 row = CreateFrame('Frame', nil, self)
-                row:SetSize(width, 16); row:SetPoint('TOPLEFT', 0, -16 - (index - 1) * 20)
+                row:SetSize(width, 20); row:SetPoint('TOPLEFT', 0, -18 - (index - 1) * 26)
                 row.x = W:ValueEdit(row, 56); row.x:SetPoint('LEFT', 0, 0); row.x.onCommit = edited
                 row.arrow = W:Chevron(row, 8); row.arrow:SetPoint('LEFT', 60, 0); row.arrow:SetDirection('right')
                 row.y = W:ValueEdit(row, 56); row.y:SetPoint('LEFT', 72, 0); row.y.onCommit = edited
@@ -849,9 +929,9 @@ function W:Curve(parent, width)
             row:Show()
         end
         for index = #self.points + 1, #self.rows do self.rows[index]:Hide() end
-        self.add:ClearAllPoints(); self.add:SetPoint('TOPLEFT', 0, -16 - #self.points * 20)
+        self.add:ClearAllPoints(); self.add:SetPoint('TOPLEFT', 3, -18 - #self.points * 26)
         self.add:SetDisabled(self.disabled)
-        self:SetHeight(16 + #self.points * 20 + 16)
+        self:SetHeight(18 + #self.points * 26 + 23)
     end
     function holder:SetDisabled(disabled)
         self.disabled = disabled and true or false
@@ -880,12 +960,12 @@ function W:ListEditor(parent, width)
             local row = self.rows[index]
             if not row then
                 row = CreateFrame('Frame', nil, self)
-                row:SetSize(width, 16); row:SetPoint('TOPLEFT', 0, -(index - 1) * 18)
+                row:SetSize(width, 20); row:SetPoint('TOPLEFT', 0, -3 - (index - 1) * 26)
                 row.label = W:Label(row, '', BODY); row.label:SetPoint('LEFT', 4, 0); row.label:SetWidth(width - 64); row.label:SetWordWrap(false)
                 row.remove = W:SmallButton(row, 'Remove', 52, function(button)
                     if holder.onRemove then holder.onRemove(holder, button.key) end
                 end)
-                row.remove:SetPoint('RIGHT', 0, 0)
+                row.remove:SetPoint('RIGHT', -3, 0)
                 self.rows[index] = row
             end
             row.label:SetText(tostring(item.label or item.key)); row.remove.key = item.key
@@ -893,10 +973,10 @@ function W:ListEditor(parent, width)
             row:Show()
         end
         for index = #items + 1, #self.rows do self.rows[index]:Hide() end
-        self.entry:ClearAllPoints(); self.entry:SetPoint('TOPLEFT', 0, -#items * 18)
+        self.entry:ClearAllPoints(); self.entry:SetPoint('TOPLEFT', 0, -5 - #items * 26)
         self.add:ClearAllPoints(); self.add:SetPoint('LEFT', self.entry, 'RIGHT', 6, 0)
         self.entry:SetDisabled(self.disabled); self.add:SetDisabled(self.disabled)
-        self:SetHeight(#items * 18 + 16)
+        self:SetHeight(3 + #items * 26 + 23)
     end
     function holder:SetDisabled(disabled)
         self.disabled = disabled and true or false

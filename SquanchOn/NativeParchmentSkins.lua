@@ -4,7 +4,6 @@
 local _, ns = ...
 local module = { fills = {}, hidden = {}, text = {}, roots = {}, hooks = {} }
 ns.NativeParchmentSkins = module
-local GREY, ALPHA = 0.054901964962482, 0.66216158866882
 
 local function public(value)
     return not (_G.issecretvalue and _G.issecretvalue(value))
@@ -30,7 +29,7 @@ function module:Fill(frame)
     if not self.fills[frame] then
         if InCombatLockdown() then self.pending = true; return end
         local fill = frame:CreateTexture(nil, 'BACKGROUND', nil, -8)
-        fill:SetColorTexture(GREY, GREY, GREY, ALPHA)
+        ns.DarkSkin:PaintFill(fill)
         self.fills[frame] = fill
     end
     ns.DarkSkin:FitPanelBackground(self.fills[frame], ns.DarkSkin:Panel(frame, 'dialog', 0))
@@ -171,7 +170,7 @@ function module:SpellBook()
                 -- Native resting/hover alpha belongs to the row. Replace only
                 -- the pale paper bitmap, retaining those state transitions.
                 local alpha = row.Backplate:GetAlpha()
-                row.Backplate:SetColorTexture(GREY, GREY, GREY, ALPHA)
+                ns.DarkSkin:PaintFill(row.Backplate)
                 row.Backplate:SetAlpha(alpha)
             end
         end

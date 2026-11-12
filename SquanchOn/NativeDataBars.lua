@@ -11,7 +11,15 @@ local function makeBar(name, width, height)
     holder:SetSize(width, height)
     local backdrop = holder:CreateTexture(nil, "BACKGROUND")
     backdrop:SetAllPoints()
-    backdrop:SetColorTexture(0.0549, 0.0549, 0.0549, 0.75)
+    -- The theme's panel fill, a little more solid than a panel (.75 shipped).
+    local function paint()
+        local skin = ns.DarkSkin
+        local r, g, b, alpha = 0.054901964962482, 0.054901964962482, 0.054901964962482, 0.66216158866882
+        if skin then r, g, b, alpha = skin:FillColor() end
+        backdrop:SetColorTexture(r, g, b, math.min(1, alpha * 0.75 / 0.66216158866882))
+    end
+    paint()
+    if ns.DarkSkin then ns.DarkSkin:OnTheme(paint) end
     local function layer(level, r, g, b, alpha)
         local bar = CreateFrame("StatusBar", nil, holder)
         bar:SetAllPoints()

@@ -27,7 +27,7 @@
       "files": [
         {
           "path": "NameplateIndicators.lua",
-          "sha256": "18da78852d2eb36ffc6102c0b9f0069b1ae6414bb247b88ffb0b746a08dbc3d6"
+          "sha256": "6b21ca15e5ce48b7d6a631e4851a1260fa4e15c6525c3fb89bd05daeaed2b472"
         },
         {
           "path": "LICENSES/TargetNameplateIndicator-LICENSE.txt",
@@ -745,6 +745,38 @@
         {
           "path": "media/fonts/ShareTechMono-OFL.txt",
           "sha256": "9d96f445b6e9c701428811d0177f894874f8d6f07ecc30d568c506542368f3ff"
+        }
+      ]
+    },
+    {
+      "name": "LibSerialize v1.2.3 (MINOR 7)",
+      "license": "MIT",
+      "source": "https://github.com/rossnichols/LibSerialize/tree/aa6e50dddad28f8dfa6c27c9b1e15ae40262b4a5",
+      "modifications": "Unmodified LibSerialize.lua and LICENSE from the tagged upstream commit. Serializes profile export strings.",
+      "files": [
+        {
+          "path": "libs/LibSerialize/LICENSE",
+          "sha256": "20dfddf4b7b254dc9048734b9cf67658769299189cd0a53b3c638eafd4c0da06"
+        },
+        {
+          "path": "libs/LibSerialize/LibSerialize.lua",
+          "sha256": "5aa318ac8f511094a0e0f6437941754528a109fe4c3c307433b7451b3ccf8b4a"
+        }
+      ]
+    },
+    {
+      "name": "LibDeflate 1.0.2-release",
+      "license": "Zlib",
+      "source": "https://github.com/SafeteeWoW/LibDeflate/tree/6831edcaa915154e7769d622e0de72ee5d25a882",
+      "modifications": "Unmodified LibDeflate.lua and LICENSE.txt from the tagged upstream commit. Compresses and print-encodes profile export strings.",
+      "files": [
+        {
+          "path": "libs/LibDeflate/LICENSE.txt",
+          "sha256": "acbecf8578f4febb766a1dd0217336e2e7ec19e66d13c907e38b01b1b727d7df"
+        },
+        {
+          "path": "libs/LibDeflate/LibDeflate.lua",
+          "sha256": "76f2114e527c2be1ac5cf768a68084946a3e19f63592834640020b7c9b5a450f"
         }
       ]
     }

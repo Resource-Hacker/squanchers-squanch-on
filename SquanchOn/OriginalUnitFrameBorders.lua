@@ -14,9 +14,9 @@ local function resolve(path)
     for key in path:gmatch('[^.]+') do object = object and object[key] end
     return object
 end
-local function add(id, path, styles, strata, predicate, alpha)
+local function add(id, path, styles, strata, predicate)
     records[#records + 1] = { id = id, path = path, styles = styles or { 'unit' },
-        strata = strata, predicate = predicate, alpha = ns.DarkSkin.borderAlpha }
+        strata = strata, predicate = predicate }
 end
 
 -- frameStrata1 means Inherited; frameStrata2 means BACKGROUND in original M33.
@@ -74,11 +74,12 @@ local function refresh(record)
         for _, panel in ipairs(record.panels or {}) do panel:Hide() end
     end
     local panels = {}
+    local alpha = ns.DarkSkin.borderAlpha -- the theme's current rim opacity
     for _, style in ipairs(record.styles) do
         local panel = ns.DarkSkin:Panel(target, style, 0)
         if record.strata then panel:SetFrameStrata(record.strata) end
-        panel.baseAlpha = record.alpha
-        panel:SetAlpha(InCombatLockdown() and 1 or record.alpha)
+        panel.baseAlpha = alpha
+        panel:SetAlpha(InCombatLockdown() and 1 or alpha)
         panels[#panels + 1] = panel
     end
     record.target, record.panels = target, panels

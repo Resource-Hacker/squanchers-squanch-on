@@ -64,7 +64,7 @@ function Drawer:FitQuestEntries()
                 button:SetFrameLevel(block.HeaderButton:GetFrameLevel()+1)
                 local text=button:CreateFontString(nil,'OVERLAY','GameFontNormal')
                 text:SetAllPoints(button)
-                if ns.NativeText then ns.NativeText:Header(text,8) end
+                if ns.NativeText then ns.NativeText:Header(text,'questHeader') end
                 record.text=text
                 button:SetScript('OnClick',function()
                     if InCombatLockdown() then return end
@@ -256,7 +256,7 @@ function Drawer:Initialize()
     local title=handle:CreateFontString(nil,'OVERLAY','GameFontNormal')
     title:SetPoint('BOTTOM',handle,'TOP',0,2)
     title:SetText(QUESTS_LABEL or 'Quests')
-    if ns.NativeText then ns.NativeText:Header(title,8) end
+    if ns.NativeText then ns.NativeText:Header(title,'questHeader') end
     title:Hide()
     -- Hover is presentation only. It never changes secure drawer visibility.
     handle:HookScript('OnEnter',function() title:Show() end)
@@ -289,7 +289,7 @@ function Drawer:Initialize()
     local label=plate:CreateFontString(nil,'OVERLAY','GameFontNormal')
     label:SetAllPoints(plate)
     label:SetText(QUESTS_LABEL or 'Quests')
-    if ns.NativeText then ns.NativeText:Header(label,8) end
+    if ns.NativeText then ns.NativeText:Header(label,'questHeader') end
     local close=CreateFrame('Button',nil,frame,'SecureHandlerClickTemplate')
     close:SetSize(16,16)
     close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-4,-2)

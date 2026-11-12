@@ -154,19 +154,24 @@ function Import:Normalize(source)
     return profile
 end
 
+-- The unit-frame settings are one table inside the active addon profile
+-- (ns.db.unitFrames). The second result keeps the fields callers read from
+-- the old inner-profile state: `profile` (the addon profile's name), `profiles`
+-- (that one table) and the per-account import receipts.
 function Import:Initialize()
     if not ns.db then return nil,'Saved variables are not initialized' end
-    local state=ns.db.unitFrames
-    if type(state)~='table' then state={version=1,profile='Default',profiles={}};ns.db.unitFrames=state end
-    state.profiles=state.profiles or {};state.profile=state.profile or 'Default'
-    if type(ns.db.unitFrameImport)=='table' and state.importVersion~=2 then
+    local receipts=ns.Profiles:Receipts('unitFrameReceipts')
+    local name,profile=ns.Profiles:Current(),rawget(ns.db,'unitFrames')
+    if type(ns.db.unitFrameImport)=='table' and receipts.importVersion~=2 then
         -- Keep the rejected schema intact as rollback, then consume the fresh
         -- complete private import exactly once. Later option edits are retained.
-        if state.imported then state.preVersion2Profiles=self:Copy(state.profiles) end
-        state.profiles[state.profile]=self:Normalize(ns.db.unitFrameImport)
-        state.imported=true;state.importVersion=2;state.version=2
+        if receipts.imported and type(profile)=='table' then receipts.preVersion2Profiles={[name]=self:Copy(profile)} end
+        profile=self:Normalize(ns.db.unitFrameImport)
+        receipts.imported=true;receipts.importVersion=2;receipts.version=2
     end
-    if not state.profiles[state.profile] then state.profiles[state.profile]=self:Defaults() end
-
-    return state.profiles[state.profile],state
+    if type(profile)~='table' then profile=self:Defaults() end
+    ns.db.unitFrames=profile
+    local state=setmetatable({profile=name,profiles={[name]=profile}},
+        {__index=receipts,__newindex=function(_,key,value) receipts[key]=value end})
+    return profile,state
 end

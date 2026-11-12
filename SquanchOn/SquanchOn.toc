@@ -13,11 +13,14 @@
 libs/LibStub/LibStub.lua
 libs/LibDispel/LibDispel.lua
 libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua
+libs/LibSerialize/LibSerialize.lua
+libs/LibDeflate/LibDeflate.lua
 libs/oUF/oUF_Forever.xml
 
 Range.lua
 DefaultProfile.lua
 DefaultSeed.lua
+Profiles.lua
 Core.lua
 Options.lua
 Media.lua
@@ -83,4 +86,5 @@ options/Auras.lua
 options/Appearance.lua
 options/Chat.lua
 options/Windows.lua
+options/Profiles.lua
 options/About.lua

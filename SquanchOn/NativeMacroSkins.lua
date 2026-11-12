@@ -3,7 +3,6 @@
 local _, ns = ...
 local Macros = {}
 ns.NativeMacroSkins = Macros
-local GREY, ALPHA = 0.054901964962482, 0.66216158866882
 local initialized, pending = false, false
 local edges = {
     "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
@@ -59,7 +58,7 @@ function Macros:Apply()
         hideRim(box)
         local rim = skin:Panel(popup, "dialog", 0)
         if popup.BG then
-            popup.BG:SetColorTexture(GREY, GREY, GREY, ALPHA)
+            skin:PaintFill(popup.BG)
             skin:FitPanelBackground(popup.BG, rim)
         end
         local name = box.IconSelectorEditBox

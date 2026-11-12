@@ -1315,18 +1315,17 @@ function addon:OnEvent(event, ...)
       return
     end
 
-    -- First run: start from the shipped layout. The table is released either way.
-    if SquanchOnDB == nil and addon.DefaultProfile then
-      SquanchOnDB = addon.SeedDefaults and addon:SeedDefaults(addon.DefaultProfile) or addon.DefaultProfile
-    end
-    addon.DefaultProfile = nil
-    SquanchOnDB = SquanchOnDB or {}
-    copyDefaults(defaults, SquanchOnDB)
-    -- Retired cursor-peek / AHK settings have no owner in this native version.
-    for _, key in ipairs({"enablePetConfirmBindings", "useNativePeekActionButtons", "syncFreelookCentering"}) do
-      SquanchOnDB[key] = nil
-    end
-    self.db = SquanchOnDB
+    -- Profiles.lua owns the saved-variable shape: the first-run seed from the
+    -- shipped layout, the one-time migration, and which profile this character
+    -- uses. self.db is that active profile; it calls back for every profile
+    -- that becomes active.
+    self.db = addon.Profiles:Bootstrap(function(profile)
+      copyDefaults(defaults, profile)
+      -- Retired cursor-peek / AHK settings have no owner in this native version.
+      for _, key in ipairs({"enablePetConfirmBindings", "useNativePeekActionButtons", "syncFreelookCentering"}) do
+        profile[key] = nil
+      end
+    end)
     self.db.loadedVersion = "0.3.0-rewrite"
     if not self.db.nativeReturnRevision then
       self.db.nativeCombinedClick = false

@@ -152,6 +152,13 @@ function Skin:BarControls()
     end
 end
 
+-- A colour-only retint of existing inner rims; safe in combat.
+Skin:OnTheme(function()
+    for _, state in pairs(profiles) do
+        if state.iconRim then state.iconRim:SetVertexColor(unpack(Skin.innerBorderColor)) end
+    end
+end)
+
 -- Native icon changes remain free of addon geometry while combat-locked.
 local pendingSkins=CreateFrame("Frame")
 pendingSkins:RegisterEvent("PLAYER_REGEN_ENABLED")

@@ -67,10 +67,8 @@ Options:Add('appearance.theme', {
         desc = 'Colour of gold labels such as unselected chat tabs.',
         keywords = 'title header gold label font', apply = theme }),
     row('theme', Skin, 'bodyText', { id = 'theme.bodyText', type = 'color', label = 'Body text colour', section = 'Text', order = 20,
-        desc = 'Colour of ordinary text in settings lists.',
-        keywords = 'body font white label',
-        -- No renderer in the theme module draws body text; shown once one reads Skin.bodyTextColor.
-        hidden = function() return not Skin.bodyTextColorUsed end, apply = theme }),
+        desc = 'Colour of ordinary text in the game settings lists and in this window.',
+        keywords = 'body font white label', apply = theme }),
 })
 
 local function text()

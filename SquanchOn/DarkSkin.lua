@@ -14,8 +14,9 @@ local FACE_BRIGHTNESS = 1
 -- The values above are the shipped theme. Edited values live in ns.db.theme and
 -- ns.db.chat (only keys that were changed); Skin:ApplyTheme reloads the locals
 -- and retints everything recorded below. Consumers in other files may read the
--- live tables Skin.innerBorderColor, Skin.headerTextColor, Skin.bodyTextColor
--- and Skin.borderAlpha, and subscribe with Skin:OnTheme(fn).
+-- live tables Skin.rimColor, Skin.innerBorderColor, Skin.lineColor,
+-- Skin.headerTextColor, Skin.bodyTextColor and Skin.borderAlpha, paint with
+-- Skin:FillColor()/Skin:PaintFill(texture), and subscribe with Skin:OnTheme(fn).
 Skin.themeDefaults = {
     rim = { r = 0.90, g = 0.684, b = 0.378 }, rimAlpha = 0.95,
     inner = { r = 0.70, g = 0.532, b = 0.294 },
@@ -30,6 +31,13 @@ Skin.chatDefaults = {
     -- fillAlpha: nil follows the theme's panel opacity.
 }
 Skin.chatTimestampFormat = "|cffb2b2b2[%H:%M]|r "
+Skin.rimColor = { 0.90, 0.684, 0.378 }
+-- Flat rules and dividers: the one colour for every solid line meant to look
+-- like the textured inner outline (a flat line at the inner colour reads far
+-- brighter than that texture). Owner-tuned for the shipped inner colour and
+-- scaled per channel with theme.inner, about inner * (0.34 / 0.70).
+local LINE_DEFAULT = { 0.34, 0.26, 0.145 }
+Skin.lineColor = { 0.34, 0.26, 0.145 }
 Skin.headerTextColor = { 0.90, 0.684, 0.378 }
 Skin.bodyTextColor = { 0.9, 0.9, 0.86 }
 Skin.themeListeners = {}
@@ -53,8 +61,13 @@ local function loadTheme()
     BORDER_R, BORDER_G, BORDER_B = themeColor("rim")
     BORDER_ALPHA = tonumber(Skin:Theme("rimAlpha")) or Skin.themeDefaults.rimAlpha
     Skin.borderAlpha = BORDER_ALPHA
+    local rim, line = Skin.rimColor, Skin.lineColor
+    rim[1], rim[2], rim[3] = BORDER_R, BORDER_G, BORDER_B
     local inner = Skin.innerBorderColor
     inner[1], inner[2], inner[3] = themeColor("inner")
+    local shipped = Skin.themeDefaults.inner
+    line[1], line[2], line[3] = LINE_DEFAULT[1] * inner[1] / shipped.r,
+        LINE_DEFAULT[2] * inner[2] / shipped.g, LINE_DEFAULT[3] * inner[3] / shipped.b
     PANEL_R, PANEL_G, PANEL_B = themeColor("fill")
     PANEL_ALPHA = tonumber(Skin:Theme("fillAlpha")) or Skin.themeDefaults.fillAlpha
     FACE_BRIGHTNESS = tonumber(Skin:Theme("buttonBrightness")) or 1
@@ -74,6 +87,10 @@ local function paintFill(texture, chat)
     local alpha = chat and tonumber(Skin:ChatSetting("fillAlpha")) or PANEL_ALPHA
     texture:SetColorTexture(PANEL_R, PANEL_G, PANEL_B, alpha)
 end
+-- For fills owned by other files. PaintFill records a long-lived texture so
+-- ApplyTheme repaints it; pooled native textures use FillColor at paint time.
+function Skin:FillColor() return PANEL_R, PANEL_G, PANEL_B, PANEL_ALPHA end
+function Skin:PaintFill(texture) paintFill(texture) end
 local BORDER_ATLAS = "UI-Character-Info-GearSlot"
 local WHITE = [[Interface\Buttons\WHITE8X8]]
 -- Exact client atlas:55x55 logical units (110x110 raw). The painted rim runs

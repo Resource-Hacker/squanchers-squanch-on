@@ -1,9 +1,11 @@
 -- SPDX-License-Identifier: MIT
--- First run only: fit the shipped layout to this screen. The profile was
--- arranged on a 5120x1440 screen at UI scale 1 (2730.667 x 768 UI units).
+-- Fit a profile arranged on another screen to this one: the shipped layout on
+-- a first run, a reset or new profile, and an imported profile. The shipped
+-- profile was arranged on a 5120x1440 screen at UI scale 1 (2730.667 x 768 UI
+-- units); any other profile names its screen in `profile.screen`.
 -- Every element keeps its distance from whichever of left edge, centre or
 -- right edge (bottom, middle, top) it was nearest to, then is held on screen.
--- On the authoring screen nothing is touched.
+-- On the screen it was arranged on nothing is touched.
 local _, ns = ...
 local AUTHOR_WIDTH, AUTHOR_HEIGHT, UNITS_HIGH = 5120, 1440, 768
 
@@ -37,10 +39,13 @@ local function encoded(c, value, width, height)
 end
 
 local function convert(db, physicalWidth, physicalHeight)
-    if physicalWidth == AUTHOR_WIDTH and physicalHeight == AUTHOR_HEIGHT then return end
-    local c = { ow = UNITS_HIGH * AUTHOR_WIDTH / AUTHOR_HEIGHT, oh = UNITS_HIGH,
+    local from = type(db.screen) == 'table' and db.screen or {}
+    local fromWidth, fromHeight = tonumber(from[1]) or AUTHOR_WIDTH, tonumber(from[2]) or AUTHOR_HEIGHT
+    db.screen = { physicalWidth, physicalHeight }
+    if physicalWidth == fromWidth and physicalHeight == fromHeight then return end
+    local c = { ow = UNITS_HIGH * fromWidth / fromHeight, oh = UNITS_HIGH,
         nw = UNITS_HIGH * physicalWidth / physicalHeight, nh = UNITS_HIGH }
-    local oldPixels, newPixels = AUTHOR_HEIGHT / UNITS_HIGH, physicalHeight / UNITS_HIGH
+    local oldPixels, newPixels = fromHeight / UNITS_HIGH, physicalHeight / UNITS_HIGH
 
     -- Layout editor records: physical pixels from the top left.
     for _, record in pairs(type(db.layout) == 'table' and db.layout.targets or {}) do
@@ -69,16 +74,14 @@ local function convert(db, physicalWidth, physicalHeight)
         windows.clampToScreen = true
     end
 
-    local frames = db.unitFrames
-    for _, profile in pairs(type(frames) == 'table' and type(frames.profiles) == 'table' and frames.profiles or {}) do
-        for key, value in pairs(type(profile.movers) == 'table' and profile.movers or {}) do
-            local unit = profile.units and profile.units[key:match('^cast_(.+)$') or key]
-            local size = unit and (key:match('^cast_') and unit.castbar or unit) or {}
-            local width, height = tonumber(size.width), tonumber(size.height)
-            if type(value) == 'table' and type(value.x) == 'number' and type(value.y) == 'number' then
-                value.x, value.y = anchored(c, 'TOPLEFT', 'BOTTOMLEFT', value.x, value.y, width, height)
-            else profile.movers[key] = encoded(c, value, width, height) end
-        end
+    local frames = type(db.unitFrames) == 'table' and db.unitFrames or {}
+    for key, value in pairs(type(frames.movers) == 'table' and frames.movers or {}) do
+        local unit = frames.units and frames.units[key:match('^cast_(.+)$') or key]
+        local size = unit and (key:match('^cast_') and unit.castbar or unit) or {}
+        local width, height = tonumber(size.width), tonumber(size.height)
+        if type(value) == 'table' and type(value.x) == 'number' and type(value.y) == 'number' then
+            value.x, value.y = anchored(c, 'TOPLEFT', 'BOTTOMLEFT', value.x, value.y, width, height)
+        else frames.movers[key] = encoded(c, value, width, height) end
     end
 
     local tooltip = type(db.tooltipImport) == 'table' and db.tooltipImport.movers
@@ -98,8 +101,14 @@ end
 local events = CreateFrame('Frame')
 events:RegisterEvent('PLAYER_LOGIN')
 events:SetScript('OnEvent', function()
-    local db = SquanchOnDB
-    if type(db) ~= 'table' or not db.seedPending then return end
-    db.seedPending = nil
-    convert(db, GetPhysicalScreenSize())
+    local root = SquanchOnDB
+    for _, profile in pairs(type(root) == 'table' and type(rawget(root, 'profiles')) == 'table' and rawget(root, 'profiles') or {}) do
+        if rawget(profile, 'seedPending') then
+            rawset(profile, 'seedPending', nil)
+            local width, height = GetPhysicalScreenSize()
+            if type(width) == 'number' and type(height) == 'number' and width > 0 and height > 0 then
+                convert(profile, width, height)
+            end
+        end
+    end
 end)

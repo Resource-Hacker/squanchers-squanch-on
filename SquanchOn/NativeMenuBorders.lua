@@ -19,7 +19,8 @@ local function showBorder(_, menu)
     for _, region in ipairs({menu:GetRegions()}) do
         local atlas = region.GetAtlas and region:GetAtlas()
         if atlas == "common-dropdown-bg" or atlas == "common-dropdown-c-bg" then
-            region:SetColorTexture(0.054901964962482, 0.054901964962482, 0.054901964962482, 0.66216158866882)
+            -- Pooled by the client: painted per show, never recorded for retinting.
+            region:SetColorTexture(skin:FillColor())
             region:SetAlpha(1)
             skin:FitPanelBackground(region, border)
         end

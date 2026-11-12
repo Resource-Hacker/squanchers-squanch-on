@@ -48,6 +48,16 @@ WoWUIDev Community (original author mitch0); see
 not taken from the ElvUI distribution, and supplies the melee and proximity
 range checks.
 
+LibSerialize v1.2.3 (MINOR 7) is separately MIT-licensed, copyright 2020 Ross
+Nichols; see `libs/LibSerialize/LICENSE`. LibDeflate 1.0.2-release is
+separately zlib-licensed, copyright 2018-2020 Haoqian He; see
+`libs/LibDeflate/LICENSE.txt`. Both are the unmodified source files from
+their tagged upstream commits
+([LibSerialize aa6e50d](https://github.com/rossnichols/LibSerialize/tree/aa6e50dddad28f8dfa6c27c9b1e15ae40262b4a5),
+[LibDeflate 6831edc](https://github.com/SafeteeWoW/LibDeflate/tree/6831edcaa915154e7769d622e0de72ee5d25a882)),
+not taken from the ElvUI distribution. Together they write and read the
+profile export strings; an imported string is decoded as data and never run.
+
 ElvUI and BenikUI supplied behavioral and settings references. Their custom
 engine licenses remain attached to those separate originals; neither engine is
 renamed or distributed here.

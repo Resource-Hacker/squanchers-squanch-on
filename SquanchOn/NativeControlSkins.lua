@@ -86,6 +86,12 @@ end
 -- Its rim is four solid pixel-snapped lines: at the compact Options scale the
 -- sampled atlas rim loses its horizontal edges at fractional row offsets.
 local checkFaces = setmetatable({}, { __mode = "k" })
+local function paintCheckRim(face)
+    local color, shade = ns.DarkSkin.innerBorderColor, face.enabled and 1 or 0.5
+    for _, line in pairs(face.rim) do
+        line:SetColorTexture(color[1] * shade, color[2] * shade, color[3] * shade, 1)
+    end
+end
 local function compactCheck(button, enabled)
     local face = checkFaces[button]
     if not face then
@@ -116,11 +122,11 @@ local function compactCheck(button, enabled)
     face:SetPoint("LEFT", button, "LEFT", 1, 0)
     face:SetSize(size, size)
     local pixel = PixelUtil.GetPixelToUIUnitFactor() / button:GetEffectiveScale()
-    local color, shade = ns.DarkSkin.innerBorderColor, enabled and 1 or 0.5
+    face.enabled = enabled
     for side, line in pairs(face.rim) do
         if side == "TOP" or side == "BOTTOM" then line:SetHeight(2 * pixel) else line:SetWidth(2 * pixel) end
-        line:SetColorTexture(color[1] * shade, color[2] * shade, color[3] * shade, 1)
     end
+    paintCheckRim(face)
     for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
         local texture = button[method] and button[method](button)
         if texture then texture:SetAlpha(0) end
@@ -420,7 +426,9 @@ local function finishSideCategories(pane)
 end
 -- Options text: soft off-white body, gold headings. Native white (selected),
 -- grey (disabled/unbound) and red (warning) colours keep their meaning.
-local BODY_TEXT, HEADER_TEXT = { 0.9, 0.9, 0.86 }, { 0.90, 0.684, 0.378 }
+-- The theme's live colour tables; the copies are what regions currently show.
+local BODY_TEXT, HEADER_TEXT = ns.DarkSkin.bodyTextColor, ns.DarkSkin.headerTextColor
+local shownBody, shownHeader = { unpack(BODY_TEXT) }, { unpack(HEADER_TEXT) }
 local settingsColorHooks = setmetatable({}, { __mode = "k" })
 local settingsFonts, settingsFontCount = {}, 0
 local function nativeYellow(r, g, b)
@@ -504,13 +512,39 @@ local function settingsRule(owner)
     if not line then
         line = owner:CreateTexture(nil, "BORDER")
         settingsRules[owner] = line
-        local color = ns.DarkSkin.innerBorderColor
+        local color = ns.DarkSkin.lineColor
         line:SetColorTexture(color[1], color[2], color[3], ns.DarkSkin.borderAlpha)
         line:SetPoint("BOTTOMLEFT", owner, "BOTTOMLEFT")
         line:SetPoint("BOTTOMRIGHT", owner, "BOTTOMRIGHT")
     end
     line:SetHeight(2 * PixelUtil.GetPixelToUIUnitFactor() / owner:GetEffectiveScale())
 end
+-- Theme change: retint what this file coloured and still shows that colour.
+local function sameColor(r, g, b, color)
+    return type(r) == "number" and not (issecretvalue and issecretvalue(r))
+        and math.abs(r - color[1]) < 0.004 and math.abs(g - color[2]) < 0.004 and math.abs(b - color[3]) < 0.004
+end
+ns.DarkSkin:OnTheme(function()
+    for _, face in pairs(checkFaces) do paintCheckRim(face) end
+    for texture in pairs(iconHooks) do recolorIcon(texture) end
+    local line = ns.DarkSkin.lineColor
+    for _, rule in pairs(settingsRules) do
+        rule:SetColorTexture(line[1], line[2], line[3], ns.DarkSkin.borderAlpha)
+    end
+    for region, state in pairs(settingsColorHooks) do
+        local r, g, b, a = region:GetTextColor()
+        local header = ns.NativeText and ns.NativeText.headers[region]
+        if sameColor(r, g, b, header and shownHeader or shownBody) then
+            local color = header and HEADER_TEXT or BODY_TEXT
+            state.busy = true
+            region:SetTextColor(color[1], color[2], color[3], a)
+            state.busy = false
+        end
+    end
+    for _, clone in pairs(settingsFonts) do clone:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]) end
+    shownBody[1], shownBody[2], shownBody[3] = BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]
+    shownHeader[1], shownHeader[2], shownHeader[3] = HEADER_TEXT[1], HEADER_TEXT[2], HEADER_TEXT[3]
+end)
 local function settingsCategory(row)
     -- Header rows (Gameplay/Accessibility/System) own Background. A full rim
     -- there doubled the list box's top edge: one rule under the title instead.

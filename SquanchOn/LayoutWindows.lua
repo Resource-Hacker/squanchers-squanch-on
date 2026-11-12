@@ -148,8 +148,17 @@ function module:IconArtWidth(button, owner) return artWidth(iconFor(button), own
 
 -- Returns the chat panel while a window still uses its default drawer place.
 -- Only an owner /sqedit record (never an imported legacy one) replaces it.
+-- ns.db.windows.drawers = false keeps windows free; read at each open.
+module.defaults = { drawers = true }
+function module:Setting(key)
+    local values = ns.db and ns.db.windows
+    local value
+    if type(values) == 'table' then value = values[key] end
+    if value == nil then return self.defaults[key] end
+    return value
+end
 function module:DrawerChat(id, frame)
-    if not drawers[frame:GetName()] then return end
+    if not drawers[frame:GetName()] or not self:Setting('drawers') then return end
     local record = ns.LayoutEditor:Read(id)
     -- Only a position the owner set in /sqedit counts; automatic sizing does not.
     if record and record.placed then return end

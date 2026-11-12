@@ -130,36 +130,51 @@ local function characterKey()
   return (safe(UnitName, "player") or "Player") .. " - " .. (safe(GetRealmName) or "Realm")
 end
 
+-- The indicators are one table inside the active addon profile
+-- (nameplateIndicators). self.db is a session view for the callers that list
+-- profiles by name: each addon profile's indicator table. Nothing in it is saved.
+function module:UseProfile()
+  local profiles = addon.Profiles
+  local active = profiles:Bootstrap()
+  if type(rawget(active, "nameplateIndicators")) ~= "table" then
+    -- A migration seed avoids depending on loading the disabled addon's own SV file.
+    local legacy = type(_G.TargetNameplateIndicatorDB) == "table" and _G.TargetNameplateIndicatorDB
+    local chosen = legacy and type(legacy.profileKeys) == "table" and legacy.profileKeys[characterKey()] or "Default"
+    active.nameplateIndicators = copy(legacy and type(legacy.profiles) == "table" and legacy.profiles[chosen] or {})
+    local receipts = profiles:Receipts("nameplateIndicatorReceipts")
+    if receipts.schemaVersion == nil then receipts.importedLegacy, receipts.schemaVersion = legacy and true or false, 1 end
+  end
+  local view = { profiles = {}, profileKeys = {} }
+  for _, name in ipairs(profiles:Names()) do
+    local stored = rawget(profiles:Get(name), "nameplateIndicators")
+    if type(stored) == "table" then view.profiles[name] = stored end
+  end
+  self.db = view
+  self.profileName = profiles:Current()
+  self.profile = active.nameplateIndicators
+  remapTextures({ self.profile })
+  fill(newProfile(), self.profile)
+  self:Refresh()
+end
+
+-- Indicator profiles are the addon's profiles: selecting one switches the whole addon.
 function module:SelectProfile(name)
   if type(name) ~= "string" or name == "" then return false end
-  self.db.profiles[name] = self.db.profiles[name] or newProfile()
-  fill(newProfile(), self.db.profiles[name])
-  self.profileName = name
-  self.profile = self.db.profiles[name]
-  self.db.profileKeys[characterKey()] = name
-  self:Refresh()
-  return true
+  if name == self.profileName then self:Refresh(); return true end
+  local ok, message = addon.Profiles:Select(name)
+  if message then print("Squancher nameplate indicators: " .. message) end
+  return ok and true or false
+end
+
+function module:ReplaceProfile(profile)
+  addon.Profiles:Bootstrap().nameplateIndicators = profile
+  self:UseProfile()
 end
 
 function module:Initialize()
   if self.db then return end
-  SquanchOnDB = SquanchOnDB or {}
-  local root = SquanchOnDB
-  if not root.nameplateIndicators then
-    -- A migration seed avoids depending on loading the disabled addon's own SV file.
-    local legacy = type(_G.TargetNameplateIndicatorDB) == "table" and _G.TargetNameplateIndicatorDB
-    root.nameplateIndicators = {
-      profiles = copy(type(legacy) == "table" and legacy.profiles or {}),
-      profileKeys = copy(type(legacy) == "table" and legacy.profileKeys or {}),
-      importedLegacy = type(legacy) == "table",
-      schemaVersion = 1,
-    }
-  end
-  self.db = root.nameplateIndicators
-  self.db.profiles = self.db.profiles or {}
-  self.db.profileKeys = self.db.profileKeys or {}
-  remapTextures(self.db.profiles)
-  self:SelectProfile(self.db.profileKeys[characterKey()] or "Default")
+  self:UseProfile()
+  addon.Profiles:OnChanged(function() module:UseProfile() end)
 end
 
 local function comparisonBlocked(unit)
@@ -357,20 +372,11 @@ function module:Slash(message)
   local action, text = message:match("^(%S+)%s+(.+)$")
   if action == "profile" then self:SelectProfile(text); self:RefreshPanel(); return end
   if action == "copy" and self.db.profiles[text] then
-    self.db.profiles[self.profileName] = copy(self.db.profiles[text])
-    self:SelectProfile(self.profileName); self:RefreshPanel(); return
+    self:ReplaceProfile(copy(self.db.profiles[text])); self:RefreshPanel(); return
   end
-  if action == "delete" and self.db.profiles[text] then
-    if text == self.profileName then print("Switch profiles before deleting the current profile."); return end
-    self.db.profiles[text] = nil
-    for key, name in pairs(self.db.profileKeys) do
-      if name == text then self.db.profileKeys[key] = nil end
-    end
-    return
-  end
+  if action == "delete" then print("Profiles are deleted on the Profiles page: /squanchon profiles"); return end
   if message == "reset" then
-    self.db.profiles[self.profileName] = newProfile()
-    self:SelectProfile(self.profileName); self:RefreshPanel(); return
+    self:ReplaceProfile(newProfile()); self:RefreshPanel(); return
   end
   local unit, reaction, key, value = message:match("^(%S+)%s+(%S+)%s+(%S+)%s+(.+)$")
   if unit then

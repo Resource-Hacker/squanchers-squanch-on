@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
--- Windows & Drawers page: the open motion of drawers (DrawerMotion.lua).
+-- Windows & Drawers page: chat drawers (LayoutWindows.lua) and their open
+-- motion (DrawerMotion.lua).
 -- Every default is the constant the motion shipped with.
 local _, ns = ...
 local Options, Motion = ns.Options, ns.DrawerMotion
@@ -40,6 +41,9 @@ local function seconds(key, label, order, desc)
 end
 
 Options:Add('windows', {
+    row('windows', ns.LayoutWindows, 'drawers', { id = 'windows.drawers', type = 'toggle', label = 'Open windows as chat drawers', section = 'Drawers', order = 5,
+        desc = 'Windows such as the character sheet, spellbook and quest log open above chat at its width. Off leaves them at their own place and size. A window you placed in /sqedit keeps that place either way. Used the next time a window opens.',
+        keywords = 'drawer chat window dock attach above position free' }),
     row('windows', Motion, 'style', { id = 'windows.style', type = 'choice', label = 'Opening motion', section = 'Opening motion', order = 10,
         desc = 'Unfold grows the empty window upward from its bottom edge and then fades its content in. None opens at once.',
         keywords = 'animation motion unfold instant drawer open enabled disable',

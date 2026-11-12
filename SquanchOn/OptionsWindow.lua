@@ -17,12 +17,14 @@ local TOP, BOTTOM = 36, 40              -- title strip and footer, measured from
 local LEFT_W = 136                      -- category column
 local CONTENT_X = PAD + LEFT_W + 12     -- 160
 local CONTENT_W = WIDTH - CONTENT_X - PAD - 10   -- 378; 10 is the scroll marker's lane
-local ROW, TREE_ROW = 20, 16
+-- Raised buttons and dropdowns are 20 high and their rim's corner diamonds
+-- reach 3 beyond that, so rows are 26 apart.
+local ROW, TREE_ROW = 26, 16
 local INDENT, LABEL_W, CONTROL_X, CONTROL_W = 8, 150, 166, 176
 local NAME = 'SquanchOnOptions'
 local VALUELESS = { action = true, note = true }
 local GREY = { 0.62, 0.62, 0.6 }
-local BODY_TEXT = { 0.9, 0.9, 0.86 }
+local BODY_TEXT = ns.DarkSkin.bodyTextColor -- live theme table
 local WARN = { 1, 0.6, 0.3 }
 
 local function widgets() return ns.OptionWidgets end
@@ -462,7 +464,7 @@ function Window:DrawPage()
         control:SetOptions(selector.labels or selector.values, selected, math.min(80, math.floor((CONTENT_W - INDENT) / #selector.values)))
         control:ClearAllPoints(); control:SetPoint('TOPLEFT', self.body, 'TOPLEFT', INDENT, -y)
         control:Show()
-        y = y + 24
+        y = y + 28
     end
     if category.build then
         if category.page == nil then
@@ -515,9 +517,9 @@ end
 local function createResultHeader()
     local control = CreateFrame('Button', nil, Window.body)
     control:SetSize(CONTENT_W, 20)
-    control.text = widgets():Label(control, '', 10, widgets().gold[1], widgets().gold[2], widgets().gold[3]); control.text:SetPoint('LEFT', 0, 0)
+    control.text = widgets():Label(control, '', 10, widgets().headerText[1], widgets().headerText[2], widgets().headerText[3]); control.text:SetPoint('LEFT', 0, 0)
     control:SetScript('OnEnter', function(self) self.text:SetTextColor(1, .85, .55) end)
-    control:SetScript('OnLeave', function(self) self.text:SetTextColor(widgets().gold[1], widgets().gold[2], widgets().gold[3]) end)
+    control:SetScript('OnLeave', function(self) self.text:SetTextColor(widgets().headerText[1], widgets().headerText[2], widgets().headerText[3]) end)
     control:SetScript('OnMouseDown', function(self) self.text:SetPoint('LEFT', 1, -1) end)
     control:SetScript('OnMouseUp', function(self) self.text:SetPoint('LEFT', 0, 0) end)
     control:SetScript('OnClick', function(self) Window:Jump(self.category) end)
@@ -596,7 +598,7 @@ local function createTreeRow()
     local row = CreateFrame('Button', nil, Window.treeBody)
     row:SetSize(LEFT_W - 6, TREE_ROW)
     row:SetHighlightTexture([[Interface\Buttons\WHITE8X8]]); row:GetHighlightTexture():SetVertexColor(1, .78, .42, .08)
-    row.bar = row:CreateTexture(nil, 'ARTWORK'); row.bar:SetColorTexture(W.gold[1], W.gold[2], W.gold[3], 1)
+    row.bar = row:CreateTexture(nil, 'ARTWORK'); W:Flat(row.bar, W.gold, 1)
     row.bar:SetPoint('TOPLEFT', 0, -1); row.bar:SetPoint('BOTTOMLEFT', 0, 1); row.bar:SetWidth(2)
     row.chevron = W:Chevron(row, 8)
     row.text = W:Label(row, '', 8); row.text:SetWordWrap(false)
@@ -633,7 +635,7 @@ function Window:DrawTree()
         row.text:ClearAllPoints(); row.text:SetPoint('LEFT', row.indent, 0); row.text:SetPoint('RIGHT', -22, 0)
         row.text:SetText(category.title)
         local selected = not searching and category.id == self.category
-        if selected then row.text:SetTextColor(W.gold[1], W.gold[2], W.gold[3]) else row.text:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]) end
+        if selected then row.text:SetTextColor(W.headerText[1], W.headerText[2], W.headerText[3]) else row.text:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3]) end
         row.bar:SetShown(selected)
         row.chevron:SetShown(children)
         if children then
@@ -745,8 +747,7 @@ function Window:ResetSection(section)
 end
 function Window:UpdateFooter()
     local options = registry()
-    local uf = ns.UnitFrames
-    local profile = uf and uf.state and uf.state.profile or 'Default'
+    local profile = ns.Profiles and ns.Profiles:Current() or 'Default'
     self.profile:SetValue(profile, tostring(profile))
     self.profileNote:SetText('profile: ' .. tostring(profile))
     self.undo:SetDisabled(not options:CanUndo())
@@ -768,7 +769,7 @@ end
 -- Construction -----------------------------------------------------------
 function Window:Build()
     local W, skin = widgets(), ns.DarkSkin
-    local gold = W.gold
+    local gold, heading = W.gold, W.headerText
     local frame = CreateFrame('Frame', NAME, UIParent)
     self.frame = frame
     frame:SetSize(WIDTH, HEIGHT); frame:SetFrameStrata('DIALOG'); frame:SetToplevel(true)
@@ -792,19 +793,19 @@ function Window:Build()
         local anchor, _, relative, x, y = frame:GetPoint(1)
         saved().point = { anchor, relative, x, y }
     end)
-    local name = W:Label(frame, 'Squanch-On', 10, gold[1], gold[2], gold[3]); name:SetPoint('LEFT', frame, 'TOPLEFT', PAD + 6, -PAD - 10)
-    self.closeX = W:SmallButton(frame, 'x', 16, function() frame:Hide() end)
+    local name = W:Label(frame, 'Squanch-On', 10, heading[1], heading[2], heading[3]); name:SetPoint('LEFT', frame, 'TOPLEFT', PAD + 6, -PAD - 10)
+    self.closeX = W:SmallButton(frame, 'x', 20, function() frame:Hide() end)
     self.closeX:SetPoint('RIGHT', frame, 'TOPRIGHT', -PAD - 2, -PAD - 10)
     self.profileNote = W:Label(frame, '', 8, GREY[1], GREY[2], GREY[3]); self.profileNote:SetPoint('RIGHT', self.closeX, 'LEFT', -10, 0)
     local function rule(y, fromBottom)
         local line = frame:CreateTexture(nil, 'ARTWORK')
-        line:SetColorTexture(W.line[1], W.line[2], W.line[3], 1); line:SetHeight(1)
+        W:Flat(line, W.line, 1); line:SetHeight(1)
         line:SetPoint(fromBottom and 'BOTTOMLEFT' or 'TOPLEFT', PAD, y); line:SetPoint(fromBottom and 'BOTTOMRIGHT' or 'TOPRIGHT', -PAD, y)
         return line
     end
     rule(-TOP); rule(BOTTOM, true)
     local divider = frame:CreateTexture(nil, 'ARTWORK')
-    divider:SetColorTexture(W.line[1], W.line[2], W.line[3], 1); divider:SetWidth(1)
+    W:Flat(divider, W.line, 1); divider:SetWidth(1)
     divider:SetPoint('TOPLEFT', PAD + LEFT_W + 4, -TOP); divider:SetPoint('BOTTOMLEFT', PAD + LEFT_W + 4, BOTTOM)
 
     -- Left column: search and the category tree.
@@ -824,44 +825,51 @@ function Window:Build()
     self.scroll, self.body = W:Scroll(frame)
     self.scroll:SetPoint('TOPLEFT', CONTENT_X, -TOP - 8); self.scroll:SetPoint('BOTTOMLEFT', CONTENT_X, BOTTOM + 6)
     self.scroll:SetWidth(CONTENT_W)
-    self.title = W:Label(self.body, '', 10, gold[1], gold[2], gold[3]); self.title:SetPoint('TOPLEFT', 0, -2)
+    self.title = W:Label(self.body, '', 10, heading[1], heading[2], heading[3]); self.title:SetPoint('TOPLEFT', 0, -2)
     self.desc = W:Label(self.body, '', 8, GREY[1], GREY[2], GREY[3]); self.desc:SetPoint('TOPLEFT', 0, -18)
     self.desc:SetWidth(CONTENT_W - INDENT); self.desc:SetWordWrap(true)
     self.pool = newPool()
-    self.flash = self.body:CreateTexture(nil, 'BORDER'); self.flash:SetColorTexture(gold[1], gold[2], gold[3], .35); self.flash:Hide()
+    self.flash = self.body:CreateTexture(nil, 'BORDER'); W:Flat(self.flash, gold, .35); self.flash:Hide()
     self.flash.fade = self.flash:CreateAnimationGroup()
     local fade = self.flash.fade:CreateAnimation('Alpha')
     fade:SetFromAlpha(1); fade:SetToAlpha(0); fade:SetDuration(1.4); fade:SetStartDelay(0.3)
     self.flash.fade:SetScript('OnFinished', function() Window.flash:Hide() end)
 
     -- Footer.
-    local base = 16
+    local base = 12 -- 20-high buttons centred between the window rim and the footer rule
     self.profile = W:Dropdown(frame, 130)
     self.profile:SetPoint('BOTTOMLEFT', PAD + 2, base)
-    self.profile:SetScript('OnClick', function()
-        if registry().categories.profiles and registry():Visible(registry().categories.profiles) then Window:Select('profiles')
-        else Window:Status('Profiles get their own page later; unit-frame profiles are on the Unit Frames page.') end
-    end)
+    -- The profile this character uses; picking another switches the whole addon.
+    function self.profile:getItems()
+        local items = {}
+        for _, name in ipairs(ns.Profiles and ns.Profiles:Names() or {}) do items[#items + 1] = { value = name, label = name } end
+        return items
+    end
+    self.profile.onCommit = function(_, name)
+        local ok, message = ns.Profiles:Select(name)
+        Window:Status(message or '', not ok)
+        Window.dirty = true
+    end
     self.undo = W:SmallButton(frame, 'Undo', 50, function()
         local ok, message = registry():Undo()
         Window:Status(message == 'queued' and 'The undo is queued until combat ends.' or message or (ok and 'Undone.' or ''), not ok)
     end)
-    self.undo:SetPoint('LEFT', self.profile, 'RIGHT', 6, 0)
+    self.undo:SetPoint('LEFT', self.profile, 'RIGHT', 8, 0)
     self.reset = W:SmallButton(frame, 'Reset section', 84, function() Window:ResetSection(Window:Section()) end)
-    self.reset:SetPoint('LEFT', self.undo, 'RIGHT', 6, 0)
+    self.reset:SetPoint('LEFT', self.undo, 'RIGHT', 8, 0)
     self.reset:HookScript('OnEnter', function(button)
         local section = Window:Section()
         if not section or not GameTooltip then return end
         GameTooltip:SetOwner(button, 'ANCHOR_TOP')
-        GameTooltip:SetText('Reset section', gold[1], gold[2], gold[3], 1, true)
-        GameTooltip:AddLine('Returns every setting under "' .. section .. '" to its default. One Undo reverts it.', .9, .9, .86, true)
+        GameTooltip:SetText('Reset section', heading[1], heading[2], heading[3], 1, true)
+        GameTooltip:AddLine('Returns every setting under "' .. section .. '" to its default. One Undo reverts it.', BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3], true)
         GameTooltip:Show()
     end)
     self.reset:HookScript('OnLeave', function(button) W:HideDescription(button) end)
     self.closeButton = W:SmallButton(frame, 'Close', 50, function() frame:Hide() end)
     self.closeButton:SetPoint('BOTTOMRIGHT', -PAD - 2, base)
     self.reload = W:SmallButton(frame, 'Reload UI', 64, function() if ReloadUI then ReloadUI() end end)
-    self.reload:SetPoint('RIGHT', self.closeButton, 'LEFT', -6, 0); self.reload:Hide()
+    self.reload:SetPoint('RIGHT', self.closeButton, 'LEFT', -8, 0); self.reload:Hide()
     self.status = W:Label(frame, '', 8, GREY[1], GREY[2], GREY[3]); self.status:SetHeight(16)
     self.status:SetWordWrap(false); self.status:SetJustifyV('MIDDLE')
 

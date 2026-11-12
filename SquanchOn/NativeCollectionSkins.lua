@@ -4,7 +4,6 @@
 local _, ns = ...
 local Collections = {}
 ns.NativeCollectionSkins = Collections
-local GREY, ALPHA = 0.054901964962482, 0.66216158866882
 local pending, initialized = false, false
 local edges = {
     "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
@@ -44,7 +43,7 @@ function Collections:Apply()
     -- One fill only: transparent child canvases must not stack this opacity.
     local background = CollectionsJournal.Bg
     if background and background.IsObjectType and background:IsObjectType("Texture") then
-        background:SetColorTexture(GREY, GREY, GREY, ALPHA)
+        ns.DarkSkin:PaintFill(background)
         ns.DarkSkin:FitPanelBackground(background, ns.DarkSkin:Panel(CollectionsJournal, "dialog", 0))
     end
     hideTexture(CollectionsJournal.TopTileStreaks)
