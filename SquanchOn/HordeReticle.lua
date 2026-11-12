@@ -353,8 +353,9 @@ local function render(now, elapsed)
   publishMouseoverDot(opacity)
 end
 
--- Owner: the emblem's middle sits on the aim point: the spot the engine rests
--- the locked cursor on and picks mouseover from.
+-- Owner: the dot is the centre. The aim point (where the engine rests the
+-- locked cursor and picks mouseover) holds the dot, and the emblem is placed
+-- so its diamond, texel (64.5, 46.5) of the 128-texel art, surrounds it.
 local placedX, placedY, placedScale
 function module:PlaceArt()
   if not group then return end
@@ -367,8 +368,10 @@ function module:PlaceArt()
   local art = shadow:GetEffectiveScale()
   if cx == placedX and cy == placedY and art == placedScale then return end
   placedX, placedY, placedScale = cx, cy, art
+  local size = shadow.data.height
+  local dx, dy = size * (64.5 - 64) / 128 * art, size * (64 - 46.5) / 128 * art   -- screen pixels
   group:ClearAllPoints()
-  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx / ui, cy / ui)
+  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx - dx) / ui, (cy - dy) / ui)
 end
 
 function module:ApplyReticleScale()
@@ -382,14 +385,11 @@ function module:ApplyReticleScale()
       frame:SetScale(scale / parentScale)
       if id == "Mouseover Dot" or id == "Mouseover Glow" then
         -- The original aura's sizes (dot 28x31, glow 50x50, whole textures).
-        -- The emblem's middle is on the aim point; its diamond is above it, at
-        -- texel (64.5, 46.5) of 128 in the 35-unit art. The dot's own diamond
-        -- (texel 63.9, 46.1 in its 28x31 frame) and the glow's centre (texel
-        -- 64.6, 60.3 in its 50x50 frame) are laid on that point.
+        -- The dot IS the aim point: its diamond (texel 63.9, 46.1 in its 28x31
+        -- frame) and the glow's centre (texel 64.6, 60.3 in its 50x50 frame)
+        -- sit exactly on it. PlaceArt puts the emblem's diamond around it.
         frame.fillWidth, frame.fillHeight = nil, nil
-        local shadow = self.frames["No Combat"]
-        local size = shadow.data.height
-        local targetX, targetY = size * (64.5 - 64) / 128, size * (64 - 46.5) / 128
+        local targetX, targetY = 0, 0
         local d = frame.data
         local ownX, ownY
         if id == "Mouseover Dot" then ownX, ownY = d.width * (63.9 - 64) / 128, d.height * (64 - 46.1) / 128
