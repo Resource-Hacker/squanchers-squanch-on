@@ -41,7 +41,7 @@ local NO_RATE = { Interrupts = true, Dispels = true, Deaths = true }
 local SHORT = { DamageTaken = 'Dmg taken', AvoidableDamageTaken = 'Avoidable', EnemyDamageTaken = 'Enemy taken' }
 -- HEADER: the gap under the top rim before the column names (no title strip;
 -- the fight selector lives in the mode plate's menu).
-local HEADER, PAD, THROTTLE, MIN_WIDTH = 2, 6, .25, 40
+local HEADER, PAD, THROTTLE, MIN_WIDTH = 0, 6, .25, 40
 -- The mode plate on the top rim, the quest drawer's title plate: 18 high, at
 -- least 76 wide, 10 in from the drawer's left end, in the panel's units.
 local PLATE_W, PLATE_H, PLATE_X, PLATE_PAD = 76, 18, 10, 16
@@ -687,7 +687,8 @@ function Meter:Initialize()
     -- A child of the drawer, so it shows, hides and fades in with it.
     local modeBox = headerButton(frame, 8, skin.headerTextColor, 150)
     modeBox:SetSize(PLATE_W, PLATE_H)
-    modeBox:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', PLATE_X, 0)
+    -- Right end, mirroring the bag window's title at its left end.
+    modeBox:SetPoint('BOTTOMRIGHT', frame, 'TOPRIGHT', -PLATE_X, 0)
     modeBox:SetFrameLevel(self.border:GetFrameLevel() + 2)
     modeBox.text:ClearAllPoints(); modeBox.text:SetAllPoints(modeBox); modeBox.text:SetJustifyH('CENTER')
     skin:RaisedButton(modeBox, 'compact')
@@ -777,6 +778,8 @@ function Meter:Initialize()
     grid:SetFrameLevel(list:GetFrameLevel() + 5)
     headRim:SetFrameLevel(grid:GetFrameLevel() + 1)
     headText:SetFrameLevel(grid:GetFrameLevel() + 2)
+    -- The mode plate sits over the column names where they meet the top rim.
+    modeBox:SetFrameLevel(headText:GetFrameLevel() + 3)
     self.grid = grid
     local function theme()
         local color = skin.headerTextColor

@@ -44,6 +44,18 @@ interactions have not been verified. See [compatibility](docs/COMPATIBILITY.md#v
 
 *Squanch-On's nameplates in the `/sqplates test on` preview. The units are made up by the preview; this is not live combat.*
 
+| Bags, quests, minimap and damage meter | Character sheet as a chat drawer |
+| --- | --- |
+| ![Bag window left of the minimap, quest drawer above it and the damage meter table on its right, each with a raised title.](docs/images/ui-bags-minimap-meter.png) | ![The character sheet opened above the chat at the chat's width.](docs/images/ui-character-drawer.png) |
+
+![Chat, player and target frames, action bars, minimap and damage meter along the bottom of an ultrawide screen.](docs/images/ui-hud-strip.png)
+
+*The bottom strip in play. Out of combat at full health with no target, the player frame steps aside.*
+
+| Graphics sliders past the game's top level |
+| --- |
+| ![Squanch-On Graphics page: ground clutter, view distance and environment detail on a 1 to 20 scale.](docs/images/ui-settings-graphics.png) |
+
 ## The reticle is the control
 
 Normal locked mouselook keeps centered mouseover **closed**. Holding right mouse

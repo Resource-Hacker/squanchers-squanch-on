@@ -56,6 +56,7 @@ UnitFrameImport.lua
 UnitFrames.lua
 UnitFrameState.lua
 UnitFrameAuras.lua
+PlayerIdleFade.lua
 Nameplates.lua
 NameplateStyle.lua
 NameplateCast.lua

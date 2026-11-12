@@ -22,3 +22,5 @@ The diagrams are original project artwork. World of Warcraft, its characters,
 game environments and game-provided artwork retain Blizzard Entertainment's
 rights. Screenshot game content is not relicensed under the code's MIT license.
 The repository does not distribute extracted Blizzard textures as addon assets.
+
+`ui-bags-minimap-meter.png`, `ui-character-drawer.png`, `ui-hud-strip.png` and `ui-settings-graphics.png` are the author's Forever captures of version 1.0, 2026-11-12, cropped only. Other players' and NPCs' names appear as the game showed them.

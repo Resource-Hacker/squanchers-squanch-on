@@ -342,6 +342,12 @@ local controlBorders, alphaOwners = {}, {}
 local function controlAlpha(border)
     local owner = border.alphaOwner
     local alpha = owner:GetAlpha()
+    -- A secret alpha (the player frame's idle fade) cannot be scaled: pass it on.
+    if issecretvalue and issecretvalue(alpha) then
+        border:SetAlpha(alpha)
+        if border.slotFill then border.slotFill:SetAlpha(alpha) end
+        return
+    end
     local inherited = alpha > 0 and border.control:GetEffectiveAlpha() / alpha or 0
     local fade = math.min(1, alpha / border.restingAlpha)
     border:SetAlpha(border.baseAlpha * inherited * fade)

@@ -39,3 +39,14 @@ rows[#rows + 1] = { id = 'graphics.reset', type = 'action', label = 'Reset to ga
     keywords = 'graphics reset default restore',
     func = function() G:Reset(); return "The game's own graphics levels are back." end }
 Options:Add('graphics', rows)
+
+-- The player frame's idle fade lives with the unit frames.
+if ns.PlayerIdleFade then
+    Options:Add('unitframes', { { id = 'unitframes.playerIdleHide', type = 'toggle', label = 'Hide the player frame when idle',
+        section = 'Player frame', order = 5, combatSafe = true, default = true,
+        keywords = 'player frame hide fade idle full health out of combat',
+        desc = 'Out of combat, at full health and power, with no target and no cast, the player frame fades out. It returns the moment any of that changes.',
+        get = function() return not ns.db or ns.db.playerIdleHide ~= false end,
+        set = function(_, value) ns.db.playerIdleHide = value and true or false end,
+        apply = function() ns.PlayerIdleFade:Refresh() end } })
+end

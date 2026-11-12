@@ -627,7 +627,9 @@ local function configurePortrait(frame,config)
             end
             if self.SetDesaturation then self:SetDesaturation(config.desaturation or 0) end
             if self.SetPaused then self:SetPaused(config.paused==true) end
-            self:SetModelAlpha(frame:GetAlpha()*(frame.USE_PORTRAIT_OVERLAY and (config.overlayAlpha or .5) or 1))
+            local shown=frame:GetAlpha()
+            if issecretvalue and issecretvalue(shown) then -- left as it is; PlayerIdleFade hides the model
+            else self:SetModelAlpha(shown*(frame.USE_PORTRAIT_OVERLAY and (config.overlayAlpha or .5) or 1)) end
         end
     else
         portrait.useClassBase=false
@@ -897,7 +899,10 @@ local function style(frame,unit,key)
     frame.PortraitModel:SetIgnoreParentAlpha(true)
     hooksecurefunc(frame,'SetAlpha',function(_,alpha)
         local portrait=frame.Portrait3D
-        if portrait then portrait:SetModelAlpha(alpha*(frame.USE_PORTRAIT_OVERLAY and (frame.db.portrait.overlayAlpha or .5) or 1)) end
+        if not portrait then return end
+        -- A secret alpha (the idle fade) is passed through untouched.
+        if issecretvalue and issecretvalue(alpha) then return end   -- the model refuses secret alpha; PlayerIdleFade hides it
+        portrait:SetModelAlpha(alpha*(frame.USE_PORTRAIT_OVERLAY and (frame.db.portrait.overlayAlpha or .5) or 1))
     end)
     frame.PortraitModel:Hide();frame.PortraitModel.backdrop:Hide();frame.PortraitTexture:Hide()
     frame:HookScript('OnShow',function(self) if self.squancherPortraitPlace and self.USE_PORTRAIT and not self.USE_PORTRAIT_OVERLAY then self.squancherPortraitPlace() end end)

@@ -2,6 +2,9 @@
 
 ## 1.0.0 — unreleased
 
+- The player frame fades out when idle: out of combat, full health, no target, no cast (setting under Unit Frames).
+- Damage meter: column names sit against the top rim; the mode title moved to the right end; the quest title is centred.
+
 - Ship everything in one `SquanchOn/` folder. No other addon, assembly step or
   separately supplied media is needed. Unit-frame layout and presentation are
   independently implemented on separately licensed oUF, LibDispel and LibStub;
