@@ -32,7 +32,7 @@ function Drawer:InstallQuestEntries()
     hooksecurefunc(ObjectiveTrackerManager,'ReleaseFrame',function(_,frame)
         restoreRegion(frame)
         local record=entryRecords[frame]
-        if record then record.button:Hide() end
+        if record then record.button:Hide(); if record.divider then record.divider:Hide() end end
     end)
 end
 function Drawer:FitQuestEntries()
@@ -75,6 +75,22 @@ function Drawer:FitQuestEntries()
                     self:RequestLayout()
                 end)
             end
+            -- The faded gold rule of the AddOn list, between one quest and the next.
+            if not record.divider then
+                local line=block:CreateTexture(nil,'ARTWORK')
+                local ok=pcall(line.SetAtlas,line,'Options_HorizontalDivider',false)
+                if not ok or not line:GetAtlas() then
+                    local c=ns.DarkSkin and ns.DarkSkin.rimColor or {.9,.684,.378}
+                    line:SetColorTexture(c[1],c[2],c[3],.5)
+                end
+                line:SetHeight(1.5)
+                record.divider=line
+            end
+            local gap=-(module.fromBlockOffsetY or 0)
+            record.divider:ClearAllPoints()
+            record.divider:SetPoint('LEFT',block,'TOPLEFT',-6,gap/2)
+            record.divider:SetPoint('RIGHT',block,'TOPRIGHT',6,gap/2)
+            record.divider:SetShown(previous~=nil)
             local collapsed=collapsedQuests[block.id]
             record.text:SetText(collapsed and '+' or '-')
             record.button:Show()
