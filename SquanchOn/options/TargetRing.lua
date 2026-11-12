@@ -58,8 +58,23 @@ Options:Add('targetring', {
         step = 1, format = '+%d px', default = 1, drag = true, apply = refit, disabled = noFit }),
 
     row({ id = 'targetring.friendlyClassColor', type = 'toggle', label = 'Class colour', section = 'Friendly target', order = 50,
-        desc = 'On a friendly player the ring takes that player\'s class colour instead of the health colour.',
+        desc = 'On a friendly player the ring takes that player\'s class colour instead of the health colour. Applies while the health bar look is off or the plate bar has no colour to give.',
         keywords = 'friendly ring class colour color', path = 'friendlyClassColor', default = true, apply = refit }),
+
+    row({ id = 'targetring.friendlyBarLook', type = 'toggle', label = 'Health bar look', section = 'Friendly target', order = 60,
+        desc = 'On a friendly target the ring takes the texture of the nameplate health bar and the colour that bar shows.',
+        keywords = 'friendly ring bar look texture colour color nameplate health', path = 'friendlyBarLook', default = true, apply = refit }),
+
+    row({ id = 'targetring.hostilePlayerBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Hostile target', order = 10,
+        desc = 'On a hostile player the ring takes the texture and colour of the nameplate health bar. The execute pulse and range marks stay as they are.',
+        keywords = 'hostile enemy player ring bar look texture colour color nameplate', path = 'hostilePlayerBarLook', default = true, apply = refit }),
+    row({ id = 'targetring.hostilePlayerHealthShift', type = 'toggle', label = 'Player health shift', section = 'Hostile target', order = 15,
+        desc = 'A hostile player\'s ring starts at the class colour and shifts to orange and red as health drops, like the plain ring. Needs Colour by health.',
+        keywords = 'hostile enemy player ring health shift class colour color orange red', path = 'hostilePlayerHealthShift', default = true, apply = refit,
+        disabled = function() local ring = marker(); return not (ring and ring.db.hostilePlayerBarLook ~= false and ring.db.healthColor) end }),
+    row({ id = 'targetring.hostileNpcBarLook', type = 'toggle', label = 'Health bar look on NPCs', section = 'Hostile target', order = 20,
+        desc = 'On a hostile or neutral NPC the ring follows the nameplate health bar, threat colours included, instead of the plain ring coloured by health.',
+        keywords = 'hostile enemy neutral npc ring bar look texture colour color threat nameplate', path = 'hostileNpcBarLook', default = false, apply = refit }),
 
     row({ id = 'targetring.lines', type = 'toggle', label = 'Guide lines', section = 'Guide lines', order = 10,
         desc = 'Draws thin lines from the ring to the screen edges. Same as /sqcrosshairs lines on and off.',

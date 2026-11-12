@@ -150,3 +150,30 @@ edge('border-thin-bevel.tga', 8, line((0, 1, 150), (1, 2, 255)))
 edge('border-double.tga', 8, line((0, 1, 255), (3, 4, 255)))
 edge('border-rounded.tga', 8, line((3, 4, 255)), corner=math.hypot, samples=4)
 edge('border-shadow.tga', T, lambda inward: (0, 0, 0, falloff(inward)), corner=math.hypot)
+
+# Target rings that read as a status bar bent into a circle (TargetCrosshairs.lua).
+# The ring keeps circle.tga's geometry (128 px, mean radius 46); across its
+# thickness it repeats the bar face's 32 rows, bar top on the outer edge and bar
+# bottom on the inner one, so the same vertex colour tints ring and bar alike.
+# One file per face constant along the bar and per line thickness in texture
+# pixels; patterned faces use the ring of their vertical ramp (see the Lua map).
+RINGS = DEST.parent / 'Crosshairs'
+RING, RADIUS, RING_SAMPLES, RING_WIDTHS = 128, 46, 4, (3, 5, 8, 12)
+ring_rows = {name[4:-4]: [clamp(face(y / (H - 1))) for y in range(H)] for name, face in faces.items()}
+ring_rows['smooth'] = [clamp(smooth(y / (H - 1))) for y in range(H)]
+ring_rows['bevel'] = [255] + [205] * (H - 2) + [110]
+ring_rows['flat'] = [255] * H
+for name, rows in sorted(ring_rows.items()):
+    for width in RING_WIDTHS:
+        def pixel(x, y, rows=rows, width=width):
+            total = count = 0
+            for sy in range(RING_SAMPLES):
+                for sx in range(RING_SAMPLES):
+                    px, py = x + (sx + .5) / RING_SAMPLES - RING / 2, y + (sy + .5) / RING_SAMPLES - RING / 2
+                    t = (RADIUS + width / 2 - math.hypot(px, py)) / width
+                    if 0 <= t < 1:
+                        total += rows[int(t * H)]
+                        count += 1
+            grey = clamp(total / count) if count else 255
+            return grey, grey, grey, clamp(255 * count / RING_SAMPLES ** 2)
+        tga(f'ring-{name}-{width}.tga', RING, RING, pixel, RINGS)
