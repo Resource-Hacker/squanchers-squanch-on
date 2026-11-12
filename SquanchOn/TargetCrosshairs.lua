@@ -325,32 +325,72 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   ringGloss:Hide()
   local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
   -- The plate bar is translucent, so a ring behind it would show through.
-  -- A mask cuts the band behind the bar out of every ring texture: the art is
-  -- opaque except for a strip a quarter of its height, clamped to opaque beyond.
-  local bandMask = ringFrame:CreateMaskTexture()
-  bandMask:SetTexture(artwork .. "band-mask.tga", "CLAMPTOWHITE", "CLAMPTOWHITE")
-  local masked = false
-  local function cutBand(health)
-    local on = barLook and available(health) and health:IsShown()
-    if on then
+  -- Each ring texture is therefore drawn as two cropped pieces, one above and
+  -- one below the bar, leaving the band behind the bar empty.
+  local pieces = { ring, ringGloss, ringEdges[1], ringEdges[2] }
+  local twins = {}
+  for index, texture in ipairs(pieces) do
+    twins[index] = ringFrame:CreateTexture(nil, "OVERLAY")
+    twins[index]:Hide()
+  end
+  local cut, bandHealth
+  local function layoutPieces()
+    local size = ringFrame:GetHeight()
+    local active = cut and size and size > 0
+    if active and ring.spin then ring.spin:Stop() end
+    for index, texture in ipairs(pieces) do
+      local twin, d = twins[index], texture.inflate or 0
+      texture:ClearAllPoints()
+      if active then
+        local full = size + 2 * d
+        local top = math.max(0, math.min(full, size / 2 + d - (cut.y + cut.band / 2)))
+        local bottom = math.max(0, math.min(full, cut.y - cut.band / 2 + size / 2 + d))
+        texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
+        texture:SetPoint("TOPRIGHT", ringFrame, "TOPRIGHT", d, d)
+        texture:SetHeight(math.max(top, 0.001))
+        texture:SetTexCoord(0, 1, 0, top / full)
+        twin:ClearAllPoints()
+        twin:SetPoint("BOTTOMLEFT", ringFrame, "BOTTOMLEFT", -d, -d)
+        twin:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+        twin:SetHeight(math.max(bottom, 0.001))
+        twin:SetTexCoord(0, 1, 1 - bottom / full, 1)
+        twin:SetTexture(texture:GetTexture())
+        twin:SetBlendMode(texture:GetBlendMode())
+        twin:SetDrawLayer(texture:GetDrawLayer())
+        twin:SetVertexColor(texture:GetVertexColor())
+        twin:SetAlpha(texture:GetAlpha())
+        twin:SetShown(texture:IsShown() and bottom > 0)
+      else
+        texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
+        texture:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+        texture:SetTexCoord(0, 1, 0, 1)
+        twin:Hide()
+      end
+    end
+  end
+  local function measureBand()
+    local health = bandHealth
+    cut = nil
+    if available(health) and health:IsShown() then
       local own, theirs = ringFrame:GetEffectiveScale(), health:GetEffectiveScale()
       local _, barY = health:GetCenter()
       local _, ringY = ringFrame:GetCenter()
-      if not (own and theirs and barY and ringY and own > 0) then on = false else
+      if own and theirs and barY and ringY and own > 0 then
         local pixel = PixelUtil.GetPixelToUIUnitFactor() / own
-        local band = health:GetHeight() * theirs / own + 2 * pixel
-        bandMask:ClearAllPoints()
-        bandMask:SetSize(ringFrame:GetWidth() * 3, band * 4)
-        bandMask:SetPoint("CENTER", ringFrame, "CENTER", 0, barY * theirs / own - ringY)
-        -- The bar's own opacity, so equal colours read as equal.
-        local alpha = health:GetEffectiveAlpha()
-        if type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then ringFrame:SetAlpha(alpha) end
+        cut = { y = barY * theirs / own - ringY, band = health:GetHeight() * theirs / own }
       end
     end
-    if on ~= masked then
-      masked = on
-      for _, texture in ipairs({ ring, ringGloss, ringEdges[1], ringEdges[2] }) do
-        if on then texture:AddMaskTexture(bandMask) else texture:RemoveMaskTexture(bandMask) end
+    layoutPieces()
+  end
+  local function cutBand(health)
+    bandHealth = health
+    measureBand()
+    if cut then
+      local alpha = health:GetEffectiveAlpha()
+      if barLook and type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then ringFrame:SetAlpha(alpha) end
+      -- The selected plate grows for a moment; measure again once it settles.
+      if C_Timer and C_Timer.After then
+        for _, delay in ipairs({ 0, 0.1, 0.35, 0.8 }) do C_Timer.After(delay, measureBand) end
       end
     end
   end
@@ -396,14 +436,14 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- Bar look: the two lines are the bar's dark border, on the ring's outer
       -- and inner edge (half the ring's drawn width away, plus half a line).
       if edge.border then d = edge.direction * (edge.border + pixel * 0.75) end
-      edge:ClearAllPoints()
-      edge:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
-      edge:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+      edge.inflate = d
     end
+    layoutPieces()
   end
   fitRingEdges()
   ringFrame:HookScript("OnSizeChanged", fitRingEdges)
   local ringSpin = ring:CreateAnimationGroup()
+  ring.spin = ringSpin
   local ringTurn = ringSpin:CreateAnimation("Rotation")
   ringTurn:SetDegrees(-360)
   ringSpin:SetLooping("REPEAT")
@@ -596,6 +636,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if secret then shownRed = nil else shownRed, shownGreen, shownBlue = red, green, blue end
     ring:SetVertexColor(red, green, blue)
     for _, edge in ipairs(ringEdges) do if not edge.border then edge:SetVertexColor(red, green, blue) end end
+    if cut then layoutPieces() end
   end
   local watched = setmetatable({}, { __mode = "k" })
   local deferred = false
@@ -637,7 +678,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if self.rangeMode ~= mode then applyRange(mode) end
     if not self.clickFeedbackActive then
       if mode then
-        if not ringSpin:IsPlaying() then ringSpin:Play() end
+        if not cut and not ringSpin:IsPlaying() then ringSpin:Play() end
       else
         ringSpin:Stop()
       end

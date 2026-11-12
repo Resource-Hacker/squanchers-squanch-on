@@ -157,23 +157,42 @@ edge('border-shadow.tga', T, lambda inward: (0, 0, 0, falloff(inward)), corner=m
 # bottom on the inner one, so the same vertex colour tints ring and bar alike.
 # One file per face constant along the bar and per line thickness in texture
 # pixels; patterned faces use the ring of their vertical ramp (see the Lua map).
+# Texels outside the line keep the nearest end row's grey at zero opacity, so
+# filtering fades the line out without pulling its end rows towards white.
 RINGS = DEST.parent / 'Crosshairs'
 RING, RADIUS, RING_SAMPLES, RING_WIDTHS = 128, 46, 4, (3, 5, 8, 12)
 ring_rows = {name[4:-4]: [clamp(face(y / (H - 1))) for y in range(H)] for name, face in faces.items()}
 ring_rows['smooth'] = [clamp(smooth(y / (H - 1))) for y in range(H)]
 ring_rows['bevel'] = [255] + [205] * (H - 2) + [110]
 ring_rows['flat'] = [255] * H
+# The client's default status bar (Interface\TargetingFrame\UI-StatusBar) at
+# mid length: its eight grey rows as measured, stretched as the client
+# stretches them over a bar (linear between row centres).
+DEFAULT_BAR = (136, 189, 216, 189, 144, 101, 122, 101)
+def stretched(rows, t):
+    v = min(max(t * len(rows) - .5, 0), len(rows) - 1)
+    low = min(int(v), len(rows) - 2)
+    return rows[low] + (rows[low + 1] - rows[low]) * (v - low)
+ring_rows['default'] = [clamp(stretched(DEFAULT_BAR, (y + .5) / H)) for y in range(H)]
+# The plate border is drawn inside the bar: the default two-pixel line on the
+# default eleven-pixel bar covers this share of the face at either end.
+RIM = 2 / 11
+ring_rows['rim'] = [255] * H
 for name, rows in sorted(ring_rows.items()):
     for width in RING_WIDTHS:
-        def pixel(x, y, rows=rows, width=width):
+        def pixel(x, y, rows=rows, width=width, rim=name == 'rim'):
             total = count = 0
             for sy in range(RING_SAMPLES):
                 for sx in range(RING_SAMPLES):
                     px, py = x + (sx + .5) / RING_SAMPLES - RING / 2, y + (sy + .5) / RING_SAMPLES - RING / 2
                     t = (RADIUS + width / 2 - math.hypot(px, py)) / width
-                    if 0 <= t < 1:
+                    if 0 <= t < 1 and not (rim and RIM <= t < 1 - RIM):
                         total += rows[int(t * H)]
                         count += 1
-            grey = clamp(total / count) if count else 255
+            if not count:
+                t = (RADIUS + width / 2 - math.hypot(x + .5 - RING / 2, y + .5 - RING / 2)) / width
+                grey = rows[0 if t < .5 else H - 1]
+            else:
+                grey = clamp(total / count)
             return grey, grey, grey, clamp(255 * count / RING_SAMPLES ** 2)
         tga(f'ring-{name}-{width}.tga', RING, RING, pixel, RINGS)
