@@ -6,6 +6,9 @@ local W = {}
 ns.OptionWidgets = W
 local WHITE = [[Interface\Buttons\WHITE8X8]]
 local GOLD = { 0.90, 0.684, 0.378 }
+-- Flat rules and dividers: tuned to render like the unit frames' textured inner
+-- outline (a flat line at the rim colour reads far brighter than that texture).
+local LINE = { 0.34, 0.26, 0.145 }
 
 local function fontPath()
     return ns.UnitFrames and ns.UnitFrames.db and ns.UnitFrames:Font(ns.UnitFrames.db.font) or STANDARD_TEXT_FONT
@@ -90,7 +93,7 @@ function W:Window(name, width, height, title)
     -- Settings need a readable backing; the shared translucent fill gets a darker underlay.
     local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, 0) -- owner: same body as the chat panel
     frame.title = self:Header(frame, title); frame.title:SetPoint('TOPLEFT', 18, -16)
-    local rule = frame:CreateTexture(nil, 'ARTWORK'); rule:SetColorTexture(GOLD[1] * .78, GOLD[2] * .78, GOLD[3] * .78, .9)
+    local rule = frame:CreateTexture(nil, 'ARTWORK'); rule:SetColorTexture(LINE[1], LINE[2], LINE[3], 1)
     rule:SetHeight(1); rule:SetPoint('TOPLEFT', 14, -38); rule:SetPoint('TOPRIGHT', -14, -38)
     frame.close = self:Button(frame, 'x', 22, function() frame:Hide() end, 22)
     frame.close:SetPoint('TOPRIGHT', -12, -10)
@@ -110,7 +113,7 @@ end
 local BODY, HEAD, DIM = 8, 10, 0.4
 local HOVER = { 1, 0.85, 0.55 }
 local GREY = { 0.62, 0.62, 0.6 }
-W.bodySize, W.headerSize, W.gold = BODY, HEAD, GOLD
+W.bodySize, W.headerSize, W.gold, W.line = BODY, HEAD, GOLD, LINE
 
 local function rim(frame, style)
     local skin = ns.DarkSkin
@@ -708,7 +711,7 @@ function W:Section(parent, width)
     reset:SetSize(34, 16); reset:SetPoint('RIGHT', 0, 0)
     reset.text = self:Label(reset, 'Reset', BODY, GREY[1], GREY[2], GREY[3]); reset.text:SetPoint('RIGHT', -2, 0)
     local rule = control:CreateTexture(nil, 'ARTWORK')
-    rule:SetColorTexture(GOLD[1] * .78, GOLD[2] * .78, GOLD[3] * .78, .6); rule:SetHeight(1)
+    rule:SetColorTexture(LINE[1], LINE[2], LINE[3], 1); rule:SetHeight(1)
     rule:SetPoint('LEFT', control.title, 'RIGHT', 8, 0); rule:SetPoint('RIGHT', reset, 'LEFT', -6, 0)
     control.reset = reset
     local function hover()

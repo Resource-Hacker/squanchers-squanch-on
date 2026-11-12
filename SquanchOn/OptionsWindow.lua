@@ -798,13 +798,13 @@ function Window:Build()
     self.profileNote = W:Label(frame, '', 8, GREY[1], GREY[2], GREY[3]); self.profileNote:SetPoint('RIGHT', self.closeX, 'LEFT', -10, 0)
     local function rule(y, fromBottom)
         local line = frame:CreateTexture(nil, 'ARTWORK')
-        line:SetColorTexture(gold[1] * .78, gold[2] * .78, gold[3] * .78, .9); line:SetHeight(1)
+        line:SetColorTexture(W.line[1], W.line[2], W.line[3], 1); line:SetHeight(1)
         line:SetPoint(fromBottom and 'BOTTOMLEFT' or 'TOPLEFT', PAD, y); line:SetPoint(fromBottom and 'BOTTOMRIGHT' or 'TOPRIGHT', -PAD, y)
         return line
     end
     rule(-TOP); rule(BOTTOM, true)
     local divider = frame:CreateTexture(nil, 'ARTWORK')
-    divider:SetColorTexture(gold[1] * .78, gold[2] * .78, gold[3] * .78, .9); divider:SetWidth(1)
+    divider:SetColorTexture(W.line[1], W.line[2], W.line[3], 1); divider:SetWidth(1)
     divider:SetPoint('TOPLEFT', PAD + LEFT_W + 4, -TOP); divider:SetPoint('BOTTOMLEFT', PAD + LEFT_W + 4, BOTTOM)
 
     -- Left column: search and the category tree.
