@@ -846,6 +846,12 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     hookIcons()
     -- Hostile and icon-less targets keep the configured size on the health bar.
     local icon, size, dx, dy = iconFit(plate)
+    -- Owner: the icon ring keeps the size it has before the client enlarges
+    -- the selected plate, so it sits closer around the enlarged icon.
+    if icon and size and nestedIn then
+      local grown = tonumber(GetCVar and GetCVar("nameplateSelectedScale")) or 1
+      if grown > 1 then size = size / grown end
+    end
     barLook = barLookWanted()
     local art = "circle"
     if barLook then
