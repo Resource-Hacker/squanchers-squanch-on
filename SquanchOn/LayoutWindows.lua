@@ -251,10 +251,16 @@ function module:Apply(id, frame)
             -- The character sheet matches chat with its stats sidebar closed; an
             -- open sidebar extends past the chat at that same scale.
             local width = rect.w
-            if frame == CharacterFrame and frame.Expanded then
-                local full = frame:GetWidth()
-                local closed = PANEL_DEFAULT_WIDTH or 338
-                if full and full > closed then width = rect.w * closed / full end
+            if frame == CharacterFrame then
+                -- This client keeps the sheet at its full width whether or not the
+                -- sidebar is open, so measure the left pane itself: up to the
+                -- sidebar's inset when it exists, otherwise the measured 399/631.
+                local full, left = frame:GetWidth(), frame:GetLeft()
+                local side = CharacterFrameInsetRight
+                local edge = side and side:GetLeft()
+                local pane = left and edge and edge - left
+                if not (pane and full and pane > 100 and pane < full) then pane = full and full * 399 / 631 end
+                if pane and full and full > 0 then width = rect.w * pane / full end
             end
             local ratio = math.min(target.w / width, math.max(1, target.y - 12) / rect.h)
             if math.abs(ratio - 1) > 0.0005 then frame:SetScale(frame:GetScale() * ratio) end
