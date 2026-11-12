@@ -264,13 +264,14 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- Rotating separate Line regions rotates their individual local axes.
   -- Owner: every target ring is one solid line (the dashed art is retired).
   local ring = image(ringFrame, "circle", "OVERLAY")
-  -- Owner: a couple of pixels thicker at the same radius. Two copies sit one
+  -- Owner: the friendly ring is a couple of pixels thicker at the same radius. Two copies sit one
   -- physical pixel outside and inside the main line, so the mean radius holds
   -- at every ring size (a thicker texture would scale with the ring instead).
   local ringEdges = {}
   for index, direction in ipairs({ 1, -1 }) do
     local edge = image(ringFrame, "circle", "OVERLAY")
     edge.direction = direction
+    edge:Hide() -- friendly icon ring only
     ringEdges[index] = edge
   end
   local function fitRingEdges()
@@ -606,6 +607,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     hookIcons()
     -- Hostile and icon-less targets keep the configured size on the health bar.
     local icon, size, dx, dy = iconFit(plate)
+    for _, edge in ipairs(ringEdges) do edge:SetShown(icon ~= nil) end
     -- Friendly and hostile rings share the configured ring opacity in range;
     -- out of range both fade with the target unit frame through the parent alpha.
     local anchor = icon or destination
