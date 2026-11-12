@@ -149,7 +149,7 @@ local function makeFrame(id, index)
     -- Aura104 supplies the central-diamond shape used by the dot. Its only
     -- nontransparent pixels occupy [51,77) x [32,62) in the 128px source.
     foreground:SetTexture(media .. "Aura104", "CLAMP", "CLAMP")
-    foreground:SetTexCoord(51 / 128, 77 / 128, 32 / 128, 62 / 128)
+    foreground:SetTexCoord(0, 1, 0, 1)
   elseif id == "Mouseover Glow" then
     -- Owner: the soft round glow of the original aura (Aura22, additive)
     -- around the dot while the hostile mouseover is in range.
@@ -353,10 +353,8 @@ local function render(now, elapsed)
   publishMouseoverDot(opacity)
 end
 
--- Owner: everything is centred on the mouse. The point the engine rests the
--- locked cursor on (and picks mouseover from) is where the art's central
--- diamond goes; the dot and glow sit on that same point. The diamond is
--- (64, 47) in the 128-texel art, so the art's own centre lies below it.
+-- Owner: the emblem's middle sits on the aim point: the spot the engine rests
+-- the locked cursor on and picks mouseover from.
 local placedX, placedY, placedScale
 function module:PlaceArt()
   if not group then return end
@@ -369,9 +367,8 @@ function module:PlaceArt()
   local art = shadow:GetEffectiveScale()
   if cx == placedX and cy == placedY and art == placedScale then return end
   placedX, placedY, placedScale = cx, cy, art
-  local drop = shadow.data.height * (0.5 - 47 / 128) * art     -- screen pixels
   group:ClearAllPoints()
-  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx / ui, (cy - drop) / ui)
+  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx / ui, cy / ui)
 end
 
 function module:ApplyReticleScale()
@@ -384,29 +381,22 @@ function module:ApplyReticleScale()
       local parentScale = frame:GetParent():GetEffectiveScale()
       frame:SetScale(scale / parentScale)
       if id == "Mouseover Dot" or id == "Mouseover Glow" then
+        -- The original aura's sizes (dot 28x31, glow 50x50, whole textures).
+        -- The emblem's middle is on the aim point; its diamond is above it, at
+        -- texel (64.5, 46.5) of 128 in the 35-unit art. The dot's own diamond
+        -- (texel 63.9, 46.1 in its 28x31 frame) and the glow's centre (texel
+        -- 64.6, 60.3 in its 50x50 frame) are laid on that point.
+        frame.fillWidth, frame.fillHeight = nil, nil
         local shadow = self.frames["No Combat"]
-        local effectiveScale = frame:GetEffectiveScale()
-        local pixelFactor = PixelUtil.GetPixelToUIUnitFactor()
-        local pixel = pixelFactor / effectiveScale
-        local halfWidth = shadow.data.width * 26 / 256
-        local halfHeight = shadow.data.height * 30 / 256
-        -- Parallel diamond edges: one physical pixel measured perpendicular
-        -- to each edge, independent of UI scale and the virtual canvas size.
-        local insetScale = math.max(0.0001, 1 - pixel
-          * math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight)
-          / (halfWidth * halfHeight))
-        if id == "Mouseover Dot" then
-          frame.fillWidth = 2 * halfWidth * insetScale
-          frame.fillHeight = 2 * halfHeight * insetScale
-        else
-          frame.fillWidth, frame.fillHeight = frame.data.width, frame.data.height
-        end
-        -- The imported group's BOTTOMLEFT anchor adds its half-size to the
-        -- screen center. Preserve that exact origin when following the cursor.
-        local groupScale = group:GetEffectiveScale() / effectiveScale
+        local size = shadow.data.height
+        local targetX, targetY = size * (64.5 - 64) / 128, size * (64 - 46.5) / 128
+        local d = frame.data
+        local ownX, ownY
+        if id == "Mouseover Dot" then ownX, ownY = d.width * (63.9 - 64) / 128, d.height * (64 - 46.1) / 128
+        else ownX, ownY = d.width * (64.6 - 64) / 128, d.height * (64 - 60.3) / 128 end
         frame:ClearAllPoints()
-        frame:SetPoint("CENTER", mouseAnchor, "CENTER", 0, 0)
-        frame:SetSize(frame.fillWidth, frame.fillHeight)
+        frame:SetPoint("CENTER", mouseAnchor, "CENTER", targetX - ownX, targetY - ownY)
+        frame:SetSize(d.width, d.height)
       end
     end
   end
