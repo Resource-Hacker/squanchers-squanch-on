@@ -61,6 +61,10 @@ Options:Add('targetring', {
         desc = 'On a friendly player the ring takes that player\'s class colour instead of the health colour. Applies while the health bar look is off or the plate bar has no colour to give.',
         keywords = 'friendly ring class colour color', path = 'friendlyClassColor', default = true, apply = refit }),
 
+    row({ id = 'targetring.barLookThickness', type = 'slider', label = 'Health bar look: extra thickness', section = 'Friendly target', order = 58,
+        desc = 'Screen pixels added to the line of a ring that wears the health bar look. The ring keeps its radius; the line moves to the nearest drawn width.',
+        keywords = 'ring bar look line thick thickness', path = 'barLookThickness', min = 0, max = 12, softMax = 6, step = 1, default = 1, apply = refit }),
+
     row({ id = 'targetring.friendlyBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Friendly target', order = 60,
         desc = 'On a friendly player the ring takes the texture of the nameplate health bar and the colour that bar shows.',
         keywords = 'friendly ring bar look texture colour color nameplate health', path = 'friendlyBarLook', default = true, apply = refit }),

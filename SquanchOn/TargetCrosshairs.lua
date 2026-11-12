@@ -859,7 +859,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- pixels, drawn by the nearest generated width at the same mean radius.
       local scale = publicQuery(display.GetEffectiveScale, display)
       local pixels = (size or plainSize()) * (scale or 0) / PixelUtil.GetPixelToUIUnitFactor()
-      local wanted = 2.5 + (icon and pixels > 0 and limit(settings.friendlyThickness, 1, 0, 12) * 128 / pixels or 0)
+      local wanted = 2.5 + (icon and pixels > 0 and (limit(settings.friendlyThickness, 1, 0, 12) + limit(settings.barLookThickness, 1, 0, 12)) * 128 / pixels or 0)
       local width = RING_WIDTHS[1]
       for _, candidate in ipairs(RING_WIDTHS) do
         if math.abs(candidate - wanted) < math.abs(width - wanted) then width = candidate end
