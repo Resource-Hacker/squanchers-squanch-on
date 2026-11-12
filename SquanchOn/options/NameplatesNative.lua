@@ -114,6 +114,7 @@ add(ROOT, 'Health bar', {
   { 'subtitle.underBar', 'toggle', 'Title under an NPC health bar', { desc = 'Shows the same line, as "<General Goods>", under the health bar of NPCs that have one.' } },
   { 'subtitle.font', 'font', 'Title font' },
   { 'subtitle.size', 'slider', 'Title size', slider(4, 30, 1, { integer = true }) },
+  { 'smoothMotion', 'toggle', 'Smooth plate movement', { desc = 'Plates move at sub-pixel positions instead of each part snapping to whole pixels separately. Text can look very slightly softer while a plate moves. Takes effect after a reload.' } },
   { 'translit', 'toggle', 'Cyrillic names in Latin letters' },
   { 'sizeScale.minor.1', 'slider', 'Minor unit width', alpha() },
   { 'sizeScale.minor.2', 'slider', 'Minor unit height', alpha() },

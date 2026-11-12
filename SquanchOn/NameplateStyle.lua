@@ -886,6 +886,19 @@ function Style:Build(frame)
   frame.RaidTargetIndicator:SetPoint('RIGHT', health, 'LEFT', -14, 0)
   -- The list the target ring reads to fit a friendly target's emblem.
   frame.npIcons = { frame.Faction }
+  -- Smooth travel: by default the client snaps every texture and text of a
+  -- plate to whole screen pixels on its own, so the parts of a moving plate
+  -- step at different moments and the plate looks jagged. Without snapping the
+  -- whole plate moves as one, at sub-pixel positions.
+  if settings.smoothMotion ~= false then
+    local function unsnap(owner)
+      for _, region in ipairs({ owner:GetRegions() }) do
+        if region.SetSnapToPixelGrid then region:SetSnapToPixelGrid(false); region:SetTexelSnappingBias(0) end
+      end
+      for _, child in ipairs({ owner:GetChildren() }) do unsnap(child) end
+    end
+    unsnap(frame)
+  end
 
   if ns.NameplateCast then ns.NameplateCast:Build(frame) end
   if ns.NameplateAuras then ns.NameplateAuras:Build(frame) end
