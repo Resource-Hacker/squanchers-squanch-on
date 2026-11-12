@@ -351,6 +351,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local twins = {}
   for index, texture in ipairs(pieces) do
     twins[index] = ringFrame:CreateTexture(nil, "OVERLAY")
+    -- Moved with the icon it hugs: neither is snapped to whole pixels, so both
+    -- take the same sub-pixel position while the plate moves.
+    for _, region in ipairs({ texture, twins[index] }) do
+      if region.SetSnapToPixelGrid then region:SetSnapToPixelGrid(false); region:SetTexelSnappingBias(0) end
+    end
     twins[index]:Hide()
   end
   local cut, bandHealth
@@ -631,7 +636,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         -- Owner: 25% tighter than the geometric fit (the emblem art has transparent padding).
         -- The emblem's art sits slightly right of and above its texture centre
         -- (measured about 4% of its size on screen); centre on the art.
-        local dx = kind == "faction" and width * 0.04 * scale / own or 0
+        -- Squanch-On's own emblem is centred in its texture (measured): no shift.
+        local dx = kind == "faction" and not nestedIn and width * 0.04 * scale / own or 0
         local dy = kind == "faction" and height * 0.045 * scale / own or 0
         -- Owner: nine screen pixels wider than the tightened fit (5, then +4 for the solid ring).
         local grow = limit(settings.friendlyGrow, 9, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own

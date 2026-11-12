@@ -556,7 +556,18 @@ function Style:Layout(frame)
   local indicators = settings.indicators
   for _, icon in ipairs({ frame.Faction, frame.Rare, frame.Elite }) do icon:SetSize(indicators.size, indicators.size) end
   frame.QuestIcon:SetSize(indicators.size * 5 / 6, indicators.size * 5 / 6)
-  frame.RaidTargetIndicator:SetShown(indicators.raidMark and true or false)
+  -- Shown only while the unit carries a mark: the element decides, never the
+  -- layout (an unmarked icon shows the whole sheet of eight marks).
+  do
+    local mark = frame.RaidTargetIndicator
+    mark:Hide()
+    if indicators.raidMark and frame.unit then
+      local ok, index = pcall(GetRaidTargetIndex, frame.unit)
+      if ok and index ~= nil then
+        if pcall(SetRaidTargetIconTexture, mark, index) then mark:Show() end
+      end
+    end
+  end
   frame.RaidTargetIndicator:SetSize(indicators.size, indicators.size)
 
   local power = frame.Power
@@ -725,6 +736,8 @@ function Style:Build(frame)
   -- line break is cut to "Name...".
   frame.Name:SetWordWrap(true)
   frame.Faction = overlay:CreateTexture(nil, 'ARTWORK')
+  -- The target ring hugs this icon; both skip pixel snapping so they move as one.
+  if frame.Faction.SetSnapToPixelGrid then frame.Faction:SetSnapToPixelGrid(false); frame.Faction:SetTexelSnappingBias(0) end
   frame.Rare = overlay:CreateTexture(nil, 'ARTWORK')
   -- The star of the game's add-on list icons, grey as a rare marker.
   frame.Rare:SetTexture('Interface\\GLUES\\CharacterSelect\\Glues-AddOn-Icons')
