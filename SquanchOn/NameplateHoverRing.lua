@@ -274,23 +274,28 @@ local function nameRise(frame)
   local lines = config.guild and 2 or 1
   return (tonumber(frame.npBarHeight) or 5) / 2 + (tonumber(config.name.y) or 0) + size * lines / 2 - 10
 end
-local function glide(frame, seconds, down)
-  local name = frame.Name
-  if not name or not name.CreateAnimationGroup then return end
-  local group = name.sqHoverGlide
+local function glideOne(region, rise, seconds, down)
+  local group = region.sqHoverGlide
   if not group then
-    group = name:CreateAnimationGroup()
+    group = region:CreateAnimationGroup()
     group.move = group:CreateAnimation('Translation')
     group.move:SetSmoothing('OUT')
-    name.sqHoverGlide = group
+    region.sqHoverGlide = group
   end
   group:Stop()
-  local rise = nameRise(frame)
   -- Up: laid out high already, so it starts `rise` lower and travels to rest.
   -- Down: still laid out high; it travels down and the layout takes over there.
   group.move:SetOffset(0, -rise)
   group.move:SetDuration(seconds)
   if down then group:Play() else group:Play(true) end
+end
+local function glide(frame, seconds, down)
+  local name = frame.Name
+  if not name or not name.CreateAnimationGroup then return end
+  local rise = nameRise(frame)
+  glideOne(name, rise, seconds, down)
+  -- The name's dark edge is made of copies of it; they travel with it.
+  for _, copy in ipairs(name.npHalo or {}) do glideOne(copy, rise, seconds, down) end
 end
 
 local function teardown(ring, frame)
@@ -299,7 +304,10 @@ local function teardown(ring, frame)
   if frame.sqHoverRing == ring then
     frame.sqHoverRing = nil
     frame.npHoverRing = nil
-    if frame.Name and frame.Name.sqHoverGlide then frame.Name.sqHoverGlide:Stop() end
+    if frame.Name and frame.Name.sqHoverGlide then
+      frame.Name.sqHoverGlide:Stop()
+      for _, copy in ipairs(frame.Name.npHalo or {}) do if copy.sqHoverGlide then copy.sqHoverGlide:Stop() end end
+    end
     if NP.active[frame] then relayout(frame) else ns.NameplateStyle:Indicators(frame) end
     if frame.Faction then frame.Faction:SetAlpha(1) end
   end
@@ -351,7 +359,10 @@ function Hover:Set(frame, shown)
   if ring and ring.leaving == wanted then
     ring.leaving = nil
     taken = true
-    if wanted.Name and wanted.Name.sqHoverGlide then wanted.Name.sqHoverGlide:Stop() end
+    if wanted.Name and wanted.Name.sqHoverGlide then
+      wanted.Name.sqHoverGlide:Stop()
+      for _, copy in ipairs(wanted.Name.npHalo or {}) do if copy.sqHoverGlide then copy.sqHoverGlide:Stop() end end
+    end
   else
     ring = freeRing()
     if not ring then return end

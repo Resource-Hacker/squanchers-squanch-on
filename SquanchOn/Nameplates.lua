@@ -246,12 +246,45 @@ function NP:Settings()
 end
 
 -- shadow: an {r, g, b, a} override of the black drop shadow.
+-- Vector text draws its outline by widening the glyph shapes, and decorative
+-- faces (the player-name fonts) come out with spikes and nicks on letters such
+-- as U, Y and B. A text with a halo therefore drops the outline flag and gets
+-- its dark edge from four black copies of itself, offset diagonally behind it.
+local HALO = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+function NP:Halo(object, parent)
+  if object.npHalo or not (parent and parent.CreateFontString) then return end
+  local copies = {}
+  for index, offset in ipairs(HALO) do
+    local copy = parent:CreateFontString(nil, 'ARTWORK')
+    copy:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 8, '')
+    copy:SetTextColor(0, 0, 0, 1)
+    copy:SetPoint('CENTER', object, 'CENTER', offset[1] * 0.6, offset[2] * 0.6)
+    copy:SetJustifyH('CENTER'); copy:SetWordWrap(true)
+    copies[index] = copy
+  end
+  object.npHalo = copies
+  hooksecurefunc(object, 'SetText', function(_, text) for _, copy in ipairs(copies) do copy:SetText(text) end end)
+  hooksecurefunc(object, 'SetFormattedText', function(_, ...) for _, copy in ipairs(copies) do copy:SetFormattedText(...) end end)
+  hooksecurefunc(object, 'SetAlpha', function(_, alpha) for _, copy in ipairs(copies) do copy:SetAlpha(alpha) end end)
+  local function visible() local shown = object:IsShown() for _, copy in ipairs(copies) do copy:SetShown(shown) end end
+  hooksecurefunc(object, 'Show', visible); hooksecurefunc(object, 'Hide', visible); hooksecurefunc(object, 'SetShown', visible)
+end
+
 function NP:Font(object, name, size, outline, shadow)
   local path = ns.Media and ns.Media:Resolve('font', name) or name
   local flags = outline == 'NONE' and '' or outline or ''
   -- Smooth movement: the client's vector text ('SLUG' flag) is drawn from
   -- outlines on the GPU instead of pixel-fitted glyph bitmaps, so it can sit
   -- between pixels and travel with the unsnapped bar and border.
+  local halo = object.npHalo
+  if halo then
+    local plain = self:Settings().smoothMotion ~= false and 'SLUG' or ''
+    for _, copy in ipairs(halo) do
+      if not copy:SetFont(path, size, plain) then copy:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', size, plain) end
+      copy:SetShown(object:IsShown())
+    end
+    flags = flags:gsub('THICKOUTLINE', ''):gsub('OUTLINE', ''):gsub('^[%s,]+', ''):gsub('[%s,]+$', '')
+  end
   local smooth = self:Settings().smoothMotion ~= false and not flags:find('SLUG')
   local set = smooth and object:SetFont(path, size, flags == '' and 'SLUG' or flags .. ', SLUG')
   if not set and not object:SetFont(path, size, flags) then

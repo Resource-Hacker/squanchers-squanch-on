@@ -859,6 +859,8 @@ function Style:Build(frame)
   overlay:SetFrameLevel(health:GetFrameLevel() + 4)
   frame.TextLayer = overlay
   frame.Name, frame.Level, frame.Percent, frame.TargetName = fontString(overlay), fontString(overlay), fontString(overlay), fontString(overlay)
+  -- Names keep a clean dark edge under vector text (see NP:Halo).
+  if settings.smoothMotion ~= false then NP:Halo(frame.Name, overlay) end
   -- Two lines for players ("<Guild>" underneath); an unwrapped string with a
   -- line break is cut to "Name...".
   frame.Name:SetWordWrap(true)
