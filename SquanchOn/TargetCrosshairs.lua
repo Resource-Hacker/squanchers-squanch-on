@@ -637,7 +637,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         -- The emblem's art sits slightly right of and above its texture centre
         -- (measured about 4% of its size on screen); centre on the art.
         -- Squanch-On's own emblem is centred in its texture (measured): no shift.
-        local dx = kind == "faction" and not nestedIn and width * 0.04 * scale / own or 0
+        -- (Owner: 4% read one pixel right and 0% one pixel left on Squanch-On plates.)
+        local dx = kind == "faction" and width * (nestedIn and 0.02 or 0.04) * scale / own or 0
         local dy = kind == "faction" and height * 0.045 * scale / own or 0
         -- Owner: nine screen pixels wider than the tightened fit (5, then +4 for the solid ring).
         local grow = limit(settings.friendlyGrow, 9, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own
