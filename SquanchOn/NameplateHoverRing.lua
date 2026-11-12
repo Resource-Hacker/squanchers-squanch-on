@@ -231,17 +231,11 @@ local function show(ring, frame)
 end
 
 -- Called with every mouseover change of a plate, and when the target changes.
--- Mouseover comes and goes several times a second (the nameplate tick drops it
--- and the next mouseover event restores it). Tearing the ring down and building
--- it up each time re-laid the plate and was felt as lag, so a hide waits a
--- moment and is cancelled when the same plate is hovered again.
-local leaving = 0
-function Hover:Set(frame, shown, now)
+-- Counts real changes, for checking that a steady hover costs one build.
+Hover.builds = 0
+function Hover:Set(frame, shown)
   if not shown and frame ~= current then return end
-  if shown and frame == current and current and eligible(frame) then leaving = leaving + 1; return end
-  -- A plate that has left the screen, or was just selected, loses the ring at once.
-  if not shown and not now and current and NP.active[frame] and eligible(frame) and C_Timer and C_Timer.After then
-    leaving = leaving + 1
+  if shown and frame == current and current and eligible(frame) then return end
     local token = leaving
     C_Timer.After(0.4, function() if token == leaving and current == frame then Hover:Set(frame, false, true) end end)
     return
@@ -262,6 +256,7 @@ function Hover:Set(frame, shown, now)
     if NP.active[left] then relayout(left) else ns.NameplateStyle:Indicators(left) end
   end
   if not wanted then return end
+  self.builds = self.builds + 1
   live = live or build()
   if show(live, wanted) then
     current = wanted
@@ -274,7 +269,7 @@ end
 function Hover:Refresh()
   local frame = current
   if not frame then return end
-  self:Set(frame, false, true)
+  self:Set(frame, false)
   self:Set(frame, true)
 end
 

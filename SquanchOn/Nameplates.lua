@@ -450,7 +450,10 @@ function NP:Tick()
     if self.hoverFrame and ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(self.hoverFrame) end
   end
   local Style = ns.NameplateStyle
-  if self.hoverFrame and ask(UnitIsUnit, 'mouseover', self.hoverFrame.unit or 'none') ~= true then
+  -- Mouseover ending raises no event, so the tick notices it. Asked by plate,
+  -- the way the mouseover event finds it: comparing unit tokens can come back
+  -- unreadable for players, which ended and restarted the hover on every tick.
+  if self.hoverFrame and self:PlateFor('mouseover') ~= self.hoverFrame then
     local left = self.hoverFrame
     Style:SetHover(left, false); self.hoverFrame = nil
     if ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(left) end
