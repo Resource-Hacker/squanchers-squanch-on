@@ -39,7 +39,9 @@ local NO_RATE = { Interrupts = true, Dispels = true, Deaths = true }
 -- Header labels for the names that do not fit the strip; the tooltip and the
 -- list show the full name.
 local SHORT = { DamageTaken = 'Dmg taken', AvoidableDamageTaken = 'Avoidable', EnemyDamageTaken = 'Enemy taken' }
-local HEADER, PAD, THROTTLE, MIN_WIDTH = 14, 6, .25, 40
+-- HEADER: the gap under the top rim before the column names (no title strip;
+-- the fight selector lives in the mode plate's menu).
+local HEADER, PAD, THROTTLE, MIN_WIDTH = 2, 6, .25, 40
 -- The mode plate on the top rim, the quest drawer's title plate: 18 high, at
 -- least 76 wide, 10 in from the drawer's left end, in the panel's units.
 local PLATE_W, PLATE_H, PLATE_X, PLATE_PAD = 76, 18, 10, 16
@@ -488,7 +490,7 @@ end
 local function headerButton(parent, size, color, popupWidth)
     local widgets = ns.OptionWidgets
     local button = CreateFrame('Button', nil, parent)
-    button:SetHeight(HEADER - 2)
+    button:SetHeight(12)
     button:SetHighlightTexture(WHITE); button:GetHighlightTexture():SetVertexColor(1, .78, .42, .12)
     button.text = widgets:Label(button, '', size, color and color[1], color and color[2], color and color[3])
     button.text:SetPoint('LEFT', 2, 0); button.text:SetPoint('RIGHT', -2, 0); button.text:SetWordWrap(false)
@@ -530,7 +532,7 @@ function Meter:SetInteractive(on)
     self.interactive = on
     for _, row in ipairs(self.rows) do row:EnableMouse(on) end
     self.list:EnableMouseWheel(on)
-    self.modeBox:EnableMouse(on); self.segmentBox:EnableMouse(on)
+    self.modeBox:EnableMouse(on)
     if not on and self.tipRow then rowLeave(self.tipRow) end
 end
 
@@ -692,9 +694,17 @@ function Meter:Initialize()
     function modeBox:getItems()
         local items = {}
         for _, value in ipairs(Meter.modeValues) do items[#items + 1] = { value = value, label = Meter.modeLabels[value] } end
+        -- The fights follow the modes in the same menu.
+        for _, item in ipairs(segmentItems()) do
+            local name = item.label
+            if item.value == 'current' then name = 'Fight: current' elseif item.value == 'overall' then name = 'Fight: overall' end
+            items[#items + 1] = { value = item.value, label = name }
+        end
         return items
     end
-    modeBox.onCommit = function(_, value) choose('mode', value) end
+    modeBox.onCommit = function(_, value)
+        if Meter.modeLabels[value] then choose('mode', value) else Meter.segmentBox.onCommit(Meter.segmentBox, value) end
+    end
     local segmentBox = headerButton(content, 8)
     segmentBox:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 2 - PAD, -1)
     segmentBox.text:SetJustifyH('RIGHT')
@@ -712,6 +722,7 @@ function Meter:Initialize()
         self:UpdateHeader(); self:Refresh()
     end
     self.modeBox, self.segmentBox = modeBox, segmentBox
+    segmentBox:Hide()
 
     -- Column names on one raised charcoal plate with a thin gold rim. The cell
     -- seams are the column dividers themselves, which run on through the rows
