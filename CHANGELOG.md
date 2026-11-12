@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.2.0-candidate — unreleased
+## 0.3.0-rewrite — unreleased, staged
+
+- Independently implement unit-frame layout and presentation inside Squanch-On,
+  directly using separately MIT-licensed oUF/LibDispel and public-domain LibStub.
+  Remove external ElvUI/BenikUI engine requirements and the five-folder assembly.
+- Preserve complete resolved local settings as data, including unsupported fields,
+  while the new options editor exposes only declared renderer capabilities.
+  Full native ElvUI options and all-class/filter parity are not claimed.
+- Add independently written tooltip presentation and anchor handling; retain
+  Blizzard's content, item comparisons, native health values and event handlers.
+- Keep exact local media and optional original reticle code/assets in a separate
+  private overlay with source notices and hashes. The public addon is complete
+  with its bundled/game media defaults; exact original appearance may need assets
+  excluded from that release.
+- Validate public Lua/load/reuse integrity and private assembly. Fresh game loading,
+  visual equivalence, settings interaction and combat/group acceptance remain
+  pending. Existing gameplay images retain their earlier component provenance.
+
+## 0.2.0-candidate — original-engine baseline
+
+The accepted local baseline remains on this version while 0.3 is evaluated.
 
 - Replace the rejected alpha unit-frame rewrite with the original scoped ElvUI
   renderer, complete native editor, profiles/movers and Benik decoration.
@@ -10,7 +30,7 @@
 - Add an offline private local assembler with original identities, load checks,
   per-file hashes and explicit redistribution boundaries.
 - Preserve existing native frame databases and the suite's current reticle/camera
-  behavior. Live equivalence acceptance is pending.
+  behavior. Those original-engine checks do not certify the later independent rewrite.
 
 
 - Restore a visible gold leading border on General and other exposed chat tabs.

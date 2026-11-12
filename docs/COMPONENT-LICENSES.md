@@ -1,72 +1,60 @@
-# Component licenses and local assembly
+# Component licenses and package contents
 
-Squancher's Squanch-On publishes original integration code under MIT, with the
+Squancher's Squanch-On publishes original addon code under MIT, alongside the
 separately licensed material identified in [third-party notices](../THIRD_PARTY_NOTICES.md).
-The original frame engines remain external dependencies. MIT does not replace
-their licenses or grant rights to their fonts, textures, libraries or names.
+The standalone rewrite supplies its own unit-frame layout, tooltip presentation
+and settings editor. ElvUI and BenikUI engines and options addons are neither
+bundled nor required. Their behavior and existing configuration supplied
+references; that does not relicense their implementations or media.
 
-## Public package and private local output
+## Public standalone package
 
-The public addon package contains `SquanchOn`. A user-run assembler combines it
-locally with the user's originals, preserving five sibling addon folders:
+The public ZIP contains one top-level `SquanchOn/` addon folder, including its
+runtime modules, required libraries, public artwork and attached notices. The
+libraries remain distinct attributed components:
 
-```
-SquanchOn/
-ElvUI/
-ElvUI_Libraries/
-ElvUI_Options/
-ElvUI_BenikUI/
-```
+| Component | Included scope and terms |
+| --- | --- |
+| oUF | Independently MIT-licensed framework by Trond A Ekseth, Val Voronov, Adrian L Lange and Rainrider. Its full notice is in `SquanchOn/libs/oUF/LICENSE.txt`. The Forever load graph is embedded directly; no ElvUI engine is loaded. |
+| LibDispel | Separately MIT-licensed library, copyright 2026 Tukui.org. Full notice: `SquanchOn/libs/LibDispel/LICENSE.txt`. |
+| LibStub | The source expressly places this versioning stub in the public domain and retains contributor credits in `SquanchOn/libs/LibStub/LibStub.lua`. |
+| PT Sans Narrow Bold 2.003 | Unmodified ParaType font with its SIL OFL 1.1 notice retained beside the font and in the license notices. |
+| TargetNameplateIndicator compatibility port | MIT code attributed to Choonster. The historical upstream image library is excluded. |
+| Original Squanch-On artwork | Numerical geometric constructions and their generators; provenance distinguishes functional references from copied images. |
 
-That assembled installation is private output, not a redistributable SquanchOn
-release. Do not upload its imported source, restricted media, saved settings or
-private package to the repository or releases. Optional Plater/DynamicCam
-installations remain separate. One product or archive name does not change the
-contained addons' names, authorship or licenses.
+`SquanchOn/libs/provenance.json` identifies the supplying distribution and exact
+preserved library files. Both reuse manifests record attributed file hashes.
+A supplying distribution's overall license does not replace each library's own
+notice. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for full attribution
+and source links.
 
-## Original component sources and terms
+## Private exact media overlay
 
-| Component and author | Identified source | License boundary |
-| --- | --- | --- |
-| ElvUI; ElvUI authors and contributors, copyright 2009–2026 | v16.01-derived source, commit [`9658ff3f7cdb83019aadffad6a4a7549508f7263`](https://github.com/tukui-org/ElvUI/commit/9658ff3f7cdb83019aadffad6a4a7549508f7263). [Project](https://github.com/tukui-org/ElvUI). | [Custom license](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ElvUI/LICENSE.txt): private modifications, explicit GitHub upload exception, unchanged addon/folder name and retained notice. Third-party resources excluded. Original-named ElvUI-owned code can be distributed on GitHub under those conditions; it cannot be renamed into an MIT SquanchOn engine. |
-| ElvUI_Options; ElvUI authors and contributors | Same source commit, original folder `ElvUI_Options`. | Its [custom license](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ElvUI_Options/LICENSE.txt) has the corresponding GitHub exception, name and notice requirements. |
-| ElvUI_Libraries; respective library authors | Same source commit plus the external libraries required by packaging metadata. | The [root license](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/LICENSE.md) delegates to [individual notices](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ThirdPartyNotices.md), including MIT, public-domain, Ace3 and LGPL terms and scopes without an established redistribution grant. No blanket MIT license or blanket ElvUI GitHub exception applies to the whole folder. |
-| BenikUI; Benik, copyright 2014–2026 | v5.20, commit [`c221e0ae63d5dcb9469b4feba9e51f939a5993d0`](https://github.com/Benik/BenikUI/commit/c221e0ae63d5dcb9469b4feba9e51f939a5993d0). [Author project](https://github.com/Benik/BenikUI), [official distribution](https://www.curseforge.com/wow/addons/benikui). | [Custom license](https://github.com/Benik/BenikUI/blob/c221e0ae63d5dcb9469b4feba9e51f939a5993d0/ElvUI_BenikUI/LICENSE.txt): private modifications, preserved addon/folder name and retained notice; public upload exception only to tukui.org after permission. No GitHub redistribution grant. |
+A separate owner-local overlay can supply exact locally held fonts, textures and
+an original reticle renderer/data/assets. It still has a single `SquanchOn/`
+addon folder; it does not restore the former five-folder engine assembly. That
+private output is separate from the public release and retains source notices
+and per-file provenance. Local availability does not establish redistribution
+permission. Keep private files, manifests and output outside the repository,
+issues and release assets.
 
-Calling original engine interfaces and applying original external styling does
-not transfer their copyright to SquanchOn. Imported components retain their
-notices. The public integration excludes their implementations; this is a
-packaging decision, not a claim that every upstream project forbids every reuse.
+Expressway, Homizio, Prototype, DOCK11, Homespun, Action Man, Forced Square,
+Harry P and the original ElvUI/BenikUI textures are not supplied by the public
+package. Their presence beside addon source does not make them MIT assets.
+An overlay must identify the actual local file and preserve its attached
+provenance; a similarly named replacement is not evidence of matching appearance.
+The public package can use its bundled font and game-provided texture defaults
+without an overlay. Such fallbacks do not reproduce an absent original asset.
 
-The pinned [ElvUI source archive](https://codeload.github.com/tukui-org/ElvUI/zip/9658ff3f7cdb83019aadffad6a4a7549508f7263)
-and [Benik source archive](https://codeload.github.com/Benik/BenikUI/zip/c221e0ae63d5dcb9469b4feba9e51f939a5993d0)
-identify author-hosted source. ElvUI's ZIP alone does not reproduce a complete
-installed triplet: its [.pkgmeta](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/.pkgmeta)
-declares external dependencies. Source archives also omit a user's custom
-loaders, local integration files and exact settings. Importing a complete known
-installation preserves that closure; fetching the latest dependencies does not
-prove equivalent bytes or behavior. Local acquisition does not grant republication.
+The original ElvUI and BenikUI distributions retain their own notices and terms.
+This project makes no general redistribution claim about those distributions,
+third-party media or a user's locally assembled output. The former
+`tools/assemble_local.py` original-engine workflow is retired; see
+[public installation and local overlays](LOCAL-ASSEMBLY.md).
 
-## Exact media and fonts
+Native Blizzard paths and atlases reference resources already installed with the
+game. No extracted Blizzard fonts, textures or sound files are published here.
+Gameplay screenshots retain their documented provenance and Blizzard's rights;
+the code's MIT license does not relicense game content.
 
-The public PT Sans Narrow Bold file retains its full ParaType copyright and SIL
-OFL 1.1 notice. The exact file is identified in the notices; a different font
-catalog revision must not silently replace it.
-
-Other original fonts and textures required for a user's appearance are local
-imports with their own provenance. An addon author's license does not
-automatically license third-party fonts found beside its code. The installed
-Expressway file identifies the Bold face and prohibits distribution; today's free
-desktop Regular file is different. [Typodermic's guidance](https://typodermicfonts.com/desktop/)
-also separates desktop design from app/game embedding rights. Homizio, Prototype,
-DOCK11, Homespun, Action Man, Forced Square and Harry P are not MIT assets merely
-because an addon can reference them. Preserve exact locally supplied files; report
-missing assets instead of substituting a different face.
-
-Native Blizzard font paths, textures and atlases reference resources already
-installed with the game. No extracted Blizzard assets are published here.
-Original/generated public artwork and the MIT TargetNameplateIndicator code port
-have separate notices; its historical images are not covered by the code's grant.
-
-Upstream names identify their respective authors. They imply no endorsement,
-sponsorship or permission beyond the applicable terms.
+Names identify their respective authors and projects and imply no endorsement.

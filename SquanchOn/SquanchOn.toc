@@ -2,14 +2,19 @@
 ## Title: Squancher's Squanch-On
 ## Notes: Reticle-centered mouselook, hold-to-open mouseover and a unified native interface.
 ## Author: Squancher and contributors
-## Version: 0.2.0-candidate
+## Version: 0.3.0-rewrite
 ## SavedVariables: SquanchOnDB
-## RequiredDeps: ElvUI, ElvUI_BenikUI
 ## OptionalDeps: Plater, DynamicCam
+## X-oUF: SquanchOnUF
 ## X-License: MIT; bundled and required components retain their own licenses
 ## X-Website: https://github.com/Resource-Hacker/squanchers-squanch-on
 
+libs/LibStub/LibStub.lua
+libs/LibDispel/LibDispel.lua
+libs/oUF/oUF_Forever.xml
+
 Core.lua
+Media.lua
 LayoutEditor.lua
 MouseoverCasting.lua
 MouseoverInteractIcon.lua
@@ -25,6 +30,7 @@ NameplateIndicatorOptions.lua
 NativeText.lua
 OwnedText.lua
 DarkSkin.lua
+TooltipSkin.lua
 NativeControlSkins.lua
 NativeMenuBorders.lua
 NativeWindowBorders.lua
@@ -35,7 +41,11 @@ NativeProfessionSkins.lua
 NativeContainerSkins.lua
 ActionButtonBorders.lua
 CompactText.lua
-OriginalUnitFramesBridge.lua
+UnitFrameImport.lua
+UnitFrames.lua
+UnitFrameState.lua
+UnitFrameAuras.lua
+UnitFrameOptions.lua
 OriginalUnitFrameLighting.lua
 OriginalUnitFrameBorders.lua
 MinimapPanel.lua
@@ -46,7 +56,6 @@ NativeMinimapButtons.lua
 PlaterIconSkins.lua
 AuxiliaryLayout.lua
 LayoutTargets.lua
-LayoutUnitFrames.lua
 NativeWindowPlacement.lua
 LayoutWindows.lua
 SocialDrawer.lua

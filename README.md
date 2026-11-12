@@ -9,17 +9,18 @@ move the mouse to steer, **hold right mouse to open real mouseover at the reticl
 then release to close mouseover while the camera stays locked. Hold the free-cursor
 key when you need the interface; release it to return to mouselook.
 
-[**Build the equivalence candidate**](docs/LOCAL-ASSEMBLY.md)
+[**Build the standalone candidate**](docs/LOCAL-ASSEMBLY.md)
 · [How the reticle works](docs/RETICLE.md)
 · [Install and configure](#install-and-configure)
 · [Changelog](CHANGELOG.md)
 · [Report an issue](https://github.com/Resource-Hacker/squanchers-squanch-on/issues/new?template=bug_report.md)
 
-**0.2.0-candidate · Forever interface 16001.** This candidate restores the actual
-ElvUI unit-frame engine and complete native editor used by the author's accepted
-setup. The previous 0.1.0-alpha replacement did not preserve its appearance.
-The candidate needs in-game acceptance before a release is recommended.
-See [compatibility](docs/COMPATIBILITY.md).
+**0.3.0-rewrite · Forever interface 16001 · staged, not yet accepted in game.**
+This candidate independently implements the unit-frame layout, tooltip presentation
+and settings controls inside Squanch-On, using bundled, separately licensed
+libraries. It requires no ElvUI or BenikUI engine. Source/package checks have
+passed; visual equivalence, settings behavior and combat/group acceptance remain
+unverified. See [compatibility](docs/COMPATIBILITY.md).
 
 ## The reticle is the control
 
@@ -81,9 +82,11 @@ of sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-rang
 
 - **Native bags and bank:** Blizzard owns item use, sorting, deposits and tooltips;
   Squanch-On supplies the shared visual treatment.
-- **Unit frames:** original ElvUI health and power, casts, portraits, auras, group
-  headers, profiles, filters and complete native configuration, with Benik styling.
-  The duplicate alpha renderer and its partial editor have been removed.
+- **Unit frames:** independently written health/power layout, portraits, casts,
+  text, auras and group presentation built on oUF. The new editor exposes the
+  renderer's supported controls; it does not reproduce the full ElvUI editor.
+- **Tooltips:** shared presentation and default anchors while Blizzard retains
+  tooltip content, comparisons and native health handling.
 - **A consistent theme:** dark translucent panels, gold equipment-style borders,
   native action and pet bars, chat, minimap, menus and other native windows.
 - **A layout you can tune:** `/sqedit` moves and resizes supported components with
@@ -91,40 +94,35 @@ of sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-rang
 - **Optional integrations:** Plater retains nameplate behavior; DynamicCam can
   own camera framing. Both are installed separately.
 
-The exact local package contains **SquanchOn, ElvUI, ElvUI_Libraries,
-ElvUI_Options and ElvUI_BenikUI**. Original names, engine ownership and licenses
-stay intact. This is one locally assembled installation with five addon folders;
-it is not a renamed copy of those projects. The scoped runtime activates only
-ElvUI unit frames/tooltips and Benik unit decoration, leaving Squanch-On's other
-native surfaces in control. Do not substitute an unscoped stock installation.
+The public package is one complete **SquanchOn** addon folder, including its
+required oUF, LibDispel and LibStub libraries with their own notices. ElvUI and
+BenikUI implementations are not copied into the rewrite or loaded as dependencies.
+Existing resolved settings can be preserved as local data without implying that
+every imported option has been implemented.
 
-Some components and exact fonts cannot be redistributed under this project's
-MIT license. The public repository supplies the integration; the private local
-assembler takes legitimate, complete scoped originals from an existing install.
-The resulting private package must not be uploaded as a public release.
-[Component licenses and acquisition limits](docs/COMPONENT-LICENSES.md).
+A separate private overlay can retain exact locally held fonts, textures and an
+original reticle. Those files remain outside the public release. The public addon
+uses bundled/game defaults when exact media is absent; those fallbacks do not
+establish matching appearance. [Package and component boundaries](docs/COMPONENT-LICENSES.md).
 
 ## Install and configure
 
-1. Preserve the currently working addon folders and `WTF`; assemble outside the
-   active installation while the game runs.
-2. Follow [local assembly](docs/LOCAL-ASSEMBLY.md) with the original scoped
-   dependency trees. The builder checks their native identities, versions,
-   executable load graph and exact file hashes.
-3. Inspect the private candidate and migration plan. Install only with the game
-   closed so current settings have flushed and a fresh rollback can be captured.
-4. Preserve `ElvDB`, `ElvPrivateDB`, `ElvCharacterDB`, native mover/profile
-   identities and DynamicCam settings. Migrate the suite's own settings into
-   `SquanchOnDB` separately; do not feed the alpha's reduced import into ElvUI.
-5. Enable the assembled five-folder runtime, with Plater/DynamicCam if used.
-   Retire overlapping owners only as part of the backed-up, reviewed switch.
-6. Compare the actual frames and editor before accepting the candidate.
+1. Back up the working addon folders and `WTF`, then close the game normally
+   before replacing files or migrating settings.
+2. Build the public package using [the installation guide](docs/LOCAL-ASSEMBLY.md),
+   and extract its single `SquanchOn/` folder under `Interface/AddOns`.
+3. For a migrated setup, preserve the complete current configuration separately
+   and transfer it deliberately into `SquanchOnDB`; keep original ElvUI databases
+   and DynamicCam settings as rollback state. Packaging does not migrate settings.
+4. Disable overlapping frame/tooltip owners for the review profile. Optional
+   Plater and DynamicCam remain separate. Retain originals for rollback.
+5. Review actual loading, reticle controls, frame appearance, supported settings,
+   tooltips and movers before accepting the candidate.
 
-`tools/package.py` creates the public **integration-only** ZIP and checksum.
-That ZIP alone is not a complete runtime. `tools/assemble_local.py` creates the
-private complete local archive described above. Neither script installs or
-changes a running game. The old 0.1.0-alpha release remains historical and does
-not represent this equivalence work.
+`tools/package.py` creates the complete public addon ZIP and checksum. A private
+exact-media overlay is optional and separate; the former original-engine
+`tools/assemble_local.py` workflow is retired. Neither packaging nor private
+staging demonstrates successful game loading or behavioral equivalence.
 
 | Command | Purpose |
 | --- | --- |
@@ -138,10 +136,11 @@ not represent this equivalence work.
 | `/sqms camera setup` / `/sqms camera restore` | Create a separate framing profile / restore the saved source profile |
 
 Saved settings live in the normal `SavedVariables/SquanchOn.lua` file as
-`SquanchOnDB`. Native unit-frame settings stay in the original ElvUI databases.
-The public integration contains no account exports, saved macros or private
-profiles; the owner-specific assembled runtime can contain a private presentation
-seed and must remain local.
+`SquanchOnDB`, including the rewrite's unit-frame profiles. The new editor shows
+supported renderer controls and preserves other imported settings as data.
+Tooltip presentation editing needs an imported tooltip profile; Blizzard still
+owns content and comparisons. The public package includes no personal settings,
+account exports, macros or private media. [Supported controls and limits](docs/COMPATIBILITY.md#settings-and-supported-controls).
 
 ## Development and attribution
 
@@ -152,14 +151,16 @@ python tools/package.py
 ```
 
 The builder checks Lua syntax, TOC/XML dependencies and recorded reuse hashes,
-then packages tracked addon files into `dist/` with a SHA-256 checksum. GitHub
+then packages tracked addon files into `dist/` with a SHA-256 checksum.
+For isolated review before new source is tracked, explicit `--working-tree`
+includes those addon files; `--check-only` validates without creating a ZIP. GitHub
 Actions runs the same packaging checks. These checks do not certify game behavior.
 See [contribution guidance](CONTRIBUTING.md) and [compatibility](docs/COMPATIBILITY.md).
 
 Original Squanch-On code and geometric artwork use the [MIT license](LICENSE).
-Bundled PT Sans and Choonster's TargetNameplateIndicator contribution retain
-their own notices. Required original-name runtime components keep their separate
-licenses; the MIT grant does not cover them. See
+Bundled PT Sans, Choonster's TargetNameplateIndicator contribution, oUF and
+LibDispel retain their own notices; LibStub retains its public-domain declaration.
+Private local originals and media remain outside the public package. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [reuse-manifest.json](reuse-manifest.json) for exact scopes and file hashes.
 Game-provided art and gameplay images retain Blizzard's rights. This project is

@@ -1,89 +1,88 @@
-# Private local runtime assembly
+# Public installation and private exact media
 
-`tools/assemble_local.py` builds an offline, owner-local runtime ZIP from an
-explicit **already installed and scoped** original addon tree plus the SquanchOn
-ZIP produced by `tools/package.py`. It neither downloads nor installs anything.
-An upstream source archive is insufficient: it lacks the exact scoped loaders,
-owner-confinement lifecycle, private seed and expected original media.
+The standalone rewrite public package is a complete addon, with a single
+`SquanchOn/` folder. It includes its required oUF, LibDispel and LibStub libraries.
+It does not require ElvUI, ElvUI_Libraries, ElvUI_Options or ElvUI_BenikUI. The
+former original-engine `tools/assemble_local.py` is retired and refuses that
+assembly workflow. Do not use earlier five-folder instructions for this rewrite.
 
-The ZIP contains five original-name addon folders: `ElvUI`, `ElvUI_Libraries`,
-`ElvUI_Options`, `ElvUI_BenikUI`, and `SquanchOn`. Original files and attached
-licenses remain byte-identical. The private owner seed is deliberately preserved
-for this local assembly. Existing native profiles remain in their existing game
-SavedVariables; the tool does not copy, import or rewrite them.
+**The rewrite is staged for review, not yet accepted in game.** Building a ZIP or
+assembling a private overlay establishes neither visual equivalence nor correct
+combat behavior. [Compatibility and remaining acceptance](COMPATIBILITY.md)
+describes the current limits.
 
-**Do not publish, upload, attach to an issue, push to GitHub, or redistribute the
-assembled ZIP or extracted original trees.** Some included components and assets
-have redistribution restrictions. This private assembly grants no additional
-rights. Keep the output outside the repository and do not add it to a release.
+## Build the public addon
 
-From the candidate source checkout, first create the public SquanchOn package
-using the normal package workflow. The new bridge/layout files must be included
-by that workflow's tracked-file policy. Then run:
+From a source checkout with Python 3, Git and Lua 5.1 (`luac5.1`):
 
-```bash
-python3 tools/assemble_local.py \
-  --source-addons '/absolute/path/to/scoped/AddOns' \
-  --squanchon-zip '/absolute/path/to/checkout/dist/SquanchOn-0.2.0-candidate.zip' \
-  --output-dir '/absolute/path/to/new-private-assembly'
+```sh
+python3 tools/package.py
 ```
 
-The three paths above are mandatory. To retain the owner's existing reticle
-artwork, warning visuals and sound in the **private output only**, add:
+The default includes Git-tracked addon files, checks Lua syntax, resolves the
+TOC/XML load graph and validates reuse hashes. The output is
+`dist/SquanchOn-0.3.0-rewrite.zip` and its SHA-256 checksum. For isolated review
+of intentional new source before it is tracked, use:
 
-```bash
-  --reticle-addon '/absolute/path/to/installed/SquancherMouselookSuite'
+```sh
+python3 tools/package.py --working-tree --check-only
+python3 tools/package.py --working-tree
 ```
 
-This optional input reads only original `HordeReticle.lua`,
-`HordeReticleData.lua`, five named `Aura*.tga` files and `throwknife.ogg` under
-`media/horde-reticle/`, the existing world-target `media/Crosshairs/circle-dashed.tga`,
-plus their inspected license/provenance paths. The
-installed donor's `licenses/M33-GPLv2.txt` supplies the private copy of
-`LICENSE-M33-GPLv2.txt` when the header-named root file is absent. Optional
-`REPORT.md`, `licenses/HordeReticle-PROVENANCE.md` and
-`licenses/HordeReticle-ASSETS.json` are retained when present. Notices live under
-`SquanchOn/private-provenance/reticle/`; original Lua headers remain unchanged.
+`--working-tree` is explicit because it includes untracked files under the addon
+folder. Both selections reject private-media, private-provenance, LocalMedia.lua,
+original reticle data and external required addon dependencies. Neither command
+installs files, migrates settings, sends input or starts the game.
 
-The private ZIP replaces `SquanchOn/HordeReticle.lua` byte for byte, loads the
-original `HordeReticleData.lua` in place of `ReticleConfig.lua`, removes the
-unused public `ReticleConfig.lua`, and includes the exact original assets. The
-original renderer derives its media path from the addon name, so no Lua rewrite
-is needed. No other modules are imported; camera and public source files are
-unchanged. Without this flag, the supplied public package's reticle stays intact.
-These private reticle files and their provenance must not be copied into the
-public repository or uploaded with a release.
+## Install with rollback
 
-The output directory must not exist, its parent
-must already exist, and it must be outside both this repository and the source
-addon tree. The tool rejects symlink paths, unsafe ZIP members, additional addon
-roots, nonregular input files, oversized inputs, case-colliding paths and private
-WTF/SavedVariables/credential paths. Only the four explicitly selected original
-addon folders are read; adjacent addons and game state are excluded.
+1. Close the game normally so current settings flush. Back up the working addon
+   folders and `WTF` before replacing anything.
+2. Extract the public ZIP so `Interface/AddOns/SquanchOn/SquanchOn.toc` exists.
+3. Disable overlapping unit-frame and tooltip owners for the review profile.
+   Keep their original folders and settings in the backup; the rewrite does not
+   need their engines. Plater and DynamicCam remain optional separate addons.
+4. Retain existing `SquanchOnDB` when upgrading. An exact transfer from an older
+   suite or ElvUI profile is a separate, local settings migration, not a step the
+   packager performs. Do not replace current settings with an older alpha import.
+5. Review actual loading, errors, reticle controls, frames, tooltip presentation
+   and supported settings before accepting the change. Keep a direct way to
+   restore the prior addon selection and settings.
 
-Before writing output, the tool checks executable TOC and XML closure for the
-Forever `camelot` game type, including backslash paths and bounded relative XML
-references. It verifies the scoped top-level loaders, required dependencies,
-matching native core/library/options versions, Benik's minimum ElvUI version,
-original ElvUF metadata, original lazy options, required media/licenses, and the
-absence of the alpha's second active unit-frame/tooltip renderer. It rechecks
-original input bytes before output and verifies every archived file afterward.
+No personal profile, account export, saved macro or original engine seed ships in
+the public package. Original ElvUI databases can remain untouched as rollback
+state; the rewrite's profiles live inside `SquanchOnDB`.
 
-The private output directory has mode `0700`; output files have mode `0600`:
+## Optional private overlay
 
-- `SquanchOn-PRIVATE-local-runtime.zip`: deterministic ZIP metadata, five addon
-  folders and a private notice.
-- `SquanchOn-PRIVATE-local-runtime.zip.sha256`: archive checksum.
-- `manifest.json`: individual file SHA-256 hashes, byte counts, native versions
-  and the admitted executable dependency closure; no absolute input paths. It
-  separately records the unmodified public package's per-file hashes, every
-  owner-local reticle override's input/output hashes, the private TOC change,
-  the removed public configuration file and per-file source classifications.
-- `PRIVATE-NOT-FOR-REDISTRIBUTION.txt`: the private-only notice.
+Exact owner appearance can depend on locally held fonts, status-bar textures,
+ready/role/glow images or original reticle assets absent from the public package.
+A private operator tool maintained separately from this repository can prepare a
+new staging tree from explicit local sources. It must not copy the original
+ElvUI or BenikUI engines, account settings, WTF or credentials into that tree.
+There is no public original-engine assembly command to run.
 
-This is static assembly and byte verification. It does not establish successful
-game loading, visual equivalence, combat correctness or owner acceptance. Close
-the game and use a separately reviewed, rollback-protected installation procedure
-if deployment is later requested. Never run the earlier standalone-alpha private
-installer unchanged: its removal list deletes the original dependencies needed
-by this native-engine runtime.
+The overlay's asset seam is `LocalMedia.lua`, loaded immediately after `Core.lua`
+and before `Media.lua`. It sets `ns.LocalMedia` maps for `font`, `statusbar` and
+`texture`: exact labels and normalized original paths map to files beneath
+`Interface\\AddOns\\SquanchOn\\private-media\\`. Source notices and hash
+provenance stay in the private output. Without an exact mapping, the public
+resolver can use bundled/game defaults and records missing media identities;
+a fallback is not a visual match.
+
+An optional original reticle overlay replaces `HordeReticle.lua`, loads its exact
+`HordeReticleData.lua` instead of public `ReticleConfig.lua`, and retains the
+narrow original image/sound set and source notices. These original bytes and
+private provenance must not enter the public package. The original renderer's
+addon-relative media paths allow the private folder to remain `SquanchOn`.
+
+Private staging should refuse existing output paths, unsafe paths, symlinks,
+case collisions and unexpected file roots, recheck source bytes and validate the
+resulting Lua/load closure. A per-file receipt should distinguish public source,
+local assets, original reticle bytes and generated load/media maps. Preserve
+source notices without inferring further permissions. Keep the output private;
+see [component boundaries](COMPONENT-LICENSES.md).
+
+Private media assembly and settings migration are separate operations. Neither
+one certifies successful game loading, physical controls, visual equivalence,
+group/raid behavior or owner acceptance.

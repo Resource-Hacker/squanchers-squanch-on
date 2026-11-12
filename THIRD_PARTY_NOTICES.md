@@ -2,8 +2,8 @@
 
 The MIT license covers original Squanch-On contributions only. It does not
 relicense ElvUI, BenikUI, their libraries, third-party fonts or game resources.
-The public package contains the SquanchOn integration. Its original frame engines
-are required local dependencies, retaining their original names and licenses.
+The public package contains independently rewritten SquanchOn frame, tooltip and
+options behavior. ElvUI and BenikUI engines are not included or required.
 See [component licenses and local assembly](docs/COMPONENT-LICENSES.md).
 
 ## Included public material
@@ -21,22 +21,24 @@ The independently generated polygons in `media/native-indicators` have
 No historical TNI image library, PowerAuras texture library, exported aura script
 or throwknife audio is distributed here.
 
-## External originals and private local assembly
+## Bundled libraries and private local assets
 
-ElvUI and its contributors supply the original ElvUI engine, options and library
-integration. Benik supplies BenikUI. The required local core has five sibling
-folders: `SquanchOn`, `ElvUI`, `ElvUI_Libraries`, `ElvUI_Options` and
-`ElvUI_BenikUI`. A user-run assembler works locally with the user's originals;
-its private assembled output is separate from the public SquanchOn package.
+oUF is separately MIT-licensed by Trond A Ekseth, Val Voronov, Adrian L Lange
+and Rainrider; see `SquanchOn/libs/oUF/LICENSE.txt`. LibDispel is separately MIT-licensed
+by Tukui.org; see `SquanchOn/libs/LibDispel/LICENSE.txt`. LibStub is expressly placed in
+the public domain by its own source header. Exact preserved source hashes and
+the supplying distribution are recorded in `SquanchOn/libs/provenance.json` and
+`reuse-manifest.json`. The supplying ElvUI distribution does not replace these
+individual library licenses. The rewrite uses those libraries directly, without
+copying ElvUI or BenikUI frame, tooltip, options or lifecycle implementations.
 
-ElvUI's [custom license](https://github.com/tukui-org/ElvUI/blob/main/ElvUI/LICENSE.txt)
-contains a GitHub upload exception, requires retaining its addon/folder name and
-notice, and excludes third-party resources. This is not a blanket MIT license or
-permission to rename ElvUI into SquanchOn. Its libraries retain individual terms.
-BenikUI's [custom license](https://github.com/Benik/BenikUI/blob/development/ElvUI_BenikUI/LICENSE.txt)
-permits private modifications and restricts public redistribution, with no GitHub
-bundle exception. This public integration does not contain either original engine
-or their restricted assets. Local imports do not grant republication rights.
+ElvUI and BenikUI supplied behavioral and owner-settings references. Their
+custom engine licenses remain attached to those separate originals; neither
+engine is renamed or distributed here. A separate private owner-local assembly
+may supply exact locally held fonts, textures and original reticle code/assets.
+That private output retains its source notices and per-file provenance, is not a
+public release, and grants no redistribution rights. The retired original-engine
+assembler cannot build that output.
 
 Exact externally supplied fonts, textures and libraries retain their own rights.
 This public package does not supply Expressway, Homizio, Prototype, DOCK11,

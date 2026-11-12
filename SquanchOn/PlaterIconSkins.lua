@@ -77,6 +77,10 @@ function M:UnitFrame(unitFrame)
     self:Cast(unitFrame.castBar)
 end
 function M:Plate(unit)
+    -- UNIT_AURA also delivers targettarget/pet/party tokens. This API only
+    -- accepts plate tokens here; NAME_PLATE_UNIT_ADDED supplies their identity.
+    if type(unit) ~= "string" or (issecretvalue and issecretvalue(unit))
+        or not unit:match("^nameplate%d+$") then return end
     if not C_NamePlate or not C_NamePlate.GetNamePlateForUnit then return end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     if plate then self:UnitFrame(plate.unitFrame) end
@@ -129,7 +133,8 @@ events:SetScript("OnEvent", function(_, event, unit)
         for button in pairs(M.pending) do apply(button) end
         for castBar in pairs(M.pendingCasts) do M:Cast(castBar) end
     elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_AURA" then
-        if not M.installed then return end
+        if not M.installed or type(unit) ~= "string" or (issecretvalue and issecretvalue(unit))
+            or not unit:match("^nameplate%d+$") then return end
         -- A coalesced event edge sees icons created by Plater's own handler.
         M.queuedUnits = M.queuedUnits or {}
         if not M.queuedUnits[unit] then

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build the addon after bounded syntax and dependency checks, without game input."""
+import argparse
 from pathlib import Path
 import hashlib
 import json
@@ -10,12 +11,25 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON = ROOT / 'SquanchOn'
-tracked = subprocess.check_output(
-    ['git', 'ls-files', '-z', '--', 'SquanchOn/'], cwd=ROOT
-).decode().split('\0')
-files = sorted(ROOT / name for name in tracked if name)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--working-tree', action='store_true',
+                    help='Include untracked addon source for isolated candidate review; never private assembly')
+parser.add_argument('--check-only', action='store_true', help='Validate without creating an archive')
+args = parser.parse_args()
+if args.working_tree:
+    files = sorted(path for path in ADDON.rglob('*') if path.is_file() or path.is_symlink())
+else:
+    tracked = subprocess.check_output(
+        ['git', 'ls-files', '-z', '--', 'SquanchOn/'], cwd=ROOT
+    ).decode().split('\0')
+    files = sorted(ROOT / name for name in tracked if name)
 if not files:
-    raise SystemExit('Build from a Git source checkout with tracked addon files.')
+    raise SystemExit('No addon source files selected.')
+for path in files:
+    relative = path.relative_to(ADDON)
+    if any(part.casefold() in {'private-media', 'private-provenance', 'wtf', 'savedvariables', '__pycache__'}
+           for part in relative.parts) or path.name in {'LocalMedia.lua', 'HordeReticleData.lua'}:
+        raise SystemExit(f'Private assembly content cannot enter a public package: {relative}')
 for path in files:
     if path.is_symlink() or not path.is_file():
         raise SystemExit(f'Release file must be a regular file: {path.relative_to(ROOT)}')
@@ -56,8 +70,17 @@ def dependency(path):
 
 toc = ADDON / 'SquanchOn.toc'
 for line in toc.read_text().splitlines():
+    if line.startswith(('## RequiredDeps:', '## Dependencies:')):
+        required = [item.strip() for item in line.split(':', 1)[1].split(',') if item.strip()]
+        if required:
+            raise SystemExit(f'Standalone SquanchOn cannot require external addons: {required}')
+
+for line in toc.read_text().splitlines():
     if line.strip() and not line.startswith('#'):
         dependency(ADDON / line.strip().replace('\\', '/'))
+if args.check_only:
+    print(f'Checked {len(seen)} load dependencies, {len(files)} files, Lua syntax and reuse hashes.')
+    raise SystemExit(0)
 version = next(line.split(':', 1)[1].strip() for line in toc.read_text().splitlines()
                if line.startswith('## Version:'))
 output = ROOT / 'dist'

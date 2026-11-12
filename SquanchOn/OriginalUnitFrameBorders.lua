@@ -1,14 +1,12 @@
 -- SPDX-License-Identifier: MIT
--- Source-faithful Custom ElvUI Borders over the original ElvUF runtime.
--- Original adapter; no M33 runtime or ElvUI unit-frame implementation copied.
--- Load after DarkSkin.lua and the original ElvUI dependency. Never changes Benik art.
+-- Original material adapter for Squanch-On unit frames.
 local _, ns = ...
 local Borders = { attached = {}, installed = false, pending = false, records = {}, pendingFrames = {} }
 ns.OriginalUnitFrameBorders = Borders
 local records = Borders.records
-local function mainline() return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE end
+local function mainline() return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE or WOW_PROJECT_ID == WOW_PROJECT_CAMELOT end
 local function unitDB(unit)
-    local E = ElvUI and ElvUI[1]
+    local E = ns.UnitFrames and ns.UnitFrames.Engine
     return E and E.db and E.db.unitframe and E.db.unitframe.units[unit]
 end
 local function resolve(path)
@@ -22,35 +20,35 @@ local function add(id, path, styles, strata, predicate, alpha)
 end
 
 -- frameStrata1 means Inherited; frameStrata2 means BACKGROUND in original M33.
-add('ElvUF Player', 'ElvUF_Player', { 'unit' })
-add('ElvUF Target', 'ElvUF_Target', { 'unit' })
+add('SquanchOnUF Player', 'SquanchOnUF_Player', { 'unit' })
+add('SquanchOnUF Target', 'SquanchOnUF_Target', { 'unit' })
 for _, name in ipairs({ 'TargetTarget', 'TargetTargetTarget', 'Pet', 'PetTarget' }) do
-    add('ElvUF ' .. name, 'ElvUF_' .. name, nil, 'BACKGROUND')
+    add('SquanchOnUF ' .. name, 'SquanchOnUF_' .. name, nil, 'BACKGROUND')
 end
 for _, name in ipairs({ 'Focus', 'FocusTarget' }) do
-    add('ElvUF ' .. name, 'ElvUF_' .. name, nil, 'BACKGROUND', mainline)
+    add('SquanchOnUF ' .. name, 'SquanchOnUF_' .. name, nil, 'BACKGROUND', mainline)
 end
 for index = 1, 5 do
-    local stem = 'ElvUF_PartyGroup1UnitButton' .. index
-    add('ElvUF Party' .. index, stem, nil, 'BACKGROUND')
-    add('ElvUF PartyTarget' .. index, stem .. 'Target', nil, 'BACKGROUND')
-    add('ElvUF PartyPet' .. index, stem .. 'Pet', nil, 'BACKGROUND')
-    add('ElvUF Boss' .. index, 'ElvUF_Boss' .. index, nil, 'BACKGROUND', mainline)
-    add('ElvUF Arena' .. index, 'ElvUF_Arena' .. index, nil, 'BACKGROUND', mainline)
+    local stem = 'SquanchOnUF_PartyHeaderUnitButton' .. index
+    add('SquanchOnUF Party' .. index, stem, nil, 'BACKGROUND')
+    add('SquanchOnUF PartyTarget' .. index, stem .. 'Target', nil, 'BACKGROUND')
+    add('SquanchOnUF PartyPet' .. index, stem .. 'Pet', nil, 'BACKGROUND')
+    add('SquanchOnUF Boss' .. index, 'SquanchOnUF_Boss' .. index, nil, 'BACKGROUND', mainline)
+    add('SquanchOnUF Arena' .. index, 'SquanchOnUF_Arena' .. index, nil, 'BACKGROUND', mainline)
 end
-add('ElvUF Player.Power', 'ElvUF_Player_PowerBar.backdrop', nil, 'BACKGROUND', function()
+add('SquanchOnUF Player.Power', 'SquanchOnUF_Player_PowerBar.backdrop', nil, 'BACKGROUND', function()
     local db = unitDB('player')
     return mainline() and db and db.power and db.power.enable and db.power.detachFromFrame
 end)
-add('ElvUF Player.ClassPower', 'ElvUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
+add('SquanchOnUF Player.ClassPower', 'SquanchOnUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
     local db = unitDB('player')
-    return resolve('ElvUF_PlayerClassIconButton1') and db and db.classbar and db.classbar.enable and db.classbar.detachFromFrame
+    return resolve('SquanchOnUF_PlayerClassIconButton1') and db and db.classbar and db.classbar.enable and db.classbar.detachFromFrame
 end)
-add('ElvUF Player.RunePower', 'ElvUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
+add('SquanchOnUF Player.RunePower', 'SquanchOnUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
     local _, class = UnitClass('player')
-    return class == 'DEATHKNIGHT' and resolve('ElvUF_PlayerRuneButton1')
+    return class == 'DEATHKNIGHT' and resolve('SquanchOnUF_PlayerRuneButton1')
 end)
-add('ElvUF Player.AdditionalPower', 'AdditionalPowerBar.backdrop', nil, 'BACKGROUND', function()
+add('SquanchOnUF Player.AdditionalPower', 'AdditionalPowerBar.backdrop', nil, 'BACKGROUND', function()
     local db = unitDB('player')
     return mainline() and db and db.classbar and db.classbar.enable and db.classbar.detachFromFrame
 end)
@@ -100,7 +98,7 @@ local function tintNeutralEdge(texture,backdrop,ownerFrame)
         if backdrop then neutralTints[texture].fitOuter() end
         return
     end
-    local E=ElvUI and ElvUI[1]
+    local E=ns.UnitFrames and ns.UnitFrames.Engine
     local baseline=E and E.media and (backdrop and E.media.unitframeBorderColor or E.media.bordercolor)
     local setter=backdrop and 'SetBackdropBorderColor' or 'SetVertexColor'
     local getter=backdrop and 'GetBackdropBorderColor' or 'GetVertexColor'
@@ -273,7 +271,7 @@ function Borders:RefreshFrame(frame)
         -- Parent names include subregions like Castbar/ClassBarHolder, which
         -- already exist when the engine's post-style initialization callback runs.
         if record.path == name or record.path:sub(1, #name + 1) == name .. '.'
-            or name == 'ElvUF_Player' and record.id:match('^ElvUF Player%.') then refresh(record) end
+            or name == 'SquanchOnUF_Player' and record.id:match('^SquanchOnUF Player%.') then refresh(record) end
     end
     if eligible then
         local existing=ns.DarkSkin.byFrame[frame]
@@ -288,13 +286,13 @@ end
 function Borders:RefreshAll()
     self.pending = false
     for _, record in ipairs(records) do refresh(record) end
-    local E=ElvUI and ElvUI[1]
+    local E=ns.UnitFrames and ns.UnitFrames.Engine
     for _,frame in ipairs(E and E.oUF and E.oUF.objects or {}) do self:RefreshFrame(frame) end
     for frame in pairs(self.pendingFrames) do self:RefreshFrame(frame) end
 end
 function Borders:Install()
     if self.installed and self.configureHooked then return end
-    local E = ElvUI and ElvUI[1]
+    local E = ns.UnitFrames and ns.UnitFrames.Engine
     local engine = E and E.oUF
     if not engine or not engine.RegisterInitCallback or not ns.DarkSkin then return end
     if not self.installed then
@@ -310,14 +308,9 @@ function Borders:Install()
         hooksecurefunc(UF,'Configure_Power',function(_,frame) self:RefreshFrame(frame) end)
         self.powerHooked=true
     end
-    if E.Auras_CreateButton and not self.modernIconHooked then
+    if UF and UF.AuraCreated and not self.modernIconHooked then
         self.modernIconHooked=true
-        hooksecurefunc(E,'Auras_CreateButton',function(_,button)
-            local container=button and button.container
-            local owner=container and container.GetParent and container:GetParent()
-            local name=owner and owner.GetName and owner:GetName()
-            if name and name:match('^ElvUF_') then decorateAura(button) end
-        end)
+        hooksecurefunc(UF,'AuraCreated',function(_,button) decorateAura(button) end)
     end
     for _, frame in ipairs(engine.objects or {}) do self:RefreshFrame(frame) end
     self:RefreshAll()
@@ -329,7 +322,7 @@ events:RegisterEvent('PLAYER_LOGIN')
 events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent', function(_, event, addon)
     if event == 'ADDON_LOADED' then
-        if addon == 'ElvUI' or addon == 'ElvUI_Libraries' or addon == 'ElvUI_BenikUI' then Borders:Install() end
+        if addon == 'SquanchOn' then Borders:Install() end
     elseif event == 'PLAYER_LOGIN' then Borders:Install(); if Borders.installed then Borders:RefreshAll() end
     elseif Borders.installed and event == 'PLAYER_REGEN_ENABLED' then Borders:RefreshAll()
     end

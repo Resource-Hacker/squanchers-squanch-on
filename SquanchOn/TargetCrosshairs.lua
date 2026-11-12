@@ -208,7 +208,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   display:Hide()
 
   function marker:SyncTargetFade()
-    local owner = _G.ElvUF_Target
+    local owner = _G.SquanchOnUF_Target
     if not available(owner) then display:SetAlpha(1); return end
     if self.fadeOwner ~= owner then
       self.fadeOwner = owner

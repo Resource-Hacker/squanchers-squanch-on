@@ -4,6 +4,7 @@ local _, ns = ...
 local Text = {}
 ns.OwnedText = Text
 local events = CreateFrame("Frame")
+local currentTooltipRecord
 local tooltipHooked, queued = false, false
 
 local function receipts(owner)
@@ -16,26 +17,13 @@ local function receipts(owner)
     return appearance.ownedText8[owner]
 end
 
-local function comparisonHeaders()
-    local E = _G.ElvUI and _G.ElvUI[1]
-    local TT = E and E:GetModule("Tooltip", true)
-    if not TT or not TT.Initialized or not TT.db then return end
-    -- Native SetTooltipFonts sizes shopping line 1 as body text. Keep its
-    -- original item-header treatment, following the selected native profile.
-    for _, tooltip in ipairs(GameTooltip.shoppingTooltips or {}) do
-        local name = tooltip:GetName()
-        for _, side in ipairs({"Left", "Right"}) do
-            local font = name and _G[name .. "Text" .. side .. "1"]
-            if font then
-                local face, _, flags = font:GetFont()
-                if face then font:SetFont(face, TT.db.headerFontSize, flags) end
-            end
-        end
-    end
-    if not tooltipHooked then
-        tooltipHooked = true
-        hooksecurefunc(TT, "SetTooltipFonts", comparisonHeaders)
-    end
+local function setSize(record, object, key, path, wanted)
+    wanted = wanted or 8
+    if type(object) ~= "table" or type(object[key]) ~= "number" or object[key] == wanted then return end
+    -- Bounded rollback metadata: only explicit font-setting paths and numbers.
+    if #record.before >= 512 then return end
+    record.before[#record.before + 1] = {path = path, value = object[key]}
+    object[key] = wanted
 end
 
 local function restoreSizes(root, record, prefix)
@@ -61,7 +49,6 @@ end
 
 function Text:Apply()
     if InCombatLockdown() then return end
-    comparisonHeaders()
     restoreNameplates()
 end
 
