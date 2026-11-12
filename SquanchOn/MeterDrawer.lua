@@ -271,11 +271,16 @@ local function createRow(list)
         cell:SetTextColor(ROW_TEXT[1], ROW_TEXT[2], ROW_TEXT[3])
         cells[key] = cell
     end
-    local line = row:CreateTexture(nil, 'ARTWORK')
-    line:SetPoint('TOPLEFT', row, 'BOTTOMLEFT'); line:SetPoint('TOPRIGHT', row, 'BOTTOMRIGHT'); line:SetHeight(1)
-    row.line = line
-    local inner = skin.lineColor
-    line:SetColorTexture(inner[1], inner[2], inner[3], 1)
+    -- The unit frames' inner border itself (same textured bevel, same tint),
+    -- drawn inside each bar.
+    local rim = CreateFrame('Frame', nil, row)
+    rim:SetAllPoints(row); rim:EnableMouse(false); rim:SetFrameLevel(bar:GetFrameLevel() + 1)
+    text:SetFrameLevel(rim:GetFrameLevel() + 1)
+    local function outline()
+        if rim:GetWidth() > 2 and rim:GetHeight() > 2 then skin:TexturedUnitOutline(rim, 1) end
+    end
+    rim:SetScript('OnSizeChanged', outline); outline()
+    row.rim = rim
     row.bar, row.cells = bar, cells
     return row
 end
@@ -741,19 +746,12 @@ function Meter:Initialize()
     headFace:SetGradient('VERTICAL', CreateColor(.055, .055, .055, 1), CreateColor(.17, .17, .17, 1))
     local headRim = CreateFrame('Frame', nil, head)
     headRim:SetAllPoints(head); headRim:EnableMouse(false)
-    local headTop, headBottom = headRim:CreateTexture(nil, 'ARTWORK'), headRim:CreateTexture(nil, 'ARTWORK')
-    headTop:SetPoint('TOPLEFT'); headTop:SetPoint('TOPRIGHT')
-    headBottom:SetPoint('BOTTOMLEFT'); headBottom:SetPoint('BOTTOMRIGHT')
+    -- The unit frames' inner border around the header strip.
     local function paintHead()
-        local thick = 2 * PixelUtil.GetPixelToUIUnitFactor() / head:GetEffectiveScale()
-        headTop:SetHeight(thick); headBottom:SetHeight(thick)
-        local rim, lit = skin.rimColor, .70 / .90
-        headTop:SetColorTexture(rim[1] * lit, rim[2] * lit, rim[3] * lit, 1)
-        headBottom:SetColorTexture(rim[1] * lit, rim[2] * lit, rim[3] * lit, 1)
+        if headRim:GetWidth() > 2 and headRim:GetHeight() > 2 then skin:TexturedUnitOutline(headRim, 1) end
     end
     paintHead()
-    head:HookScript('OnSizeChanged', paintHead)
-    skin:OnTheme(paintHead)
+    headRim:SetScript('OnSizeChanged', paintHead)
     local headText = CreateFrame('Frame', nil, head)
     headText:SetAllPoints(head); headText:EnableMouse(false)
     self.head, self.headText, self.titles, self.dividers = head, headText, {}, {}
@@ -786,7 +784,6 @@ function Meter:Initialize()
         for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3], color[4]) end
         modeBox.text:SetTextColor(color[1], color[2], color[3], color[4])
         for _, line in ipairs(self.dividers) do paintRule(line) end
-        for _, row in ipairs(self.rows or {}) do if row.line then paintRule(row.line) end end
     end
     theme()
     skin:OnTheme(theme)
