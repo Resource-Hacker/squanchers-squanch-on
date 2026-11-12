@@ -75,22 +75,30 @@ function Drawer:FitQuestEntries()
                     self:RequestLayout()
                 end)
             end
-            -- The faded gold rule of the AddOn list, between one quest and the next.
+            -- A hairline gold rule between one quest and the next, fading out
+            -- toward both ends (two gradient halves, one screen pixel tall).
             if not record.divider then
-                local line=block:CreateTexture(nil,'ARTWORK')
-                local ok=pcall(line.SetAtlas,line,'Options_HorizontalDivider',false)
-                if not ok or not line:GetAtlas() then
-                    local c=ns.DarkSkin and ns.DarkSkin.rimColor or {.9,.684,.378}
-                    line:SetColorTexture(c[1],c[2],c[3],.5)
-                end
-                line:SetHeight(1.5)
-                record.divider=line
+                local holder=CreateFrame('Frame',nil,block)
+                holder.left=holder:CreateTexture(nil,'ARTWORK')
+                holder.right=holder:CreateTexture(nil,'ARTWORK')
+                for _,half in ipairs({holder.left,holder.right}) do half:SetTexture([[Interface\Buttons\WHITE8X8]]) end
+                holder.left:SetPoint('TOPLEFT');holder.left:SetPoint('BOTTOMRIGHT',holder,'BOTTOM')
+                holder.right:SetPoint('TOPRIGHT');holder.right:SetPoint('BOTTOMLEFT',holder,'BOTTOM')
+                record.divider=holder
             end
-            local gap=-(module.fromBlockOffsetY or 0)
-            record.divider:ClearAllPoints()
-            record.divider:SetPoint('LEFT',block,'TOPLEFT',-6,gap/2)
-            record.divider:SetPoint('RIGHT',block,'TOPRIGHT',6,gap/2)
-            record.divider:SetShown(previous~=nil)
+            do
+                local line=record.divider
+                local c=ns.DarkSkin and ns.DarkSkin.rimColor or {.9,.684,.378}
+                local clear,gold=CreateColor(c[1],c[2],c[3],0),CreateColor(c[1],c[2],c[3],.55)
+                line.left:SetGradient('HORIZONTAL',clear,gold)
+                line.right:SetGradient('HORIZONTAL',gold,clear)
+                local gap=-(module.fromBlockOffsetY or 0)
+                line:ClearAllPoints()
+                line:SetPoint('LEFT',block,'TOPLEFT',0,gap/2)
+                line:SetPoint('RIGHT',block,'TOPRIGHT',0,gap/2)
+                line:SetHeight(PixelUtil.GetPixelToUIUnitFactor()/block:GetEffectiveScale())
+                line:SetShown(previous~=nil)
+            end
             local collapsed=collapsedQuests[block.id]
             record.text:SetText(collapsed and '+' or '-')
             record.button:Show()
