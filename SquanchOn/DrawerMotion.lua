@@ -18,14 +18,15 @@
 local _, ns = ...
 local Motion = {
     enabled = true, -- false: every drawer opens instantly
-    grow = .35,     -- proxy unfolds, ease-out
-    fade = .15,     -- content fades in; owner: half a second in total
+    grow = .32,     -- the shell unfolds, easing out
+    fade = .26,     -- content fades in, starting while the shell still settles
+    lead = .6,      -- share of the unfold that passes before the content starts to appear
     minHeight = 16, -- the rim's two corner caps need this much room
 }
 ns.DrawerMotion = Motion
 -- Shipped values. Edited ones live in ns.db.windows (only keys that were
 -- changed) and are read each time a drawer opens.
-Motion.defaults = { style = 'unfold', grow = .35, fade = .15 }
+Motion.defaults = { style = 'unfold', grow = .32, fade = .26 }
 function Motion:Setting(key)
     local values = ns.db and ns.db.windows
     local value
@@ -48,7 +49,7 @@ local rimGroups = setmetatable({}, { __mode = 'k' })
 local function alphaGroup(region)
     local group = region:CreateAnimationGroup()
     local hold = group:CreateAnimation('Alpha')
-    hold:SetOrder(1); hold:SetDuration(Motion.grow); hold:SetFromAlpha(0); hold:SetToAlpha(0)
+    hold:SetOrder(1); hold:SetDuration(Motion.grow * Motion.lead); hold:SetFromAlpha(0); hold:SetToAlpha(0)
     local fade = group:CreateAnimation('Alpha')
     fade:SetOrder(2); fade:SetDuration(Motion.fade); fade:SetFromAlpha(0); fade:SetToAlpha(1)
     group:SetLooping('NONE')
@@ -58,7 +59,7 @@ end
 -- Groups are kept per frame; the durations follow the current settings.
 local function play(group)
     group:Stop()
-    group.hold:SetDuration(Motion.grow); group.fadeIn:SetDuration(Motion.fade)
+    group.hold:SetDuration(Motion.grow * Motion.lead); group.fadeIn:SetDuration(Motion.fade)
     group:Play()
 end
 
@@ -108,6 +109,18 @@ local function refreshRims(frame)
     end
 end
 
+-- The first time a window opens under the animation, the client can leave its
+-- children's anchors unresolved (measured on the character sheet: equipment
+-- slots shown at full alpha with no rectangle, so nothing drew). Re-stating
+-- the scale resolves them; done as the motion starts, so the content is in
+-- place while it fades in, and once more when it ends.
+local function settle(frame)
+    if InCombatLockdown() and frame:IsProtected() then return end
+    local scale = frame:GetScale()
+    frame:SetScale(scale * 1.0001)
+    frame:SetScale(scale)
+end
+
 local function finish(state)
     if not state.running then return end
     state.running = nil
@@ -118,16 +131,7 @@ local function finish(state)
         if group:IsPlaying() then group:Stop() end
     end
     state.rims = nil
-    -- The first time a window opens under the animation, the client can leave
-    -- its children's anchors unresolved (measured on the character sheet: the
-    -- equipment slots were shown at full alpha with no rectangle, so nothing
-    -- drew until it was reopened). Re-stating the scale resolves them.
-    local frame = state.frame
-    if frame:IsVisible() and not (InCombatLockdown() and frame:IsProtected()) then
-        local scale = frame:GetScale()
-        frame:SetScale(scale * 1.0001)
-        frame:SetScale(scale)
-    end
+    if state.frame:IsVisible() then settle(state.frame) end
     if state.frame:IsVisible() then pcall(refreshRims, state.frame) end
 end
 
@@ -183,7 +187,10 @@ local function open(frame, anchor, shell, style)
     skin:StylePanelBackground(state.fill, state.border)
 
     state.running = true
-    local elapsed, total = 0, Motion.grow + Motion.fade
+    local hold = Motion.grow * Motion.lead
+    local elapsed, total = 0, math.max(Motion.grow, hold + Motion.fade)
+    local _, _, _, fillAlpha = skin:FillColor()
+    fillAlpha = math.min(.98, tonumber(fillAlpha) or .66)
     proxy:SetScript('OnUpdate', function(_, delta)
         elapsed = elapsed + delta
         local full = shell:GetHeight()
@@ -192,6 +199,7 @@ local function open(frame, anchor, shell, style)
             return
         end
         if not state.rims then
+            settle(frame)
             -- First tick: every OnShow handler has run and created its rims.
             state.rims = {}
             for _, rim in ipairs(ignoringRims(frame)) do
@@ -201,13 +209,15 @@ local function open(frame, anchor, shell, style)
                 state.rims[#state.rims + 1] = group
             end
         end
-        if elapsed < Motion.grow then
-            local eased = 1 - (1 - elapsed / Motion.grow) ^ 3
-            proxy:SetHeight(math.max(math.min(Motion.minHeight, full), full * eased))
-        else
-            proxy:SetHeight(full)
-            proxy:SetAlpha(1 - (elapsed - Motion.grow) / Motion.fade)
-        end
+        -- Unfold: a long, soft landing (quartic ease-out).
+        local grown = math.min(1, elapsed / Motion.grow)
+        local eased = 1 - (1 - grown) ^ 4
+        proxy:SetHeight(math.max(math.min(Motion.minHeight, full), full * eased))
+        -- Hand-over: the window's own translucent shell fades in over the
+        -- stand-in. Fading the stand-in linearly would let the two fills add up
+        -- unevenly (a visible pulse); this keeps their combined opacity constant.
+        local shown = math.max(0, math.min(1, (elapsed - hold) / Motion.fade))
+        proxy:SetAlpha((1 - shown) / (1 - fillAlpha * shown))
     end)
     proxy:Show()
     play(state.group)
