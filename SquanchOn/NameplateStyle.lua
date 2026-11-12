@@ -455,12 +455,19 @@ local function updateName(frame)
     if frame.npTitleUnder ~= under then
       frame.npTitleUnder = under
       frame.Subtitle:ClearAllPoints()
-      if under then frame.Subtitle:SetPoint('TOP', frame.Health, 'BOTTOM', 0, -(tonumber(sub.barGap) or 2))
-      else frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2) end
-      NP:Font(frame.Subtitle, sub.font, under and (tonumber(sub.barSize) or 7) or sub.size, sub.outline)
+      if under then
+        -- Under a bar the title is the name's twin: same font, size and outline,
+        -- as far below the bar as the name sits above it.
+        frame.Subtitle:SetPoint('TOP', frame.Health, 'BOTTOM', 0, -(tonumber(config.name.y) or 0))
+        NP:Font(frame.Subtitle, config.name.font, config.name.size, config.name.outline)
+      else
+        frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2)
+        NP:Font(frame.Subtitle, sub.font, sub.size, sub.outline)
+      end
     end
     frame.Subtitle:SetText('<' .. line .. '>')
-    frame.Subtitle:SetTextColor(r, g, b)
+    frame.Subtitle:SetTextColor(frame.Name:GetTextColor())
+    frame.Subtitle:SetAlpha(frame.Name:GetAlpha())
   end
   frame.Subtitle:SetShown(frame.npTitle and frame.Name:IsShown())
 end
