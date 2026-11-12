@@ -130,24 +130,27 @@ function addon:CreateReticle()
 end
 
 function addon:UpdateAimPoint()
-  if self.HordeReticle and self.HordeReticle.group then
-    local x, y = aimOffsets(self.db)
-    local relativePoint = "CENTER"
-    if _G.GetCursorCenterPosition then
-      local ok, centerX, centerY = pcall(GetCursorCenterPosition)
-      if ok and type(centerX) == "number" and type(centerY) == "number" then
-        -- SetPoint offsets use the positioned frame's effective scale.
-        local scale = self.HordeReticle.group:GetEffectiveScale()
-        x, y = centerX / scale + x, centerY / scale + y
-        relativePoint = "BOTTOMLEFT"
-      end
+  local reticle = self.HordeReticle
+  if not (reticle and reticle.group) then return end
+  local x, y = aimOffsets(self.db)
+  -- The dot sits on the aim point; the emblem is centred so that its diamond
+  -- surrounds the dot (HordeReticle:DiamondOffset, scale-1 screen units).
+  local ox, oy = 0, 0
+  if reticle.DiamondOffset then ox, oy = reticle:DiamondOffset() end
+  local relativePoint, centerX, centerY = "CENTER", 0, 0
+  if _G.GetCursorCenterPosition then
+    local ok, cx, cy = pcall(GetCursorCenterPosition)
+    if ok and type(cx) == "number" and type(cy) == "number" then
+      relativePoint, centerX, centerY = "BOTTOMLEFT", cx, cy
     end
-    local reticle = self.HordeReticle
-    if reticle.aimX ~= x or reticle.aimY ~= y or reticle.aimRelativePoint ~= relativePoint then
-      reticle.group:ClearAllPoints()
-      reticle.group:SetPoint("BOTTOMLEFT", UIParent, relativePoint, x, y)
-      reticle.aimX, reticle.aimY, reticle.aimRelativePoint = x, y, relativePoint
-    end
+  end
+  -- SetPoint offsets use the positioned frame's effective scale.
+  local scale = reticle.group:GetEffectiveScale()
+  x, y = (centerX - ox) / scale + x, (centerY - oy) / scale + y
+  if reticle.aimX ~= x or reticle.aimY ~= y or reticle.aimRelativePoint ~= relativePoint then
+    reticle.group:ClearAllPoints()
+    reticle.group:SetPoint("CENTER", UIParent, relativePoint, x, y)
+    reticle.aimX, reticle.aimY, reticle.aimRelativePoint = x, y, relativePoint
   end
 end
 

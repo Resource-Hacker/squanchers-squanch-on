@@ -297,7 +297,6 @@ local function render(now, elapsed)
   mouseAnchor:ClearAllPoints()
   if module.test and _G.GetCursorCenterPosition then x, y = GetCursorCenterPosition() end
   mouseAnchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-  module:PlaceArt()
   for id, frame in pairs(module.frames) do
     if frame:IsShown() then
       transition(frame, now)
@@ -354,24 +353,15 @@ local function render(now, elapsed)
 end
 
 -- Owner: the dot is the centre. The aim point (where the engine rests the
--- locked cursor and picks mouseover) holds the dot, and the emblem is placed
--- so its diamond, texel (64.5, 46.5) of the 128-texel art, surrounds it.
-local placedX, placedY, placedScale
-function module:PlaceArt()
-  if not group then return end
+-- locked cursor and picks mouseover) holds the dot; Core's UpdateAimPoint
+-- places the emblem so its diamond, texel (64.5, 46.5) of the 128-texel art,
+-- surrounds it. This is that diamond's offset from the emblem's middle, in
+-- scale-1 screen units.
+function module:DiamondOffset()
   local shadow = self.frames["No Combat"]
-  if not shadow then return end
-  local cx, cy
-  if _G.GetCursorCenterPosition then cx, cy = GetCursorCenterPosition() end
-  local ui = UIParent:GetEffectiveScale()
-  if not (cx and cy) then cx, cy = UIParent:GetWidth() * ui / 2, UIParent:GetHeight() * ui / 2 end
-  local art = shadow:GetEffectiveScale()
-  if cx == placedX and cy == placedY and art == placedScale then return end
-  placedX, placedY, placedScale = cx, cy, art
-  local size = shadow.data.height
-  local dx, dy = size * (64.5 - 64) / 128 * art, size * (64 - 46.5) / 128 * art   -- screen pixels
-  group:ClearAllPoints()
-  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx - dx) / ui, (cy - dy) / ui)
+  if not shadow then return 0, 0 end
+  local size, art = shadow.data.height, shadow:GetEffectiveScale()
+  return size * (64.5 - 64) / 128 * art, size * (64 - 46.5) / 128 * art
 end
 
 function module:ApplyReticleScale()
@@ -387,7 +377,7 @@ function module:ApplyReticleScale()
         -- The original aura's sizes (dot 28x31, glow 50x50, whole textures).
         -- The dot IS the aim point: its diamond (texel 63.9, 46.1 in its 28x31
         -- frame) and the glow's centre (texel 64.6, 60.3 in its 50x50 frame)
-        -- sit exactly on it. PlaceArt puts the emblem's diamond around it.
+        -- sit exactly on it. Core:UpdateAimPoint puts the emblem's diamond around it.
         frame.fillWidth, frame.fillHeight = nil, nil
         local targetX, targetY = 0, 0
         local d = frame.data
@@ -400,8 +390,7 @@ function module:ApplyReticleScale()
       end
     end
   end
-  placedScale = nil
-  self:PlaceArt()
+  addon:UpdateAimPoint()
 end
 
 function module:Initialize()
