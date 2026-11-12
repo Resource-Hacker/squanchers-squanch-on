@@ -51,7 +51,7 @@ Options:Add('targetring', {
     row({ id = 'targetring.friendlyGrow', type = 'slider', label = 'Extra width', section = 'Friendly target', order = 30,
         desc = 'Screen pixels added to the fitted ring width.',
         keywords = 'friendly ring wider pixels width', path = 'friendlyGrow', min = -40, max = 80, softMin = -10, softMax = 30,
-        step = 1, format = '%d px', default = 9, drag = true, apply = refit, disabled = noFit }),
+        step = 1, format = '%d px', default = 8, drag = true, apply = refit, disabled = noFit }),
     row({ id = 'targetring.friendlyThickness', type = 'slider', label = 'Line thickness', section = 'Friendly target', order = 40,
         desc = 'Screen pixels added to the thickness of the friendly ring line, at the same radius.',
         keywords = 'friendly ring line thick thickness', path = 'friendlyThickness', min = 0, max = 12, softMax = 8,

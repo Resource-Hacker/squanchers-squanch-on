@@ -8,7 +8,7 @@ local baseline = {
   showKillShotPulse = true, killShotThreshold = 0.20,
   -- Friendly icon ring: share of the geometric fit, extra screen pixels of
   -- width, extra pixels of line thickness, and whether it hugs the icon at all.
-  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 9, friendlyThickness = 2,
+  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 8, friendlyThickness = 2,
 }
 
 local function duplicate(value)
@@ -457,7 +457,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         local dx = kind == "faction" and width * 0.04 * scale / own or 0
         local dy = kind == "faction" and height * 0.045 * scale / own or 0
         -- Owner: nine screen pixels wider than the tightened fit (5, then +4 for the solid ring).
-        local grow = limit(settings.friendlyGrow, 9, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own
+        local grow = limit(settings.friendlyGrow, 8, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own
         return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER * limit(settings.friendlyTighten, 0.75, 0.3, 2) + grow, baseSize, 1, 2048), dx, dy
       end
     end
