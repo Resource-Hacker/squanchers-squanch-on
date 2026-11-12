@@ -8,7 +8,7 @@ local baseline = {
   showKillShotPulse = true, killShotThreshold = 0.20,
   -- Friendly icon ring: share of the geometric fit, extra screen pixels of
   -- width, extra pixels of line thickness, and whether it hugs the icon at all.
-  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 9, friendlyThickness = 1,
+  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 9, friendlyThickness = 1, friendlyClassColor = true,
 }
 
 local function duplicate(value)
@@ -513,8 +513,16 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   end
 
   local function applyColor(red, green, blue, opacity)
-    ring:SetVertexColor(red, green, blue)
-    for _, edge in ipairs(ringEdges) do edge:SetVertexColor(red, green, blue) end
+    -- Owner: on a friendly player the ring takes the player's class colour.
+    local ringRed, ringGreen, ringBlue = red, green, blue
+    if marker.friendly and settings.friendlyClassColor ~= false
+      and publicQuery(UnitIsPlayer, "target") == true then
+      local _, class = UnitClass("target")
+      local color = class and not (issecretvalue and issecretvalue(class)) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+      if color then ringRed, ringGreen, ringBlue = color.r, color.g, color.b end
+    end
+    ring:SetVertexColor(ringRed, ringGreen, ringBlue)
+    for _, edge in ipairs(ringEdges) do edge:SetVertexColor(ringRed, ringGreen, ringBlue) end
     pointers:SetVertexColor(red, green, blue)
     for _, rectangle in ipairs(rectangles) do
       rectangle:SetVertexColor(red, green, blue)

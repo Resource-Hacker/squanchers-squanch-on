@@ -57,6 +57,10 @@ Options:Add('targetring', {
         keywords = 'friendly ring line thick thickness', path = 'friendlyThickness', min = 0, max = 12, softMax = 8,
         step = 1, format = '+%d px', default = 1, drag = true, apply = refit, disabled = noFit }),
 
+    row({ id = 'targetring.friendlyClassColor', type = 'toggle', label = 'Class colour', section = 'Friendly target', order = 50,
+        desc = 'On a friendly player the ring takes that player\'s class colour instead of the health colour.',
+        keywords = 'friendly ring class colour color', path = 'friendlyClassColor', default = true, apply = refit }),
+
     row({ id = 'targetring.lines', type = 'toggle', label = 'Guide lines', section = 'Guide lines', order = 10,
         desc = 'Draws thin lines from the ring to the screen edges. Same as /sqcrosshairs lines on and off.',
         keywords = 'crosshairs guide lines cross', path = 'showLines', default = false }),
