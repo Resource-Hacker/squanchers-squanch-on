@@ -236,11 +236,6 @@ Hover.builds = 0
 function Hover:Set(frame, shown)
   if not shown and frame ~= current then return end
   if shown and frame == current and current and eligible(frame) then return end
-    local token = leaving
-    C_Timer.After(0.4, function() if token == leaving and current == frame then Hover:Set(frame, false, true) end end)
-    return
-  end
-  leaving = leaving + 1
   local wanted = shown and frame and eligible(frame) and frame or nil
   if wanted == current then
     if current then paint(live, current) end
