@@ -456,7 +456,12 @@ watcher:Hide()
 function NP:HoverCheck()
   local hovered = self.hoverFrame
   if not hovered then watcher:Hide(); return end
-  if self:PlateFor('mouseover') == hovered then return end
+  if self:PlateFor('mouseover') == hovered then
+    -- The plate under the mouse gets a fresh range answer every frame (one
+    -- item/spell range call for one unit): its fade is never behind.
+    if ns.NameplateAuras then ns.NameplateAuras:Alpha(hovered, false, true) end
+    return
+  end
   self.hoverFrame = nil
   watcher:Hide()
   ns.NameplateStyle:SetHover(hovered, false)
@@ -483,7 +488,7 @@ function NP:Tick()
   for frame in pairs(self.active) do
     -- Threat and "not in combat" follow the fight without a reliable event.
     if self.combat and frame.npKind == 'enemynpc' then Style:Color(frame) end
-    if Auras then Auras:Alpha(frame, false, frame.npRangeSlot == slot or frame == hovered) end
+    if Auras then Auras:Alpha(frame, false, frame.npRangeSlot == slot or frame == hovered or frame == self.targetFrame) end
   end
 end
 
@@ -662,6 +667,7 @@ events:SetScript('OnEvent', function(_, event)
       local left = NP.hoverFrame
       NP.hoverFrame = frame
       watcher:SetShown(frame ~= nil)
+      if frame and ns.NameplateAuras then ns.NameplateAuras:Alpha(frame, true, true) end
       if frame then ns.NameplateStyle:SetHover(frame, true) end
       if ns.NameplateEnhance then
         if left then ns.NameplateEnhance:Emphasis(left) end
