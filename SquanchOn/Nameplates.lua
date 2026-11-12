@@ -509,6 +509,8 @@ function NP:TargetChanged()
     local hovered = self.hoverFrame
     C_Timer.After(0, function() if NP.hoverFrame == hovered then ns.NameplateStyle:SetHover(hovered, true) end end)
   end
+  -- The mouseover ring hands over to (or takes over from) the target ring at once.
+  if ns.NameplateHoverRing then ns.NameplateHoverRing:Set(self.hoverFrame, self.hoverFrame ~= nil) end
   local Style = ns.NameplateStyle
   for _, changed in ipairs({ previous or false, frame or false }) do
     if changed and self.active[changed] then

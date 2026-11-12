@@ -16,6 +16,12 @@ Options:Category({ id = 'targetring', parent = 'nameplates', title = 'Target rin
 local function style() marker():ApplyStyle() end
 -- Friendly-fit values are read at the next target refresh.
 local function refit() local ring = marker(); ring:ApplyStyle(); ring:RefreshTarget() end
+-- The mouseover ring and its preview plate follow at once.
+local function hover()
+    if ns.NameplateHoverRing then ns.NameplateHoverRing:Refresh() end
+    if ns.NameplatePreview then ns.NameplatePreview:Refresh() end
+end
+local function noHover() local ring = marker(); return not (ring and ring.db.hoverRing ~= false) end
 local function noFit() local ring = marker(); return not (ring and ring.db.friendlyFit ~= false) end
 local function row(spec)
     spec.root, spec.combatSafe = 'targetring', true
@@ -78,6 +84,19 @@ Options:Add('targetring', {
     row({ id = 'targetring.friendlyNpcBarLook', type = 'toggle', label = 'Health bar look on NPCs', section = 'Friendly target', order = 65,
         desc = 'Off keeps the plain ring on friendly NPCs, coloured white to orange to red by health.',
         keywords = 'friendly npc ring bar look texture colour color nameplate health', path = 'friendlyNpcBarLook', default = false, apply = refit }),
+
+    row({ id = 'targetring.hoverRing', type = 'toggle', label = 'Health ring on mouseover', section = 'Friendly mouseover', order = 10,
+        desc = 'While the mouse is over a friendly player who is not your target, the nameplate shows the faction emblem inside a ring that is the health bar: full at 100%, emptying clockwise from the top, class colour shifting to orange and red.',
+        keywords = 'friendly mouseover hover ring radial health emblem faction', path = 'hoverRing', default = true, apply = hover }),
+    row({ id = 'targetring.hoverRingWidth', type = 'choice', label = 'Line width', section = 'Friendly mouseover', order = 20,
+        desc = 'Thickness of the ring line. Same as target ring follows the line the ring takes once the player is selected.',
+        keywords = 'friendly mouseover hover ring line width thick thickness', path = 'hoverRingWidth',
+        values = { 0, 3, 5, 8, 12 }, labels = { 'Same as target ring', 'Thin', 'Medium', 'Thick', 'Heavy' },
+        default = 0, apply = hover, disabled = noHover }),
+    row({ id = 'targetring.hoverRingTrack', type = 'slider', label = 'Empty part opacity', section = 'Friendly mouseover', order = 30,
+        desc = 'How solid the missing-health part of the ring is drawn, in the colour of the nameplate bar background.',
+        keywords = 'friendly mouseover hover ring track background empty opacity', path = 'hoverRingTrack', min = 0, max = 1, step = 0.01,
+        format = '%.0f%%', scale = 100, default = 0.4, drag = true, apply = hover, disabled = noHover }),
 
     row({ id = 'targetring.hostilePlayerBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Hostile target', order = 10,
         desc = 'On a hostile player the ring takes the texture and colour of the nameplate health bar. The execute pulse and range marks stay as they are.',

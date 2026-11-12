@@ -59,6 +59,7 @@ UnitFrameAuras.lua
 PlayerIdleFade.lua
 Nameplates.lua
 NameplateStyle.lua
+NameplateHoverRing.lua
 NameplateCast.lua
 NameplateAuras.lua
 NameplateEnhance.lua

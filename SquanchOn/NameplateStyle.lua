@@ -447,7 +447,8 @@ local function updateIndicators(frame)
   local indicators, kind = settings.indicators, frame.npKind
   local config = settings.types[kind]
   local bar = config and barShown(frame, settings, config)
-  local art = bar and frame.npFaction and FACTION[frame.npFaction]
+  -- A hovered friendly player carries the emblem without the bar (NameplateHoverRing.lua).
+  local art = (bar or frame.npHoverRing) and frame.npFaction and FACTION[frame.npFaction]
   local wanted = art and (kind == 'friendlyplayer' and indicators.friendlyFaction or kind == 'enemyplayer' and indicators.enemyFaction)
   if wanted and kind == 'enemyplayer' and IsInInstance then
     -- No enemy emblem in battlegrounds and arenas.
@@ -493,6 +494,7 @@ function Style:SetHover(frame, shown)
   local selected = NP.targetFrame == frame and ring and ring.SetHovered and ring.barLookActive
   if ring and ring.SetHovered then ring:SetHovered(frame, shown and selected and true or false) end
   frame.Hover:SetShown(shown and not selected and frame.Health:IsShown() or false)
+  if ns.NameplateHoverRing then ns.NameplateHoverRing:Set(frame, shown) end
 end
 
 -- Layout ----------------------------------------------------------------------
@@ -539,8 +541,9 @@ function Style:Layout(frame)
   local nameFont = frame.npKind == 'enemynpc' and not bar and settings.bigName or config.name
   place(frame.Name, { font = nameFont.font, size = nameFont.size, outline = nameFont.outline }, health)
   frame.Name:ClearAllPoints()
-  -- Without a bar the name sits ten units above the plate's centre.
-  if bar then frame.Name:SetPoint('BOTTOM', health, 'TOP', 0, config.name.y or 0)
+  -- Without a bar the name sits ten units above the plate's centre; under the
+  -- mouseover ring it keeps the place it has above a bar, clear of the emblem.
+  if bar or frame.npHoverRing then frame.Name:SetPoint('BOTTOM', health, 'TOP', 0, config.name.y or 0)
   else frame.Name:SetPoint('CENTER', frame, 'CENTER', 0, 10) end
   place(frame.Level, config.level, health)
   place(frame.Percent, config.percent, health)

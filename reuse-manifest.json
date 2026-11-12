@@ -574,7 +574,7 @@
       "files": [
         {
           "path": "SquanchOn/asset-source/generate-frame-media.py",
-          "sha256": "3f18cc72bf433f3a5a75758ea42f172976e6663e7b3990807f6455d0bff34b06"
+          "sha256": "8ec2fb2192d131e52764acaf44a8677d49d5dba7fd3edd362ce9b068af1b4cec"
         },
         {
           "path": "SquanchOn/media/textures/bar-smooth.tga",
@@ -599,7 +599,7 @@
       ]
     },
     {
-      "name": "Selectable status-bar and border textures, bar-look target rings",
+      "name": "Selectable status-bar and border textures, bar-look target rings and mouseover ring segments",
       "license": "MIT",
       "source": "This repository",
       "modifications": "Generated numerically by asset-source/generate-frame-media.py (hash under Unit-frame media) from original formulas. No image is read or copied; the ring-default-* profile uses eight grey levels measured from the client's standard status-bar texture (Interface\\TargetingFrame\\UI-StatusBar), written as numbers in the generator.",
@@ -847,6 +847,166 @@
         {
           "path": "SquanchOn/media/Crosshairs/ring-soft-8.tga",
           "sha256": "664537de2e5c2cd32b6711df2a3124ea2ecafda2494be00574ee16dc4885a3c9"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-bevel-12.tga",
+          "sha256": "7c26e5afee78d1c194662bee3e91d315d4cfdde0a0ae0054a64427838115eb27"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-bevel-3.tga",
+          "sha256": "b4fc24c7aced7ef7c77446aec453d546446d7e0b2224e7e943c9df0ff367492e"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-bevel-5.tga",
+          "sha256": "60566f85c21d87a64928ad852c733c3ea37e803c3b1e6f2348d0094067730389"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-bevel-8.tga",
+          "sha256": "12f77ee591cb07a0d366e944daeadfae040c2599d002510511ef72f81d030bd6"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-deep-12.tga",
+          "sha256": "33ba517710e044b054560f0f64294d81e84da5f06e27dbf6c4d40203c1e0afe9"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-deep-3.tga",
+          "sha256": "8b18315b7bd742d117b4ff764fcd68c1c0fcd8ea1d7b4895979d21d4a10ec75d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-deep-5.tga",
+          "sha256": "e9786cc0eebeb91b65933a2fbfc8d516c58d950bbe893abe0ed6a58347dc0e92"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-deep-8.tga",
+          "sha256": "a806fc3446878861bba001e3d03335f2fcdddc26180d4dee2a84c14f1a68fe0e"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-default-12.tga",
+          "sha256": "6d010127cf19b6b3ba3354640bc0f280d34a378cc67b6bc545687184a208f632"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-default-3.tga",
+          "sha256": "ae5af721ebe26f48f6712484fec27273227f7f7f91697003200b75bb06aee21d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-default-5.tga",
+          "sha256": "c00efdc8f85306bfc8305103b1f89e06fc4e4c01dc78e31bc402d8cde0c524ef"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-default-8.tga",
+          "sha256": "ce2842b247b310c8d3fc02723ae4b9af07b9f0fda29a9efea70d8cc466764b97"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-flat-12.tga",
+          "sha256": "6d22c7972e56d2b451bcd10e57161b504f4bc4583a75e9fffe45517f2409bbec"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-flat-3.tga",
+          "sha256": "9ffbfdb091fe035789d7e2744177e4f81d9b8125935bee57945dbdde6e09404d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-flat-5.tga",
+          "sha256": "a36323613da4faa1699888698a0fe56540bf4e843b619467c0684f4932061d28"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-flat-8.tga",
+          "sha256": "49c0bbb0309bf95299c8011efc303ba95f31394c6e825690d1f512cbd4c81376"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-glass-12.tga",
+          "sha256": "473389c02faac58a46b7ecce24ea9b8b5d0e05cb097db413fe0d8314e655b20c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-glass-3.tga",
+          "sha256": "08f0cd2d79d1c8543e3bbc0c8d70cb92292f253f2f278a3197da7e964297d7ff"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-glass-5.tga",
+          "sha256": "62b71a853b4e1ddafe51ff2002fbc46c8f16b5ff25d3552749f5cb5c8bb9000a"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-glass-8.tga",
+          "sha256": "386e1c3f6e3b9fe195fd801ba2ce4b0c65eadd2b4f42d7e402e8a4584bdb0e82"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-gloss-12.tga",
+          "sha256": "b22d1180e18dba3614db3ac28f399df06287c6c9c9cd74a5674363491cd2406e"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-gloss-3.tga",
+          "sha256": "e35961eaab40ee52193460f48c3ea6978efb71bc75198ac129ad1e5cf28987bb"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-gloss-5.tga",
+          "sha256": "5b4e96643fddac57aa2b7abd9382e51c177b93bd94922f4396701dc4be9127ef"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-gloss-8.tga",
+          "sha256": "13dc41d0d4785ac894f0565c47e1656de62482262feac8d0ce3eb384ab264e17"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-groove-12.tga",
+          "sha256": "fe3af92032af95f57707f7da477f81f8f327f0e814863591d570a358e7585cd0"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-groove-3.tga",
+          "sha256": "85a2cf66e67d02b1a18adfec9848c83c9abd48a73b79b47e9b71babf68b4b6ff"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-groove-5.tga",
+          "sha256": "4ea23df28766632ed9b19958d739221a7d8ad7ca447cc8c1b84f5d23abeb4a8b"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-groove-8.tga",
+          "sha256": "56705639516e3a543435fd4d08fa76579b167b9e23a1eafd4049977bc37aca64"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-round-12.tga",
+          "sha256": "c544ef6e930253de9dc447a12300f10120aa753fd406ad6873a61997f1497493"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-round-3.tga",
+          "sha256": "29ca30f14d3b04bd75e215ca370d1600c766590535a3ece790a40c848b8f8cdc"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-round-5.tga",
+          "sha256": "6c320b84baf85ec881e30c614f70d2e4270fe3bc46be1e1ca62bb4748e58ec1e"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-round-8.tga",
+          "sha256": "a9109a67e62d72275477e0095d754b82287e543cea4795ef047d20a73cd2ca9c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-smooth-12.tga",
+          "sha256": "798cd8803662589d395559ecf104e264114ec3ae3578f17236a41ddf32b5f2f0"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-smooth-3.tga",
+          "sha256": "4639aff9b24411c1c0c492c28cdecd02ff9392e4ce182488a18ea4928f6a8f65"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-smooth-5.tga",
+          "sha256": "b02d25dbb665b35611a4c9ab5431ca8eeed1fa2144e626560f14489a88bdf40a"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-smooth-8.tga",
+          "sha256": "d4f5de675d4a4204eacbb53476c1c0acc7fbeb20be2f0ae224d1ef597338c72b"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-soft-12.tga",
+          "sha256": "6b1eae5e4a57a356e9e609c3580154cef0a439beedc738d0a6f917f0251f0a61"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-soft-3.tga",
+          "sha256": "0a0858cc4685c1bf9425a7725b2da0398683c56dfbd46d7b661382471caceb98"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-soft-5.tga",
+          "sha256": "2e5adc351c4ff9e365d71a075021703113c298bc6fbfd76b051d86773ed3e664"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/segment-soft-8.tga",
+          "sha256": "abbc6e6483b765c468da20df97a5999ef06ceb46be117f886eb45c316536c499"
         }
       ]
     },

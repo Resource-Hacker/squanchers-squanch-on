@@ -51,6 +51,7 @@ local CASES = {
   case('Friendly NPC, target', { target = true }, FRIEND),
   case('Friendly player', nil, HORDE),
   case('Friendly Horde, target', { target = true }, HORDE),
+  case('Friendly player, mouseover', { hover = true, health = 60 }, HORDE),
   case('Other target, out of range', { otherTarget = true, inRange = false }),
   case('Aggro flash (loops)', { playerCombat = true, combat = true, threat = 3, zone = 'party', aggroLoop = true }),
   case('Cast finished (flash, fade)', { playerCombat = true, combat = true, threat = 0, cast = { name = 'Fireball', icon = 135812, time = 1.5 } }),
@@ -92,6 +93,7 @@ local function paint(frame, enhanced)
     cast:Hide()
   end
   if ns.NameplateAuras then ns.NameplateAuras:Refresh(frame); ns.NameplateAuras:Alpha(frame, true) end
+  if ns.NameplateHoverRing then ns.NameplateHoverRing:Preview(frame) end
   if Enhance then Enhance.force = nil end
 end
 
