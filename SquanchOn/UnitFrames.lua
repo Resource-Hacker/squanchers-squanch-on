@@ -1262,6 +1262,17 @@ function UF:RangeState(unit)
     if ok and public(inRange) and public(checked) and checked==true then
         if inRange==true then return true elseif inRange==false then return false end
     end
+    -- No spell and no group answer (e.g. a class with no friendly spell looking
+    -- at another player): use the range library's distance estimate. Past its
+    -- farthest check (about 28 yards or more) the unit counts as out of range.
+    local library=kind and LibStub and LibStub('LibRangeCheck-3.0',true)
+    if library and library.GetRange then
+        local called,minimum,maximum=pcall(library.GetRange,library,unit)
+        if called and public(minimum) and public(maximum) then
+            if type(maximum)=='number' then return true end
+            if type(minimum)=='number' and minimum>=28 then return false end
+        end
+    end
     return nil
 end
 
