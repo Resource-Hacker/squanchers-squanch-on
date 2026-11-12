@@ -493,19 +493,30 @@ end
 -- come back unreadable for players.
 local watcher = CreateFrame('Frame')
 watcher:Hide()
+-- One path for every change of the hovered plate, whoever notices it (the
+-- mouseover event, or the watcher when a unit walks under a held-open gate or
+-- the mouse leaves), so the ring's fade in and out is always the same.
+function NP:HoverTo(frame)
+  local left = self.hoverFrame
+  if frame == left then return end
+  if left then ns.NameplateStyle:SetHover(left, false) end
+  self.hoverFrame = frame
+  if frame and ns.NameplateAuras then ns.NameplateAuras:Alpha(frame, true, true) end
+  if frame then ns.NameplateStyle:SetHover(frame, true) end
+  if ns.NameplateEnhance then
+    if left then ns.NameplateEnhance:Emphasis(left) end
+    if frame then ns.NameplateEnhance:Emphasis(frame) end
+  end
+end
 function NP:HoverCheck()
   local hovered = self.hoverFrame
-  if not hovered then watcher:Hide(); return end
-  if self:PlateFor('mouseover') == hovered then
-    -- The plate under the mouse gets a fresh range answer every frame (one
-    -- item/spell range call for one unit): its fade is never behind.
-    if ns.NameplateAuras then ns.NameplateAuras:Alpha(hovered, false, true) end
-    return
-  end
-  self.hoverFrame = nil
-  watcher:Hide()
-  ns.NameplateStyle:SetHover(hovered, false)
-  if ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(hovered) end
+  -- Runs each frame only while a plate is hovered or the mouseover gate is held.
+  if not hovered and not self.gate then watcher:Hide(); return end
+  local now = self:PlateFor('mouseover')
+  if now ~= hovered then self:HoverTo(now); return end
+  -- The plate under the mouse gets a fresh range answer every frame (one
+  -- item/spell range call for one unit): its fade is never behind.
+  if hovered and ns.NameplateAuras then ns.NameplateAuras:Alpha(hovered, false, true) end
 end
 watcher:SetScript('OnUpdate', function() NP:HoverCheck() end)
 local ticker
@@ -514,6 +525,7 @@ function NP:Tick()
   local gate = ns.IsNativeMouseoverOpen and ns:IsNativeMouseoverOpen() and true or false
   if gate ~= self.gate then
     self.gate = gate
+    if gate then watcher:Show() end
     if ns.NameplateAuras then ns.NameplateAuras:SetMouse(gate) end
     if self.hoverFrame and ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(self.hoverFrame) end
   end
@@ -701,19 +713,8 @@ events:SetScript('OnEvent', function(_, event)
   elseif event == 'PLAYER_TARGET_CHANGED' then
     NP:TargetChanged()
   elseif event == 'UPDATE_MOUSEOVER_UNIT' then
-    local frame = NP:PlateFor('mouseover')
-    if frame ~= NP.hoverFrame then
-      if NP.hoverFrame then ns.NameplateStyle:SetHover(NP.hoverFrame, false) end
-      local left = NP.hoverFrame
-      NP.hoverFrame = frame
-      watcher:SetShown(frame ~= nil)
-      if frame and ns.NameplateAuras then ns.NameplateAuras:Alpha(frame, true, true) end
-      if frame then ns.NameplateStyle:SetHover(frame, true) end
-      if ns.NameplateEnhance then
-        if left then ns.NameplateEnhance:Emphasis(left) end
-        if frame then ns.NameplateEnhance:Emphasis(frame) end
-      end
-    end
+    NP:HoverTo(NP:PlateFor('mouseover'))
+    watcher:SetShown(NP.hoverFrame ~= nil or NP.gate == true)
   else
     -- Combat edge: enemy and friendly NPC bars change height.
     NP.combat = event == 'PLAYER_REGEN_DISABLED'
