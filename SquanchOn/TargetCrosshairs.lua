@@ -430,8 +430,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         -- (measured about 4% of its size on screen); centre on the art.
         local dx = kind == "faction" and width * 0.04 * scale / own or 0
         local dy = kind == "faction" and height * 0.045 * scale / own or 0
-        -- Owner: five screen pixels wider than the tightened fit.
-        local grow = 5 * PixelUtil.GetPixelToUIUnitFactor() / own
+        -- Owner: nine screen pixels wider than the tightened fit (5, then +4 for the solid ring).
+        local grow = 9 * PixelUtil.GetPixelToUIUnitFactor() / own
         return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER * 0.75 + grow, baseSize, 1, 2048), dx, dy
       end
     end
