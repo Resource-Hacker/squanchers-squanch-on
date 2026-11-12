@@ -11,6 +11,7 @@ or required. See [component licenses](docs/COMPONENT-LICENSES.md).
 | Component | Scope and attribution | Terms |
 | --- | --- | --- |
 | TargetNameplateIndicator compatibility code | Port originally based on v1.67; copyright 2013–2016 Choonster. Adapted namespace, event lifecycle, configuration and artwork mapping. [Upstream](https://github.com/Choonster-WoW-AddOns/TargetNameplateIndicator). | [Full MIT notice](LICENSES/TargetNameplateIndicator-LICENSE.txt). Its historical image library is excluded; the code license does not license those images. |
+| Camera settings model | `SquanchOn/Camera.lua` ports parts of [DynamicCam](https://github.com/Mpstark/DynamicCam) 2.21.5: the setting and situation catalogue, wheel-increment rules, situation precedence, transition and zoom-restore rules. Copyright 2016–2020 Michael P. Starkweather (mpstark), 2020–2026 LudiusMaximus. The driver, zoom and rotation tracking, condition model, import and settings page are original. | [MIT](LICENSES/DynamicCam-MIT.txt) |
 | PT Sans Narrow Bold 2.003 | Unmodified `SquanchOn/media/fonts/ptsansnarrow_bold.ttf`; copyright 2010 ParaType Ltd.; Alexandra Korolkova, Olga Umpeleva and Vladimir Yefimov. Exact file matches [this pinned source](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ElvUI/Game/Shared/Media/Fonts/PTSansNarrow.ttf). | [SIL OFL 1.1](LICENSES/PTSansNarrow-OFL.txt), also beside the font. Reserved names PT Sans and ParaType; the font remains OFL. SHA-256 `efc8710f9eb3e41405a7efaf9aba701e41dc0e9bcabd3aa0b08f111441fb247d`. |
 
 `TargetCrosshairs.lua`, its numerical circle/arrow artwork and generator are
@@ -20,6 +21,14 @@ The independently generated polygons in `SquanchOn/media/native-indicators` have
 [source and provenance](SquanchOn/asset-source/NATIVE-INDICATORS-PROVENANCE.md).
 No historical TNI image library is distributed here. The Horde reticle's own
 GPL-2.0 data and media are listed in their section below.
+
+## Camera
+
+`SquanchOn/Camera.lua` replaces the DynamicCam addon for this package. It contains
+logic ported from DynamicCam (MIT; Michael P. Starkweather and LudiusMaximus,
+license text in `SquanchOn/LICENSES/DynamicCam-MIT.txt`) alongside original code; the
+file header lists which is which. DynamicCam's libraries (LibCamera, LibEasing,
+Ace3), options, curve editor and interface-hiding module are not included.
 
 ## Bundled libraries and references
 
@@ -49,8 +58,8 @@ bundled fonts and textures described below take their place. Blizzard paths
 reference installed game resources, including the ready-check icons; no
 extracted Blizzard images, fonts, sounds, FrameXML or binaries are bundled.
 
-Plater and DynamicCam remain optional external addons with their own authors,
-licenses and update ownership. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
+Plater remains an optional external addon with its own authors, license and
+update ownership; DynamicCam is no longer used. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
 Bagnon and Semlar's Crosshairs supplied functional/settings references; their
 complete implementations and assets are not part of this package. Their
 individual licenses differ; this is a statement of package contents, not a blanket
@@ -84,3 +93,34 @@ close to, not identical with, that setup.
 
 `SquanchOn/media/textures` (glow edge, status-bar face, role marks) are original numerical
 constructions produced by `SquanchOn/asset-source/generate-frame-media.py`, MIT.
+
+## Selectable media library
+
+The fonts below are offered in the font pickers. Each is the unmodified static
+file published by its project (no instancing, subsetting or renaming) and sits
+in `SquanchOn/media/fonts` beside its own license text. Hashes are in `reuse-manifest.json`.
+
+| Font | Copyright and source | Terms |
+| --- | --- | --- |
+| Barlow Condensed SemiBold 1.408 | Copyright 2017 The Barlow Project Authors. [Upstream](https://github.com/jpt/barlow); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/barlowcondensed/BarlowCondensed-SemiBold.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/BarlowCondensed-OFL.txt`. No Reserved Font Name. |
+| Saira Condensed SemiBold 0.072 | Copyright 2016 The Saira Project Authors. [Upstream](https://github.com/Omnibus-Type/Saira); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/sairacondensed/SairaCondensed-SemiBold.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/SairaCondensed-OFL.txt`. Reserved Font Name "Saira". |
+| Archivo Narrow SemiBold 3.002 | Copyright 2019 The Archivo Narrow Project Authors. [Upstream](https://github.com/Omnibus-Type/ArchivoNarrow); [file](https://raw.githubusercontent.com/Omnibus-Type/ArchivoNarrow/master/fonts/ttf/ArchivoNarrow-SemiBold.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/ArchivoNarrow-OFL.txt`. No Reserved Font Name. |
+| Oswald Medium 4.103 | Copyright 2016 The Oswald Project Authors. [Upstream](https://github.com/googlefonts/OswaldFont); [file](https://raw.githubusercontent.com/googlefonts/OswaldFont/main/fonts/ttf/Oswald-Medium.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/Oswald-OFL.txt`. No Reserved Font Name. |
+| Bebas Neue Regular 2.000 | Copyright 2010 Dharma Type; 2019 The Bebas Neue Project Authors. [Upstream](https://github.com/dharmatype/Bebas-Neue); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/BebasNeue-OFL.txt`. No Reserved Font Name. |
+| Cinzel Bold 2.000 | Copyright 2020 The Cinzel Project Authors. [Upstream](https://github.com/NDISCOVER/Cinzel); [file](https://raw.githubusercontent.com/NDISCOVER/Cinzel/master/fonts/ttf/Cinzel-Bold.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/Cinzel-OFL.txt`. No Reserved Font Name. |
+| Metamorphous Regular 1.001 | Copyright 2011-2012 Sorkin Type Co. [Upstream](https://github.com/SorkinType/Metamorphous); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/metamorphous/Metamorphous-Regular.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/Metamorphous-OFL.txt`. Reserved Font Name "Metamorphous". |
+| Silkscreen Regular 1.001 | Copyright 2001 The Silkscreen Project Authors. [Upstream](https://github.com/googlefonts/silkscreen); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/silkscreen/Silkscreen-Regular.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/Silkscreen-OFL.txt`. No Reserved Font Name. |
+| Pixelify Sans Regular 1.000 | Copyright 2021 The Pixelify Sans Project Authors. [Upstream](https://github.com/eifetx/Pixelify-Sans); [file](https://raw.githubusercontent.com/eifetx/Pixelify-Sans/main/fonts/ttf/PixelifySans-Regular.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/PixelifySans-OFL.txt`. No Reserved Font Name. |
+| Share Tech Mono Regular 1.003 | Copyright 2012 Carrois Type Design, Ralph du Carrois. [Upstream](https://github.com/google/fonts/tree/main/ofl/sharetechmono); [file](https://raw.githubusercontent.com/google/fonts/main/ofl/sharetechmono/ShareTechMono-Regular.ttf). | SIL OFL 1.1, `SquanchOn/media/fonts/ShareTechMono-OFL.txt`. Reserved Font Name "Share". |
+
+The selectable status-bar faces (`SquanchOn/media/textures/bar-*.tga`) and borders
+(`SquanchOn/media/borders`) are original numerical constructions produced by
+`SquanchOn/asset-source/generate-frame-media.py`, MIT. LibSharedMedia-3.0 is not
+bundled; when another addon has loaded it, Squanch-On registers these fonts and
+textures with it and lists what it offers.
+
+## Range item identifiers
+
+`Range.lua` contains item identifiers taken from the range tables of
+LibRangeCheck-3.0 (MIT, The WoWUIDev Community), which is also bundled in
+`libs/LibRangeCheck-3.0` with its license.

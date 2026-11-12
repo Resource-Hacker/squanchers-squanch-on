@@ -36,6 +36,22 @@
       ]
     },
     {
+      "name": "Camera settings model (parts ported from DynamicCam 2.21.5)",
+      "license": "MIT",
+      "source": "https://github.com/Mpstark/DynamicCam",
+      "modifications": "Camera.lua is a new file. Ported from DynamicCam: the standard-setting and built-in situation catalogue with priorities, wheel-increment rules (MouseZoom.lua), precedence of situation values and curves and the toggle-group transitions (ZoomBasedSettings.lua), situation selection, delay, zoom-action and zoom-restore rules (SituationManager.lua). Original: self-terminating driver, zoom and rotation tracking, data-only condition model, CVar write path, import and options page. No DynamicCam library, options or interface-hiding code is included.",
+      "files": [
+        {
+          "path": "Camera.lua",
+          "sha256": "0e35237712166c355d86d97c404520975c075633b1da49dd1ef341156cb38a9c"
+        },
+        {
+          "path": "LICENSES/DynamicCam-MIT.txt",
+          "sha256": "d073ad048c4a17bfb5a1c69eea17c60f262aa6f542a8ebb10c81e07c6876e6b1"
+        }
+      ]
+    },
+    {
       "name": "Original geometric artwork",
       "license": "MIT",
       "source": "This repository",
@@ -462,7 +478,7 @@
       "files": [
         {
           "path": "asset-source/generate-frame-media.py",
-          "sha256": "9c7883a75e0f06c25f870744132b5055fc0219393c44bcd7fbcdd2d49fde2b89"
+          "sha256": "01c010550eb1f93d392d93b17aa34c2d652dc8a0eb2469d731e22ee8665bdf73"
         },
         {
           "path": "media/textures/bar-smooth.tga",
@@ -483,6 +499,252 @@
         {
           "path": "media/textures/role-tank.tga",
           "sha256": "d3f2219fddc08f00ffa80153c9bec4c5add1856be0cfa844a206c131052449e2"
+        }
+      ]
+    },
+    {
+      "name": "Selectable status-bar and border textures",
+      "license": "MIT",
+      "source": "This repository",
+      "modifications": "Generated numerically by asset-source/generate-frame-media.py (hash under Unit-frame media); original formulas, no source images.",
+      "files": [
+        {
+          "path": "media/textures/bar-bevel.tga",
+          "sha256": "953a20253ba74a2b62aa8cb34cd944d77cba53b9fdaf27c3dd3578d2d19ce5c6"
+        },
+        {
+          "path": "media/textures/bar-brushed.tga",
+          "sha256": "e914e4ec28af7a41d876ddffd417e5cee5a3049f984eba10fc1f0d7029bd80bd"
+        },
+        {
+          "path": "media/textures/bar-deep.tga",
+          "sha256": "c96ccb1b9001368cd3fc0dec43beb7efdc3b091c099a0a7aebb7dbca2c733765"
+        },
+        {
+          "path": "media/textures/bar-fade.tga",
+          "sha256": "098cf94439e60c5fcab9eac1a2d182619c5c5ff2d054644081f8300eaa935088"
+        },
+        {
+          "path": "media/textures/bar-glass.tga",
+          "sha256": "41d50cb78cf987e63cee3fb3199b58b1782c7041e217ef5d60d38319a43513c6"
+        },
+        {
+          "path": "media/textures/bar-gloss.tga",
+          "sha256": "c248ec015de3ec6885755d637159c6be5a3d7521150f86876198f2bdeb5c11dd"
+        },
+        {
+          "path": "media/textures/bar-groove.tga",
+          "sha256": "cc6079a46f3d48f7a6bd9c46b97ef121cd7c740ee5486af4e70e8f20c8a92517"
+        },
+        {
+          "path": "media/textures/bar-lines.tga",
+          "sha256": "8b7b794e489e04e43376439430e1b188789d65a52ad9d577075fa59167909ed2"
+        },
+        {
+          "path": "media/textures/bar-round.tga",
+          "sha256": "ca0b147b4a0cd2cf4b2a80ab9b819271483dff40f4a56d2cac42030ab964d6a5"
+        },
+        {
+          "path": "media/textures/bar-soft.tga",
+          "sha256": "8847eeeb6d1449992bcb986e3cdbb1337e5b9119a50fd56f92ea4b0b3bf7f584"
+        },
+        {
+          "path": "media/textures/bar-stripes.tga",
+          "sha256": "f7407231c882e5981dc1c4c825269cf7aa0118f3efff1a5970ee8866f0a11119"
+        },
+        {
+          "path": "media/textures/bar-underline.tga",
+          "sha256": "41a4fd4041fd7bb74918fa6fead74fcdb5ef4b6241021293ef7209ebc72d0038"
+        },
+        {
+          "path": "media/borders/border-double.tga",
+          "sha256": "d9663a2177df6c55d279475b06f898cb0b5d18f932677a383478632b84c0a0b3"
+        },
+        {
+          "path": "media/borders/border-pixel.tga",
+          "sha256": "937e8d87fb9777845668dd4c9293667da428289ab140f67c4291498be56d105c"
+        },
+        {
+          "path": "media/borders/border-rounded.tga",
+          "sha256": "667382070a7ed6faecd932af74f2e90c9561517d319c03d2c610641770a25be5"
+        },
+        {
+          "path": "media/borders/border-shadow.tga",
+          "sha256": "b30c077b560637e41f81ab74c9817ffbd703f558f2af5bbe5c7a1adb9eaad100"
+        },
+        {
+          "path": "media/borders/border-thin-bevel.tga",
+          "sha256": "9364f78dabc8af39aaeb7f8f419815fda8e36f842b01c8312682678b1e167f28"
+        }
+      ]
+    },
+    {
+      "name": "Barlow Condensed SemiBold 1.408",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/barlowcondensed/BarlowCondensed-SemiBold.ttf",
+      "project": "https://github.com/jpt/barlow",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2017 The Barlow Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/BarlowCondensed-SemiBold.ttf",
+          "sha256": "7b619d14bc2327509a9ef32b0890f709626f7ecc9ff61191c2a4314c5499d2d9"
+        },
+        {
+          "path": "media/fonts/BarlowCondensed-OFL.txt",
+          "sha256": "186d750eb496a4c17a76385f82be6aea2ac1cf2de074a811d63786cf374ea73f"
+        }
+      ]
+    },
+    {
+      "name": "Saira Condensed SemiBold 0.072",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/sairacondensed/SairaCondensed-SemiBold.ttf",
+      "project": "https://github.com/Omnibus-Type/Saira",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2016 The Saira Project Authors. Reserved Font Name \"Saira\"; not modified or renamed. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/SairaCondensed-SemiBold.ttf",
+          "sha256": "30f8ed4d078211003a9715c80c51ce031bab5c9a17e8771182e4c4599205634b"
+        },
+        {
+          "path": "media/fonts/SairaCondensed-OFL.txt",
+          "sha256": "0e2ccc5da1dd979f08ba82bca2fb61592506a1e58d3cbfc26d904f0db71bd812"
+        }
+      ]
+    },
+    {
+      "name": "Archivo Narrow SemiBold 3.002",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/Omnibus-Type/ArchivoNarrow/master/fonts/ttf/ArchivoNarrow-SemiBold.ttf",
+      "project": "https://github.com/Omnibus-Type/ArchivoNarrow",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2019 The Archivo Narrow Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/ArchivoNarrow-SemiBold.ttf",
+          "sha256": "9df253be88f7385c208c41339b03f02c860c04c0a9fba5fa2c9b959c612a9c77"
+        },
+        {
+          "path": "media/fonts/ArchivoNarrow-OFL.txt",
+          "sha256": "b2087ef3fb91248e346600d19021249152a9688efea72905aa1996bb16a4c8de"
+        }
+      ]
+    },
+    {
+      "name": "Oswald Medium 4.103",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/googlefonts/OswaldFont/main/fonts/ttf/Oswald-Medium.ttf",
+      "project": "https://github.com/googlefonts/OswaldFont",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2016 The Oswald Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/Oswald-Medium.ttf",
+          "sha256": "d8b3ac8668c6ddbcecd299567e2130e2b933ad8b6c98b5b8ac6ff2bee9c0848a"
+        },
+        {
+          "path": "media/fonts/Oswald-OFL.txt",
+          "sha256": "0fd731a904b729a4e02eaf5e8ebd06783edd9abe400e8882760160230675b652"
+        }
+      ]
+    },
+    {
+      "name": "Bebas Neue Regular 2.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf",
+      "project": "https://github.com/dharmatype/Bebas-Neue",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2010 Dharma Type; 2019 The Bebas Neue Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/BebasNeue-Regular.ttf",
+          "sha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73"
+        },
+        {
+          "path": "media/fonts/BebasNeue-OFL.txt",
+          "sha256": "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341"
+        }
+      ]
+    },
+    {
+      "name": "Cinzel Bold 2.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/NDISCOVER/Cinzel/master/fonts/ttf/Cinzel-Bold.ttf",
+      "project": "https://github.com/NDISCOVER/Cinzel",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2020 The Cinzel Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/Cinzel-Bold.ttf",
+          "sha256": "0c23ec565db45c5508ee95889c60ad87debd167ca07167a43a5d68572b4e2eac"
+        },
+        {
+          "path": "media/fonts/Cinzel-OFL.txt",
+          "sha256": "f2b3029aba64c378bf0963b62945eee15e564fe4330b934c8f2eb058282b5e83"
+        }
+      ]
+    },
+    {
+      "name": "Metamorphous Regular 1.001",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/metamorphous/Metamorphous-Regular.ttf",
+      "project": "https://github.com/SorkinType/Metamorphous",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2011-2012 Sorkin Type Co. Reserved Font Name \"Metamorphous\"; not modified or renamed. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/Metamorphous-Regular.ttf",
+          "sha256": "55939a5664e06807e87fa4af64f52039ead12f002dda8317393fdce2f7ff57fe"
+        },
+        {
+          "path": "media/fonts/Metamorphous-OFL.txt",
+          "sha256": "4fece81b541808b40293b0cd3f5b1990274e1100e1c20455dc2987cd96639d3f"
+        }
+      ]
+    },
+    {
+      "name": "Silkscreen Regular 1.001",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/silkscreen/Silkscreen-Regular.ttf",
+      "project": "https://github.com/googlefonts/silkscreen",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2001 The Silkscreen Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/Silkscreen-Regular.ttf",
+          "sha256": "c845473330b94c2079ce9af01c51ac8ba2d99c24f4d14c039843bbb8e642ebd8"
+        },
+        {
+          "path": "media/fonts/Silkscreen-OFL.txt",
+          "sha256": "86c5e9c9382cdcc5948704fdfe60f2aa164a719746931219a42736ecd9cefbd3"
+        }
+      ]
+    },
+    {
+      "name": "Pixelify Sans Regular 1.000",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/eifetx/Pixelify-Sans/main/fonts/ttf/PixelifySans-Regular.ttf",
+      "project": "https://github.com/eifetx/Pixelify-Sans",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2021 The Pixelify Sans Project Authors. No Reserved Font Name declared. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/PixelifySans-Regular.ttf",
+          "sha256": "5436d485d1713afa376e1744911cbbcc0849eae1eb55ec9bc34c0753993ffef9"
+        },
+        {
+          "path": "media/fonts/PixelifySans-OFL.txt",
+          "sha256": "b66ba46f511a851ab09998b5a5a9fdbb102545a3864cb993095e1745996873a7"
+        }
+      ]
+    },
+    {
+      "name": "Share Tech Mono Regular 1.003",
+      "license": "OFL-1.1",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/sharetechmono/ShareTechMono-Regular.ttf",
+      "project": "https://github.com/google/fonts/tree/main/ofl/sharetechmono",
+      "modifications": "Unmodified static font file as published upstream; Copyright 2012 Carrois Type Design, Ralph du Carrois. Reserved Font Name \"Share\"; not modified or renamed. License text beside the font.",
+      "files": [
+        {
+          "path": "media/fonts/ShareTechMono-Regular.ttf",
+          "sha256": "9ceab1f87414829af259c0f537573ae03ef7dd3147c0b27a36a1a0beb6732677"
+        },
+        {
+          "path": "media/fonts/ShareTechMono-OFL.txt",
+          "sha256": "9d96f445b6e9c701428811d0177f894874f8d6f07ecc30d568c506542368f3ff"
         }
       ]
     }

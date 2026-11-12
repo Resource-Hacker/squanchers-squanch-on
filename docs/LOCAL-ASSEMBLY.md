@@ -15,13 +15,17 @@ With no saved settings, the first run starts from the author's layout. Its
 positions were authored on a 5120x1440 display; on other resolutions, use
 `/sqedit` to move and resize things. An existing `SquanchOnDB` is kept.
 
-## Optional integrations
+## Optional integration
 
 - **Plater** keeps nameplate behavior and normally supplies LibRangeCheck-3.0
   for the melee and proximity range cues. Without it those cues stay hidden.
-- **DynamicCam** can own camera framing (`/sqms camera`).
 
-Both are installed separately and are not required.
+It is installed separately and is not required.
+
+**DynamicCam** is no longer an integration. Squanch-On drives the camera itself
+and waits while DynamicCam is loaded; `/sqms camera takeover` imports the
+DynamicCam profile in use and disables DynamicCam, `/sqms camera release` hands
+the camera back.
 
 ## From a source checkout
 

@@ -4,6 +4,7 @@
 ## Author: Squancher and contributors
 ## Version: 0.3.0-rewrite
 ## SavedVariables: SquanchOnDB
+## AddonCompartmentFunc: SquanchOn_OnAddonCompartmentClick
 ## OptionalDeps: Plater, DynamicCam
 ## X-oUF: SquanchOnUF
 ## X-License: MIT; bundled and required components retain their own licenses
@@ -14,16 +15,18 @@ libs/LibDispel/LibDispel.lua
 libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua
 libs/oUF/oUF_Forever.xml
 
+Range.lua
 DefaultProfile.lua
 DefaultSeed.lua
 Core.lua
+Options.lua
 Media.lua
 LayoutEditor.lua
 MouseoverCasting.lua
 MouseoverInteractIcon.lua
 HordeReticleData.lua
 HordeReticle.lua
-CameraFraming.lua
+Camera.lua
 TargetCrosshairs.lua
 NameplateIndicators.lua
 FriendlyTargetNameplate.lua
@@ -50,6 +53,7 @@ UnitFrames.lua
 UnitFrameState.lua
 UnitFrameAuras.lua
 UnitFrameOptions.lua
+CameraOptions.lua
 OriginalUnitFrameLighting.lua
 OriginalUnitFrameBorders.lua
 MinimapPanel.lua
@@ -65,3 +69,6 @@ DrawerMotion.lua
 LayoutWindows.lua
 SocialDrawer.lua
 QuestDrawer.lua
+OptionsWindow.lua
+options/General.lua
+options/About.lua

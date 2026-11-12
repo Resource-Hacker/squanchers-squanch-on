@@ -4,11 +4,16 @@
 -- Diagnostics, migration receipts and import sources are left out.
 dofile(arg[1])
 local db = assert(SquanchOnDB, 'SquanchOnDB missing')
--- Not exported: cameraFraming (names the author's DynamicCam profiles and would
--- block /sqms camera setup), itemWindowSizing and minimapItemSizing (measured
--- per install; their presence skips the one-time icon match).
+-- Not exported: itemWindowSizing and minimapItemSizing (measured per install;
+-- their presence skips the one-time icon match).
 local tables = { unitFrames = true, tooltipImport = true, layout = true, nativeWindowImport = true,
-  appearance = true, nameplateIndicators = true, targetCrosshairs = true }
+  appearance = true, nameplateIndicators = true, targetCrosshairs = true, camera = true }
+-- The camera settings ship; its takeover records do not. The import receipt and
+-- the retired framing record name the author's DynamicCam profiles, and a
+-- missing receipt is what lets a new install import its own DynamicCam profile.
+if type(db.camera) == 'table' then
+  for _, key in ipairs({ 'receipt', 'previous', 'legacyFraming', 'combatDeferred' }) do db.camera[key] = nil end
+end
 -- Of the appearance receipts only two describe the shipped data itself: the
 -- bars are already centred, and a new install has no earlier font scale to restore.
 if type(db.appearance) == 'table' then

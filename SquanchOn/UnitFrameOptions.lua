@@ -276,6 +276,8 @@ function Options:Build()
     local layout=W:Button(frame,'Move & resize',120,function()
         frame:Hide();if ns.LayoutEditor then ns.LayoutEditor:Open() end
     end,22);layout:SetPoint('TOPRIGHT',-18,-50)
+    local camera=W:Button(frame,'Camera',80,function() frame:Hide();ns:OpenCameraOptions() end,22)
+    camera:SetPoint('RIGHT',layout,'LEFT',-8,0)
     local note=W:Label(frame,'Only supported settings are shown; other imported settings are kept unchanged.',10,.62,.62,.6)
     note:SetPoint('TOPLEFT',18,-84);note:SetWidth(744)
     self.unitButtons={}

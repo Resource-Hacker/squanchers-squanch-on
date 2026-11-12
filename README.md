@@ -98,8 +98,12 @@ of sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-rang
   native action and pet bars, chat, minimap, menus and other native windows.
 - **A layout you can tune:** `/sqedit` moves and resizes supported components with
   a centered alignment grid, width controls and session undo.
-- **Optional integrations:** Plater retains nameplate behavior; DynamicCam can
-  own camera framing. Both are installed separately.
+- **Its own camera:** shoulder offset and field of view that follow the zoom,
+  eased wheel zoom, head movement, dynamic pitch, target focus and situations,
+  edited with `/sqms camera options`. An existing DynamicCam profile is imported
+  once; DynamicCam itself is no longer used and must be disabled.
+- **Optional integration:** Plater retains nameplate behavior and is installed
+  separately.
 
 The package is one complete **SquanchOn** addon folder, including its required
 oUF, LibDispel and LibStub libraries with their own notices. ElvUI and BenikUI
@@ -117,8 +121,10 @@ GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
 1. Close the game and back up `Interface/AddOns` and `WTF`.
 2. Copy the single `SquanchOn/` folder into `Interface/AddOns`
    ([installation page](docs/LOCAL-ASSEMBLY.md)).
-3. Disable other addons that own unit frames, tooltips or the buff rows. Plater
-   and DynamicCam are optional and installed separately.
+3. Disable other addons that own unit frames, tooltips, the buff rows or the
+   camera. Squanch-On's camera waits while DynamicCam is loaded:
+   `/sqms camera takeover` imports its profile and disables it. Plater is
+   optional and installed separately.
 4. Log in. An existing `SquanchOnDB` is kept; otherwise the author's layout is
    used. Adjust positions with `/sqedit`.
 
@@ -131,8 +137,11 @@ GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
 | `/sqedit` or `/squanchon edit` | Move and resize the interface |
 | `/sqauras [count]` | Preview placeholder buff and debuff icons; run again to stop |
 | `/squanchon tooltip` | Tooltip text, opacity and anchors |
-| `/sqms camera` | DynamicCam framing status |
-| `/sqms camera setup` / `/sqms camera restore` | Create a separate framing profile / restore the saved source profile |
+| `/sqms camera` | Camera status |
+| `/sqms camera options` | Camera settings, zoom curves and situations |
+| `/sqms camera on` / `off` / `restore` | Drive the camera / stop / stop and put back the earlier camera CVars |
+| `/sqms camera takeover` / `release` | Disable DynamicCam in favor of Squanch-On's camera / hand the camera back |
+| `/sqms camera capture` | With DynamicCam still loaded: import its selected profile again |
 
 Saved settings live in the normal `SavedVariables/SquanchOn.lua` file as
 `SquanchOnDB`, including the rewrite's unit-frame profiles. The new editor shows

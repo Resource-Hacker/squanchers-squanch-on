@@ -7,14 +7,15 @@ import struct
 DEST = Path(__file__).resolve().parent.parent / 'media' / 'textures'
 DEST.mkdir(parents=True, exist_ok=True)
 
-def tga(name, width, height, pixel):
+def tga(name, width, height, pixel, dest=None):
     data = bytearray()
     for y in range(height - 1, -1, -1):  # bottom-up rows
         for x in range(width):
             r, g, b, a = pixel(x, y)
             data += bytes((b, g, r, a))
     header = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, width, height, 32, 8)
-    (DEST / name).write_bytes(header + data)
+    (dest or DEST).mkdir(parents=True, exist_ok=True)
+    ((dest or DEST) / name).write_bytes(header + data)
 
 def clamp(v):
     return max(0, min(255, int(round(v))))
@@ -78,3 +79,74 @@ for name, (shape, color) in roles.items():
         f, e = fill / N / N, edge / N / N
         return clamp(color[0] * f), clamp(color[1] * f), clamp(color[2] * f), clamp(255 * e)
     tga(name, S, S, pixel)
+
+# Selectable status-bar faces. Grey level v goes to R, G and B and the bar colour
+# tints it; t runs from the top row (0) to the bottom row (1). Faces constant
+# along the bar are 32 x 32, patterned ones 256 x 32.
+import math
+H = 32
+def smooth(t):
+    return 196 - 54 * (t * t * (3 - 2 * t))
+def tri(p):
+    p %= 1.0
+    return 1 - abs(2 * p - 1)
+def noise(row, run):  # fixed integer hash, -1..1
+    n = (row * 73856093) ^ (run * 19349663) ^ 0x5bd1e995
+    n = (n * 1103515245 + 12345) & 0x7fffffff
+    return (n >> 8) % 2001 / 1000.0 - 1
+faces = {
+    'bar-soft.tga': lambda t: 240 - 40 * t,
+    'bar-deep.tga': lambda t: 250 - 120 * t,
+    'bar-gloss.tga': lambda t: 150 - 22 * t + 105 * math.exp(-((t - .22) / .16) ** 2),
+    'bar-glass.tga': lambda t: 230 - 60 * t if t < .5 else 170 - 40 * (t - .5),
+    'bar-round.tga': lambda t: 140 + 115 * math.sin(math.pi * t) ** .6,
+    'bar-groove.tga': lambda t: 230 - 85 * math.sin(math.pi * t),
+}
+for name, face in faces.items():
+    tga(name, H, H, lambda x, y, face=face: (clamp(face(y / (H - 1))),) * 3 + (255,))
+tga('bar-bevel.tga', H, H, lambda x, y: ((255 if y == 0 else 110 if y == H - 1 else 205),) * 3 + (255,))
+tga('bar-lines.tga', H, H, lambda x, y: ((195 if y % 2 else 235),) * 3 + (255,))
+tga('bar-underline.tga', H, H, lambda x, y: (255, 255, 255, 255 if y >= H - 4 else 70))
+def stripes(x, y):
+    band = sum(tri((x + (i + .5) / 4 + y + (j + .5) / 4) / 12) for i in range(4) for j in range(4)) / 16
+    return (clamp(smooth(y / (H - 1)) * (.88 + .12 * band)),) * 3 + (255,)
+tga('bar-stripes.tga', 256, H, stripes)
+tga('bar-fade.tga', 256, H, lambda x, y: (clamp(255 * (.55 + .45 * x / 255)),) * 3 + (255,))
+tga('bar-brushed.tga', 256, H, lambda x, y: (clamp(smooth(y / (H - 1)) + 9 * noise(y, x // 8)),) * 3 + (255,))
+
+# Selectable borders, in the same eight-tile edge layout as the glow above.
+# `inward` is the distance in pixels from the side that touches the framed area.
+BORDERS = DEST.parent / 'borders'
+def edge(name, size, paint, corner=max, samples=1):
+    def at(u, v, tile):
+        if tile in (0, 2):
+            return paint(size - u)
+        if tile in (1, 3):
+            return paint(u)
+        cx = size if tile in (4, 6) else 0
+        cy = size if tile in (4, 5) else 0
+        return paint(corner(abs(u - cx), abs(v - cy)))
+    def pixel(x, y):
+        total = [0.0] * 4
+        for sy in range(samples):
+            for sx in range(samples):
+                value = at(x % size + (sx + .5) / samples, y + (sy + .5) / samples, x // size)
+                for i in range(3):
+                    total[i] += value[i] * value[3]
+                total[3] += value[3]
+        if not total[3]:
+            return 255, 255, 255, 0
+        return tuple(clamp(total[i] / total[3]) for i in range(3)) + (clamp(total[3] / samples / samples),)
+    tga(name, 8 * size, size, pixel, BORDERS)
+def line(*spans):  # (from, to, grey) bands measured inward-out
+    def paint(inward):
+        for start, stop, grey in spans:
+            if start <= inward < stop:
+                return grey, grey, grey, 255
+        return 255, 255, 255, 0
+    return paint
+edge('border-pixel.tga', 8, line((0, 1, 255)))
+edge('border-thin-bevel.tga', 8, line((0, 1, 150), (1, 2, 255)))
+edge('border-double.tga', 8, line((0, 1, 255), (3, 4, 255)))
+edge('border-rounded.tga', 8, line((3, 4, 255)), corner=math.hypot, samples=4)
+edge('border-shadow.tga', T, lambda inward: (0, 0, 0, falloff(inward)), corner=math.hypot)

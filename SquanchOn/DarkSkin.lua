@@ -850,11 +850,12 @@ local function chatInnerInset()
 end
 local function fitChatTabBorder(tab, state)
     local border = state.border
-    -- Blizzard reparents docked tabs. Keep their rim above the native face,
-    -- and always close the exposed left side of the primary General tab.
+    -- Blizzard reparents docked tabs. Keep their rim above the native face.
     border:SetFrameStrata(tab:GetFrameStrata())
     border:SetFrameLevel(tab:GetFrameLevel()+1)
-    if tab==ChatFrame1Tab then state.joinedLeft=false end
+    -- Docked on the panel, the panel rim is the General tab's left edge; only
+    -- an undocked General tab needs its own.
+    if tab==ChatFrame1Tab then state.joinedLeft=state.docked and Skin.chatDockPlaced and true or false end
     local width = chatBorderWidth(tab)
     border.raisedFace:ClearAllPoints()
     border.raisedFace:SetPoint("TOPLEFT", tab, "TOPLEFT", state.joinedLeft and 0 or width, -width)

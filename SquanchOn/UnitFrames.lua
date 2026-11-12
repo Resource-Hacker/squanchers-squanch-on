@@ -1224,76 +1224,15 @@ function UF:KnownRangeSpells(kind)
     return known
 end
 
--- The game gives no exact distance to a friendly unit outside the group, only
--- yes/no checks. These item ranges are 40 yards (the usual friendly reach).
-local FRIEND_REACH_ITEMS={1713,5205,5323,18662,18640}
-local FRIEND_REACH_YARDS=40
--- true = within about 40 yards, false = beyond, nil = cannot tell (no fade).
-function UF:FriendlyReach(unit)
-    -- Item and interact checks are blocked in combat for friendly units, and
-    -- pcall does not hide the blocked-action error: never call them there.
-    if not InCombatLockdown() then
-        if C_Item and C_Item.IsItemInRange then
-            for _,item in ipairs(FRIEND_REACH_ITEMS) do
-                local reach=rangeBoolean(C_Item.IsItemInRange,item,unit)
-                if reach~=nil then return reach end
-            end
-        end
-        -- Follow distance (28 yards): true is enough, false is not "out".
-        if rangeBoolean(CheckInteractDistance,unit,4)==true then return true end
-    end
-    -- A nameplate exists only inside nameplateMaxDistance; absence proves nothing.
-    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
-        local limit=tonumber(GetCVar('nameplateMaxDistance'))
-        if limit and limit<=FRIEND_REACH_YARDS+1 then
-            local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,unit)
-            if ok and plate then return true end
-        end
-    end
-    if rangeBoolean(UnitIsVisible,unit)==false then return false end
-    return nil
-end
-
+-- Range fade state: true = reachable, false = out of reach, nil = cannot tell
+-- (no fade). Distances come from the shared Range module.
 function UF:RangeState(unit)
     if not public(unit) or type(unit)~='string' then return nil end
     if rangeBoolean(UnitIsConnected,unit)==false then return nil end
-    local kind
-    if rangeBoolean(UnitIsUnit,unit,'pet')==true then kind='PET'
-    elseif rangeBoolean(UnitCanAttack,'player',unit)==true then kind='ENEMY'
-    elseif rangeBoolean(UnitCanAssist,'player',unit)==true then
-        local dead=rangeBoolean(UnitIsDeadOrGhost,unit)
-        if dead==true then kind='RESURRECT' elseif dead==false then kind='FRIENDLY' end
-    end
-    if kind and C_Spell and C_Spell.IsSpellInRange then
-        -- In range when ANY ability reaches. A ranged spell with a minimum
-        -- distance (Auto Shot) answers false at melee and must not fade the frame.
-        local answered=false
-        for _,id in ipairs(self:KnownRangeSpells(kind)) do
-            local inRange=rangeBoolean(C_Spell.IsSpellInRange,id,unit)
-            if inRange==true then return true elseif inRange==false then answered=true end
-        end
-        if answered then
-            if kind=='ENEMY' then
-                local library=LibStub and LibStub('LibRangeCheck-3.0',true)
-                local checker=library and library.GetHarmChecker and library:GetHarmChecker(5)
-                local melee=rangeBoolean(checker,unit)
-                if melee==true then return true end
-                if not InCombatLockdown() then
-                    if rangeBoolean(CheckInteractDistance,unit,3)==true then return true end
-                -- No way to judge melee reach in combat: unknown, never "out of
-                -- range", so a frame does not fade while fighting in melee.
-                elseif melee==nil then return nil end
-            end
-            return false
-        end
-    end
-    -- Native group range remains useful when no configured spell can answer.
-    local ok,inRange,checked=pcall(UnitInRange,unit)
-    if ok and public(inRange) and public(checked) and checked==true then
-        if inRange==true then return true elseif inRange==false then return false end
-    end
-    if kind=='FRIENDLY' or kind=='RESURRECT' then return self:FriendlyReach(unit) end
-    return nil
+    local range=ns.Range
+    if not range then return nil end
+    range.spellProvider=range.spellProvider or function(kind) return UF.db and UF:KnownRangeSpells(kind) end
+    return range:Reach(unit)
 end
 
 function UF.GetProfile() return UF.db and {unitframe=UF.db,movers=UF.db.movers} end

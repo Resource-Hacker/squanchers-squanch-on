@@ -120,13 +120,10 @@ end
 
 local function meleeRange()
   -- Forever's queued Raptor Strike reports true even at Auto Shot distance;
-  -- melee Auto Attack has no range verdict. Use Plater's exact five-yard
-  -- checker, not an eight/ten-yard interaction fallback or an unknown spell.
-  -- A missing, restricted or uncached checker must leave these markers hidden.
-  local library = LibStub and LibStub("LibRangeCheck-3.0", true)
-  local checker = library and publicQuery(library.GetHarmChecker, library, 5)
-  local result = publicQuery(checker, "target")
-  return result == true or result == 1
+  -- melee Auto Attack has no range verdict. The shared Range module answers
+  -- from the five-yard hostile check; no answer leaves these markers hidden.
+  local range = suite.Range
+  return range ~= nil and range:Melee("target") == true
 end
 
 -- Melee has priority: Auto Shot's minimum range must not hide melee artwork.
@@ -407,6 +404,13 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local function iconFit(plate)
     if not marker.friendly or publicQuery(UnitCanAttack, "player", "target") ~= false then return end
     local icons = plateIcons[plate]
+    if not (icons and (icons.class or icons.faction)) then
+      -- The hook can miss an indicator created before it was installed or
+      -- reused without a new call; fall back to the plate's first shown icon.
+      for _, texture in ipairs(plate.IconIndicators or {}) do
+        if available(texture) and texture:IsShown() then icons = { faction = texture }; break end
+      end
+    end
     if not icons then return end
     for _, kind in ipairs({"class", "faction"}) do
       local icon = icons[kind]
@@ -452,11 +456,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       if healingRange() then
         mode = "healing"
       elseif publicQuery(UnitIsDeadOrGhost, "target") == false then
-        local library = LibStub and LibStub("LibRangeCheck-3.0", true)
         local range = Plater and Plater.RangeCheckRangeFriendly or 40
         -- Keep friendly/NPC proximity separate: it never lights healing arrows.
-        local checker = library and publicQuery(library.GetSmartMaxChecker, library, range)
-        local result = publicQuery(checker, "target")
+        local result = suite.Range and suite.Range:Within("target", range)
         if result == true or result == 1 then mode = "friendly" end
       end
     else

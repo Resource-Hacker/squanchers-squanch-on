@@ -36,7 +36,14 @@ and their handlers. Squanch-On's tooltip adapter changes presentation and defaul
 anchoring; it does not recreate ElvUI's custom content extensions. Native item
 use, sorting and deposits likewise remain with Blizzard's bags and bank.
 
-Plater and DynamicCam remain optional separate integrations. The bundled
+Squanch-On has its own camera: every DynamicCam standard setting, zoom curves,
+eased wheel zoom and situations built from DynamicCam's built-in conditions. It
+does not run while DynamicCam is loaded, so DynamicCam must be disabled
+(`/sqms camera takeover`). A DynamicCam profile is imported once; situations
+with hand-written Lua conditions are kept as data and stay inactive, and of the
+hide-interface options only the whole-interface fade is implemented. None of
+this has been accepted in game yet. Plater remains an optional separate
+integration. The bundled
 LibRangeCheck-3.0 provides conservative melee/proximity cues; unavailable
 checks hide those cues. Replacement native window and minimap surfaces
 need their own visual and interaction checks.
@@ -65,7 +72,8 @@ layout (`SquanchOn/DefaultProfile.lua`). Its positions were authored on a
 `SquanchOnDB` is kept as it is. The layout includes nested settings and fields
 the rewrite does not implement; they are kept as data, which does not mean every
 field has the original engine's behavior. The addon does not read or migrate
-ElvUI databases or DynamicCam profiles.
+ElvUI databases. It reads the DynamicCam profile in use once, to import camera
+settings, and never writes DynamicCam's saved variables.
 
 `/squanchon` and `/squancher` open a new capability-limited settings editor,
 not the native ElvUI editor. Its controls are selected from the renderer's actual

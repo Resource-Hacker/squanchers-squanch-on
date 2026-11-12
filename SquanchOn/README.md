@@ -37,7 +37,8 @@ verification.
 | `/squanchon` | Unit-frame settings and profiles. |
 | `/sqedit` | Move and resize supported interface components. |
 | `/squanchon tooltip` | Tooltip settings. |
-| `/sqms camera` | Optional DynamicCam framing status. |
+| `/sqms camera` | Camera status; `options` opens its settings, `on`, `off` and `restore` control it. |
+| `/sqms camera takeover` | Import the DynamicCam profile in use and disable DynamicCam (then `/reload`). |
 | `/sqauras [count]` | Preview placeholder buffs and debuffs to judge layout. |
 
 To replace the Caps Lock/Up preset, run `/sqms bindings off`, then assign
@@ -63,7 +64,9 @@ not healing readiness. Unknown range stays hidden. Range does not guarantee
 resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
 in progress.
 
-Plater and DynamicCam remain optional and installed separately.
+Squanch-On drives the camera itself (zoom curves, eased wheel zoom, situations).
+DynamicCam is no longer used and must be disabled for the camera to run; its
+profile is imported once. Plater remains optional and installed separately.
 [Compatibility notes](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
 
 ## Source and attribution

@@ -9,6 +9,7 @@ _G.BINDING_NAME_SQMS_TOGGLEMOUSELOOK = "Toggle mouselook"
 _G.BINDING_NAME_SQMS_LOCKMOUSELOOK = "Enable mouselook"
 _G.BINDING_NAME_SQMS_UNLOCKMOUSELOOK = "Disable mouselook"
 _G.BINDING_NAME_SQMS_EDITLAYOUT = "Move and resize UI (10 px grid)"
+_G.BINDING_NAME_SQMS_OPENSETTINGS = "Open Squanch-On settings"
 
 local defaults = {
   enabled = true,
@@ -267,7 +268,7 @@ function addon:InstallMenuSuspension()
     end, self)
   end
   for i = 1, _G.UIDROPDOWNMENU_MAXLEVELS or 3 do self:TrackMenuFrame(_G["DropDownList" .. i]) end
-  for _, method in ipairs({"OpenUnitFrameOptions", "OpenTooltipOptions", "OpenNameplateIndicatorOptions"}) do
+  for _, method in ipairs({"OpenUnitFrameOptions", "OpenTooltipOptions", "OpenNameplateIndicatorOptions", "OpenCameraOptions"}) do
     if self[method] then hooksecurefunc(self, method, function() self:QueueMenuDiscovery() end) end
   end
   self:QueueMenuDiscovery()
@@ -613,6 +614,8 @@ function addon:RestoreNativeCursorReturn(reason, force)
   receipt.restoreReason = reason
   receipt.restoredAt = GetTime()
   receipt.afterSpeedRestore = cursorReturnSample()
+  -- The camera module owns these two speeds outside this transition.
+  if addon.Camera then addon.Camera:HoldSpeeds(false) end
 end
 
 local function prepareCenteredReturn(self)
@@ -638,6 +641,7 @@ local function prepareCenteredReturn(self)
     end
   end
   pendingCameraReturn = {values = values, receipt = receipt}
+  if addon.Camera then addon.Camera:HoldSpeeds(true) end
   for _, name in ipairs(cameraReturnNames) do
     if not setCVar(name, 0.1) or tonumber(GetCVar(name)) ~= 0.1 then
       receipt.status = "camera-speed-rejected"
@@ -1159,11 +1163,12 @@ end
 function addon:SlashCommand(msg)
   local command = msg or ""
   if command == "camera" or command:match("^camera%s+") then
-    self:CameraFramingCommand(command:match("^camera%s+(.*)$") or "")
+    self.Camera:Command(command:match("^camera%s+(.*)$") or "")
     return
   end
   if command == "edit" or command == "layout" or command == "unlock" then self.LayoutEditor:Toggle(); return end
   if command == "tooltip" then self:OpenTooltipOptions(); return end
+  if command == "settings" and self.OptionsCommand then self:OptionsCommand(""); return end
   if command == "unitframes" or command == "settings" then self:OpenUnitFrameOptions(); return end
   if command == "nameplates" then self:OpenNameplateIndicatorOptions(); return end
   if command:match("^nameplates%s+") then self.NameplateIndicators:Slash(command:match("^nameplates%s+(.+)$")); return end
@@ -1288,7 +1293,7 @@ function addon:SlashCommand(msg)
     end
   else
     self:PrintStatus()
-    print("|cff33ff99/sqms|r status, mouseover on/off, nameplates, crosshairs, on, off, reticle on/off, bindings on/off, lock on/off, native on/off, return on/off, left on/off, chord on/off, aim <x> <y>, cursor <0-1>, always on, always off, panic")
+    print("|cff33ff99/sqms|r status, camera [options], mouseover on/off, nameplates, crosshairs, on, off, reticle on/off, bindings on/off, lock on/off, native on/off, return on/off, left on/off, chord on/off, aim <x> <y>, cursor <0-1>, always on, always off, panic")
   end
 end
 
@@ -1341,9 +1346,17 @@ function addon:OnEvent(event, ...)
     _G.SLASH_SQMS1 = "/sqms"
     _G.SLASH_SQUANCHER1 = "/squancher"
     _G.SLASH_SQUANCHER2 = "/squanchon"
+    -- /squanchon [page | search words]: the unified settings window. Pages that
+    -- have not moved into it yet keep their own windows.
     _G.SlashCmdList.SQUANCHER = function(msg)
-      if msg == "edit" or msg == "layout" then addon.LayoutEditor:Toggle()
-      elseif msg == "tooltip" then addon:OpenTooltipOptions()
+      local word = string.lower(msg or ""):match("^%s*(.-)%s*$")
+      local pages = addon.Options and addon.Options.categories or {}
+      if word == "edit" or word == "layout" then addon.LayoutEditor:Toggle()
+      elseif word == "tooltip" and not pages.tooltip then addon:OpenTooltipOptions()
+      elseif word == "camera" and not pages.camera then addon:OpenCameraOptions()
+      elseif word == "unitframes" and not pages.unitframes then addon:OpenUnitFrameOptions()
+      elseif word == "nameplates" and not pages.nameplates then addon:OpenNameplateIndicatorOptions()
+      elseif addon.OptionsCommand then addon:OptionsCommand(msg)
       else addon:OpenUnitFrameOptions() end
     end
     _G.SlashCmdList.SQMS = function(msg) addon:SlashCommand(msg) end
@@ -1353,12 +1366,10 @@ function addon:OnEvent(event, ...)
       -- Owner-selected native cursor; keep it out of the game render path.
       setCVar("HardwareCursor", 1)
       self:InitializeHordeReticle(self.db)
-      -- An optional camera-profile failure must not abort native input setup.
-      local cameraOK, cameraError = pcall(self.InitializeCameraFraming, self)
-      if not cameraOK then
-        self.db.cameraFramingError = tostring(cameraError)
-        print("Squancher: camera profile setup failed; native controls remain available.")
-      end
+      -- A camera failure must not abort native input setup.
+      local cameraOK, cameraError = pcall(self.InitializeCamera, self)
+      self.db.cameraError = not cameraOK and tostring(cameraError) or nil
+      if not cameraOK then print("Squancher: camera setup failed; native controls remain available.") end
       self:UpdateAimPoint()
       self:InitializeTargetCrosshairs(self.db, _G.CrosshairsDB):RegisterSlashCommands()
     end
@@ -1378,7 +1389,7 @@ function addon:OnEvent(event, ...)
     self:UpdateReticle()
     self:RecordNativeReceipt(event)
     if event == "PLAYER_LOGIN" then
-      print("Squancher's Squanch-On 0.3 rewrite loaded. /sqedit opens the layout grid.")
+      print("Squancher's Squanch-On 0.3 rewrite loaded. /squanchon opens settings; /sqedit opens the layout grid.")
     end
   elseif event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
     self:RestoreNativeLeftDelta(event)
