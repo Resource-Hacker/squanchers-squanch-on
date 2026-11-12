@@ -118,6 +118,16 @@ local function finish(state)
         if group:IsPlaying() then group:Stop() end
     end
     state.rims = nil
+    -- The first time a window opens under the animation, the client can leave
+    -- its children's anchors unresolved (measured on the character sheet: the
+    -- equipment slots were shown at full alpha with no rectangle, so nothing
+    -- drew until it was reopened). Re-stating the scale resolves them.
+    local frame = state.frame
+    if frame:IsVisible() and not (InCombatLockdown() and frame:IsProtected()) then
+        local scale = frame:GetScale()
+        frame:SetScale(scale * 1.0001)
+        frame:SetScale(scale)
+    end
     if state.frame:IsVisible() then pcall(refreshRims, state.frame) end
 end
 
