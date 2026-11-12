@@ -504,6 +504,11 @@ function NP:TargetChanged()
   local frame = self:PlateFor('target')
   local previous = self.targetFrame
   self.targetFrame = frame
+  -- A hovered plate that becomes (or stops being) the target moves its highlight.
+  if self.hoverFrame and ns.NameplateStyle and C_Timer then
+    local hovered = self.hoverFrame
+    C_Timer.After(0, function() if NP.hoverFrame == hovered then ns.NameplateStyle:SetHover(hovered, true) end end)
+  end
   local Style = ns.NameplateStyle
   for _, changed in ipairs({ previous or false, frame or false }) do
     if changed and self.active[changed] then

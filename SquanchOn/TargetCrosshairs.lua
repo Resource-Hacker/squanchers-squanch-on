@@ -804,6 +804,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     healthMode = "public health"
   end
 
+  function marker:SetHovered(frame, shown)
+    if shown and nestedIn and frame == nestedIn then self.hovered = true
+    elseif frame == nestedIn or not shown then self.hovered = nil end
+    if display:IsShown() then self:RefreshTarget() end
+  end
   function marker:HideTarget()
     bound = nil
     boundPlate = nil
@@ -860,6 +865,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       if grown > 1 then size = size / grown end
     end
     barLook = barLookWanted()
+    marker.barLookActive = barLook
     local art = "circle"
     if barLook then
       -- Same line as the plain ring (2.5 of 128) plus the friendly extra screen
@@ -883,6 +889,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       local plates = not Plater and suite.Nameplates
       local target = plates and plates.Settings and plates:Settings().target
       local gloss = barLook and type(target) == "table" and tonumber(target.overlayAlpha) or 0
+      -- Mouseover on the selected plate brightens the ring (not the bar): the
+      -- plate's hover strength is added to the ring's gloss.
+      if gloss > 0 and marker.hovered then gloss = math.min(1, gloss + (tonumber(target.hoverAlpha) or 0.5)) end
       if gloss > 0 then
         ringGloss:SetTexture(artwork .. "ring-gloss-" .. (art:match("%-(%d+)$") or "5") .. ".tga")
         ringGloss:SetAlpha(gloss)

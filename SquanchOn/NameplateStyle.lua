@@ -488,7 +488,11 @@ end
 function Style:Indicators(frame) updateIndicators(frame) end
 
 function Style:SetHover(frame, shown)
-  frame.Hover:SetShown(shown and frame.Health:IsShown() or false)
+  -- The selected plate shows mouseover on its target ring instead of its bar.
+  local ring = ns.TargetCrosshairs
+  local selected = NP.targetFrame == frame and ring and ring.SetHovered and ring.barLookActive
+  if ring and ring.SetHovered then ring:SetHovered(frame, shown and selected and true or false) end
+  frame.Hover:SetShown(shown and not selected and frame.Health:IsShown() or false)
 end
 
 -- Layout ----------------------------------------------------------------------
