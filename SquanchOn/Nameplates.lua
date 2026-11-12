@@ -248,8 +248,14 @@ end
 -- shadow: an {r, g, b, a} override of the black drop shadow.
 function NP:Font(object, name, size, outline, shadow)
   local path = ns.Media and ns.Media:Resolve('font', name) or name
-  if not object:SetFont(path, size, outline == 'NONE' and '' or outline or '') then
-    object:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', size, outline == 'NONE' and '' or outline or '')
+  local flags = outline == 'NONE' and '' or outline or ''
+  -- Smooth movement: the client's vector text ('SLUG' flag) is drawn from
+  -- outlines on the GPU instead of pixel-fitted glyph bitmaps, so it can sit
+  -- between pixels and travel with the unsnapped bar and border.
+  local smooth = self:Settings().smoothMotion ~= false and not flags:find('SLUG')
+  local set = smooth and object:SetFont(path, size, flags == '' and 'SLUG' or flags .. ', SLUG')
+  if not set and not object:SetFont(path, size, flags) then
+    object:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', size, flags)
   end
   -- The previous plates drew every text with a black one-unit drop shadow; it
   -- is what keeps a bar from showing through the hollows of the digits.
