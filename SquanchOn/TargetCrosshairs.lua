@@ -8,7 +8,7 @@ local baseline = {
   showKillShotPulse = true, killShotThreshold = 0.20,
   -- Friendly icon ring: share of the geometric fit, extra screen pixels of
   -- width, extra pixels of line thickness, and whether it hugs the icon at all.
-  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 8, friendlyThickness = 2,
+  friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 9, friendlyThickness = 1,
 }
 
 local function duplicate(value)
@@ -281,7 +281,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local scale = ringFrame:GetEffectiveScale()
     local pixel = scale and scale > 0 and PixelUtil.GetPixelToUIUnitFactor() / scale or 1
     for _, edge in ipairs(ringEdges) do
-      local d = pixel * edge.direction * limit(settings.friendlyThickness, 2, 0, 12) / 2
+      local d = pixel * edge.direction * limit(settings.friendlyThickness, 1, 0, 12) / 2
       edge:ClearAllPoints()
       edge:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
       edge:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
@@ -457,7 +457,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         local dx = kind == "faction" and width * 0.04 * scale / own or 0
         local dy = kind == "faction" and height * 0.045 * scale / own or 0
         -- Owner: nine screen pixels wider than the tightened fit (5, then +4 for the solid ring).
-        local grow = limit(settings.friendlyGrow, 8, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own
+        local grow = limit(settings.friendlyGrow, 9, -40, 80) * PixelUtil.GetPixelToUIUnitFactor() / own
         return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER * limit(settings.friendlyTighten, 0.75, 0.3, 2) + grow, baseSize, 1, 2048), dx, dy
       end
     end
@@ -611,7 +611,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     hookIcons()
     -- Hostile and icon-less targets keep the configured size on the health bar.
     local icon, size, dx, dy = iconFit(plate)
-    for _, edge in ipairs(ringEdges) do edge:SetShown(icon ~= nil and (tonumber(settings.friendlyThickness) or 2) > 0) end
+    for _, edge in ipairs(ringEdges) do edge:SetShown(icon ~= nil and (tonumber(settings.friendlyThickness) or 1) > 0) end
     -- Friendly and hostile rings share the configured ring opacity in range;
     -- out of range both fade with the target unit frame through the parent alpha.
     local anchor = icon or destination
