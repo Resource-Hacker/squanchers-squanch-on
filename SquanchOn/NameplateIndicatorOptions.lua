@@ -5,33 +5,33 @@ local module = addon.NameplateIndicators
 local selectedUnit, selectedReaction = "mouseover", "hostile"
 
 local function text(parent, label, x, y, width)
-  local font = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local font = addon.OptionWidgets:Label(parent, label, 10)
   font:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
   font:SetWidth(width or 200)
-  font:SetJustifyH("LEFT")
-  font:SetText(label)
   return font
 end
 
 local function button(parent, label, x, y, width, callback)
-  local frame = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  frame:SetSize(width or 100, 24)
-  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-  frame:SetText(label)
-  frame:SetScript("OnClick", callback)
+  local frame = addon.OptionWidgets:Button(parent, label, width or 100, callback, 22)
+  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 1)
   return frame
 end
 
 local function editbox(parent, x, y, width, callback)
-  local frame = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  frame:SetSize(width or 150, 24)
-  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-  frame:SetAutoFocus(false)
+  local frame = addon.OptionWidgets:Edit(parent, width or 150)
+  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 1)
   frame:SetScript("OnEscapePressed", function(self) self:ClearFocus(); module:RefreshPanel() end)
   frame:SetScript("OnEnterPressed", function(self)
     callback(self:GetText())
     self:ClearFocus()
   end)
+  return frame
+end
+
+local function check(parent, x, y, callback)
+  local frame = addon.OptionWidgets:Check(parent)
+  frame:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+  frame:SetScript("OnClick", callback)
   return frame
 end
 
@@ -58,6 +58,7 @@ function module:RefreshPanel()
   panel.unitEnabled:SetChecked(unitConfig.enable)
   panel.reactionEnabled:SetChecked(config and config.enable or false)
   panel.reactionEnabled:SetEnabled(config ~= nil)
+  panel.reactionEnabled:SetAlpha(config and 1 or 0.4)
   panel.unsupported:SetText(config and "" or "This reaction is not used by this soft-target indicator.")
   for key, field in pairs(panel.fields) do
     local value = config and config[key]
@@ -83,18 +84,15 @@ end
 
 function module:OpenOptions()
   if self.panel then self:RefreshPanel(); self.panel:Show(); return end
-  local panel = CreateFrame("Frame", "SquancherNameplateIndicatorOptions", UIParent, "BasicFrameTemplateWithInset")
+  local window = addon.OptionWidgets:Window("SquancherNameplateIndicatorOptions", 690, 676,
+    "Squanch-On · Nameplate indicators")
+  -- Controls keep their original offsets on a host placed below the title rule.
+  local panel = CreateFrame("Frame", nil, window)
+  panel:SetPoint("TOPLEFT", 0, -16)
+  panel:SetPoint("BOTTOMRIGHT", 0, -16)
+  panel.Show = function() window:Show() end
+  panel.Hide = function() window:Hide() end
   self.panel = panel
-  panel:SetSize(700, 660)
-  panel:SetPoint("CENTER")
-  panel:SetFrameStrata("DIALOG")
-  panel:SetMovable(true)
-  panel:EnableMouse(true)
-  panel:RegisterForDrag("LeftButton")
-  panel:SetScript("OnDragStart", panel.StartMoving)
-  panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-  panel.TitleText:SetText("Squancher · Nameplate Indicators")
-  if UISpecialFrames then table.insert(UISpecialFrames, "SquancherNameplateIndicatorOptions") end
   panel.fields = {}
 
   text(panel, "Profile", 22, -40, 100)
@@ -115,20 +113,16 @@ function module:OpenOptions()
   panel.unit = button(panel, selectedUnit, 110, -100, 180, function()
     selectedUnit = nextValue(module.units, selectedUnit, 1); module:RefreshPanel()
   end)
-  panel.unitEnabled = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-  panel.unitEnabled:SetPoint("TOPLEFT", panel, "TOPLEFT", 310, -96)
-  panel.unitEnabled:SetScript("OnClick", function(self)
+  panel.unitEnabled = check(panel, 312, -102, function(self)
     module:SetOption(selectedUnit, "unit", "enable", self:GetChecked()); module:RefreshPanel()
   end)
-  text(panel, "Enable this unit", 345, -106, 200)
+  text(panel, "Enable this unit", 342, -108, 200)
   text(panel, "Reaction", 22, -144, 80)
   panel.reaction = button(panel, selectedReaction, 110, -136, 180, function()
     selectedReaction = nextValue(module.reactions, selectedReaction, 1); module:RefreshPanel()
   end)
-  panel.reactionEnabled = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-  panel.reactionEnabled:SetPoint("TOPLEFT", panel, "TOPLEFT", 310, -132)
-  panel.reactionEnabled:SetScript("OnClick", function(self) set("enable", self:GetChecked()) end)
-  text(panel, "Enable this reaction", 345, -142, 250)
+  panel.reactionEnabled = check(panel, 312, -138, function(self) set("enable", self:GetChecked()) end)
+  text(panel, "Enable this reaction", 342, -144, 250)
   panel.unsupported = text(panel, "", 22, -171, 650)
 
   text(panel, "Texture", 22, -210, 90)
@@ -181,4 +175,5 @@ function module:OpenOptions()
   button(panel, "Status", 230, -622, 100, function() module:PrintStatus() end)
   button(panel, "Close", 565, -622, 100, function() panel:Hide() end)
   self:RefreshPanel()
+  window:Show()
 end

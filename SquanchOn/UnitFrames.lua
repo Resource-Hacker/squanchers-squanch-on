@@ -319,8 +319,11 @@ end
 -- stacking upward on its own side. Player: debuffs left, buffs right. Target:
 -- buffs left, debuffs right.
 local splitSides={player={Debuffs='LEFT',Buffs='RIGHT'},target={Buffs='LEFT',Debuffs='RIGHT'}}
+-- Small secondary frames carry no aura rows (owner, 2026-11-11).
+local noAuras={targettarget=true,targettargettarget=true,pettarget=true,focustarget=true}
 local function configureAura(frame,key,config)
     local c=frame[key]
+    if noAuras[frame.squancherKey] then config=Import:Copy(config);config.enable=false end
     local side=splitSides[frame.squancherKey] and splitSides[frame.squancherKey][key]
     if side then
         local cells=numeric(config.perrow,10,4,40)
@@ -1128,7 +1131,7 @@ function UF:RegisterLayoutTargets()
     for key,mover in pairs(self.movers) do
         if not self.layoutRegistered[key] then
             local id=key
-            editor:Register({id='uf_'..id,label=(unitNames[id] or id)..' unit frame',resize=not groupTypes[id] and id~='boss' and id~='arena' and 'free' or false,fixedBorderSize=true,
+            editor:Register({id='uf_'..id,label=id:match('^cast_') and (unitNames[id:sub(6)] or id:sub(6))..' cast bar' or id:match('^power_') and (unitNames[id:sub(7)] or id:sub(7))..' power bar' or (unitNames[id] or id)..' unit frame',resize=not groupTypes[id] and id~='boss' and id~='arena' and 'free' or false,fixedBorderSize=true,
                 getFrame=function() return UF.movers[id] end,
                 getBoundsFrames=function()
                     if groupTypes[id] or id=='boss' or id=='arena' then

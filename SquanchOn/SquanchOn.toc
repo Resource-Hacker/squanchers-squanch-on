@@ -31,6 +31,7 @@ NameplateIndicatorOptions.lua
 NativeText.lua
 OwnedText.lua
 DarkSkin.lua
+OptionWidgets.lua
 TooltipSkin.lua
 NativeControlSkins.lua
 NativeMenuBorders.lua

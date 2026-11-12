@@ -206,8 +206,8 @@ function Targets:Register()
         local id, label, name = unpack(item)
         register(id, label, function() return _G[name] end, 'scale', applyBars, 25)
     end
-    for _, item in ipairs({ { 'ifilger_buffs', 'Buffs', 'SquanchOnBuffs' },
-        { 'minimap_buttons', 'Minimap addon buttons', 'SquanchOnMinimapButtons' } }) do
+    -- The retired aura panel has no handle; its place is taken by the buff and debuff bars.
+    for _, item in ipairs({ { 'minimap_buttons', 'Minimap addon buttons', 'SquanchOnMinimapButtons' } }) do
         local id, label, name = unpack(item)
         register(id, label, function() return _G[name] end, 'scale', applyAux, 25)
     end

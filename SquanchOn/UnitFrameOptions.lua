@@ -104,20 +104,28 @@ local function supported(path)
     if type(path)=='table' then return capabilities['customTexts.*']==true or capabilities['customTexts.'..path[3]]==true end
     return capabilities[path]==true
 end
-local function label(parent,text,x,y)
-    local fs=parent:CreateFontString(nil,'OVERLAY','GameFontNormal')
-    fs:SetPoint('TOPLEFT',x,y);fs:SetText(text);return fs
+local textKeys={text_format=true,font=true,size=true,fontOutline=true,attachTextTo=true,position=true,xOffset=true,yOffset=true}
+local frameKeys={enable=true,width=true,height=true,orientation=true}
+local sectionNames={portrait='Portrait',health='Health',power='Power',castbar='Cast bar',classbar='Class resources',
+    fader='Fading',buffs='Buffs',debuffs='Debuffs'}
+-- Section title for a field path, plus the label prefix that title makes redundant.
+local function section(path)
+    if type(path)=='table' then return 'Custom text: '..tostring(path[2]),tostring(path[2]) end
+    local head,tail=path:match('^([^.]+)%.?(.*)$')
+    local title
+    if tail=='' then title=frameKeys[head] and 'Frame' or 'Group layout'
+    elseif head=='name' or ((head=='health' or head=='power') and textKeys[tail]) then
+        title=head:sub(1,1):upper()..head:sub(2)..' text'
+    else title=sectionNames[head] or head end
+    return title,title
 end
-local function button(parent,text,width,callback)
-    local control=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate')
-    control:SetSize(width,24);control:SetText(text);control:SetScript('OnClick',callback);return control
+local function shortLabel(text,prefix)
+    if text:sub(1,#prefix):lower()~=prefix:lower() then return text end
+    local rest=text:sub(#prefix+1):gsub('^[%s:]+','')
+    if rest=='' then return text end
+    return rest:sub(1,1):upper()..rest:sub(2)
 end
-local function edit(parent,width)
-    local control=CreateFrame('EditBox',nil,parent,'InputBoxTemplate')
-    control:SetSize(width,22);control:SetAutoFocus(false)
-    control:SetScript('OnEscapePressed',function(self) self:ClearFocus() end)
-    return control
-end
+local ROW,LABEL_WIDTH,CONTROL_X,BODY_WIDTH=24,250,266,562
 function Options:Message(text) if self.message then self.message:SetText(text or '') end end
 function Options:FieldsForUnit()
     local result={}
@@ -141,42 +149,65 @@ function Options:FieldsForUnit()
     return result
 end
 function Options:DrawRows()
+    local W=ns.OptionWidgets
     for _,row in ipairs(self.rows or {}) do row.control:Hide();row.label:Hide();row.field=nil end
-    self.rows=self.rows or {}
+    for _,header in ipairs(self.headers or {}) do header:Hide();header.rule:Hide() end
+    self.rows=self.rows or {};self.headers=self.headers or {}
     local available=self:FieldsForUnit()
+    local y,current,used=0,nil,0
     for index,field in ipairs(available) do
-        local row=self.rows[index] or {};self.rows[index]=row
-        if row.kind~=field[3] then
-            if row.control then row.control:Hide() end
-            row.kind=field[3]
-            if field[3]=='boolean' then
-                row.control=CreateFrame('CheckButton',nil,self.body,'UICheckButtonTemplate');row.control:SetSize(25,25)
-            elseif field[3]=='choice' then
-                row.control=button(self.body,'',235,function(control)
+        local title,prefix=section(field[2])
+        if title~=current then
+            current=title;used=used+1
+            if y>0 then y=y+10 end
+            local header=self.headers[used]
+            if not header then
+                header=W:Header(self.body,'');self.headers[used]=header
+                header.rule=self.body:CreateTexture(nil,'ARTWORK');header.rule:SetColorTexture(.70,.532,.294,.6);header.rule:SetHeight(1)
+            end
+            header:ClearAllPoints();header:SetPoint('TOPLEFT',0,-y-4);header:SetText(title);header:Show()
+            header.rule:ClearAllPoints();header.rule:SetPoint('TOPLEFT',0,-y-22);header.rule:SetPoint('TOPRIGHT',0,-y-22);header.rule:Show()
+            y=y+28
+        end
+        local row=self.rows[index] or {controls={}};self.rows[index]=row
+        local kind=field[3];local control=row.controls[kind]
+        if not control then
+            if kind=='boolean' then control=W:Check(self.body)
+            elseif kind=='choice' then
+                control=W:Button(self.body,'',180,function(choice)
                     local choices=row.field and row.field[4];if not choices then return end
                     local selected=0
-                    for i,value in ipairs(choices) do if value==control:GetText() then selected=i;break end end
-                    control:SetText(choices[selected%#choices+1])
-                end)
-            else row.control=edit(self.body,field[3]=='string' and 270 or 115) end
+                    for i,value in ipairs(choices) do if value==choice:GetText() then selected=i;break end end
+                    choice:SetText(choices[selected%#choices+1])
+                end,20)
+            else control=W:Edit(self.body,kind=='string' and 270 or 90);control:SetHeight(20) end
+            row.controls[kind]=control
         end
-        row.field=field
-        row.label=row.label or label(self.body,'',0,0)
-        row.label:ClearAllPoints();row.label:SetPoint('TOPLEFT',0,-(index-1)*30-5)
-        row.label:SetWidth(335);row.label:SetJustifyH('LEFT');row.label:SetText(field[1]);row.label:Show()
-        row.control:ClearAllPoints();row.control:SetPoint('TOPLEFT',350,-(index-1)*30);row.control:Show()
+        row.control,row.kind,row.field=control,kind,field
+        if not row.label then
+            row.label=W:Label(self.body,'',10);row.label:SetSize(LABEL_WIDTH,ROW)
+            row.label:SetJustifyV('MIDDLE');row.label:SetWordWrap(false)
+        end
+        row.label:ClearAllPoints();row.label:SetPoint('TOPLEFT',8,-y)
+        row.label:SetText(shortLabel(field[1],prefix));row.label:Show()
+        control:ClearAllPoints();control:SetPoint('LEFT',self.body,'TOPLEFT',CONTROL_X,-y-ROW/2);control:Show()
         local value=pathValue(self.working,field[2])
         row.original=value
-        if field[3]=='boolean' then row.control:SetChecked(value==true)
-        else row.control:SetText(value==nil and '' or tostring(value)) end
+        if kind=='boolean' then control:SetChecked(value==true)
+        else control:SetText(value==nil and '' or tostring(value)) end
+        y=y+ROW
     end
-    self.body:SetHeight(math.max(1,#available*30))
+    self.body:SetHeight(math.max(1,y))
+    self.scroll:SetVerticalScroll(0);self.scroll.Refresh()
 end
 function Options:LoadUnit()
     local UF=ns.UnitFrames
     if not UF or not UF.db then return end
     local unit=ns.UnitFrameImport.units[self.unitIndex or 1]
-    self.unitKey=unit;self.unitButton:SetText('Unit: '..unit..' (next)')
+    self.unitKey=unit
+    for index,control in ipairs(self.unitButtons) do
+        if index==(self.unitIndex or 1) then control.text:SetTextColor(.90,.684,.378) else control.text:SetTextColor(.9,.9,.86) end
+    end
     self.working=ns.UnitFrameImport:Copy(UF.db.units[unit] or {})
     self.profileName:SetText(UF.state.profile)
     self:DrawRows();self:Message('')
@@ -234,38 +265,34 @@ function Options:SelectProfile(name,create)
 end
 function Options:Build()
     if self.frame then return self.frame end
-    local frame=CreateFrame('Frame','SquanchOnUFOptions',UIParent,'BackdropTemplate')
-    frame:SetSize(760,680);frame:SetPoint('CENTER');frame:SetFrameStrata('DIALOG')
-    frame:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1})
-    frame:SetBackdropColor(.055,.055,.055,.96);frame:SetBackdropBorderColor(.7,.532,.294,1)
-    frame:EnableMouse(true);frame:SetMovable(true);frame:RegisterForDrag('LeftButton')
-    frame:SetScript('OnDragStart',frame.StartMoving);frame:SetScript('OnDragStop',frame.StopMovingOrSizing)
-    label(frame,'Squanch-On · Implemented unit-frame settings',20,-18)
-    local close=CreateFrame('Button',nil,frame,'UIPanelCloseButton');close:SetPoint('TOPRIGHT',-2,-2)
-    label(frame,'Profile',20,-55)
-    self.profileName=edit(frame,190);self.profileName:SetPoint('TOPLEFT',90,-50)
-    local select=button(frame,'Select',75,function() self:SelectProfile(self.profileName:GetText(),false) end)
+    local W=ns.OptionWidgets
+    local frame=W:Window('SquanchOnUFOptions',780,660,'Squanch-On · Unit frames')
+    local profile=W:Label(frame,'Profile',10);profile:SetPoint('LEFT',frame,'TOPLEFT',18,-61)
+    self.profileName=W:Edit(frame,190);self.profileName:SetPoint('TOPLEFT',70,-50)
+    local select=W:Button(frame,'Select',70,function() self:SelectProfile(self.profileName:GetText(),false) end,22)
     select:SetPoint('LEFT',self.profileName,'RIGHT',12,0)
-    local clone=button(frame,'Copy to new',105,function() self:SelectProfile(self.profileName:GetText(),true) end)
+    local clone=W:Button(frame,'Copy to new',100,function() self:SelectProfile(self.profileName:GetText(),true) end,22)
     clone:SetPoint('LEFT',select,'RIGHT',8,0)
-    self.unitButton=button(frame,'Unit: player (next)',200,function()
-        self.unitIndex=(self.unitIndex or 1)%#ns.UnitFrameImport.units+1;self:LoadUnit()
-    end);self.unitButton:SetPoint('TOPLEFT',20,-86)
-    local layout=button(frame,'Move & resize',150,function()
+    local layout=W:Button(frame,'Move & resize',120,function()
         frame:Hide();if ns.LayoutEditor then ns.LayoutEditor:Open() end
-    end);layout:SetPoint('LEFT',self.unitButton,'RIGHT',12,0)
-    local note=label(frame,'Only implemented controls are shown. Imported unsupported settings are preserved.\nSpecialized aura filters, all-class resources and full ElvUI options are not reproduced.',20,-119)
-    note:SetWidth(710);note:SetJustifyH('LEFT')
-    local scroll=CreateFrame('ScrollFrame',nil,frame,'UIPanelScrollFrameTemplate')
-    scroll:SetPoint('TOPLEFT',20,-160);scroll:SetPoint('BOTTOMRIGHT',-42,90)
-    self.body=CreateFrame('Frame',nil,scroll);self.body:SetSize(690,1);scroll:SetScrollChild(self.body)
-    self.scroll=scroll
-    self.message=label(frame,'',20,-610);self.message:SetWidth(710);self.message:SetJustifyH('LEFT')
-    local apply=button(frame,'Apply',100,function() self:Apply() end);apply:SetPoint('BOTTOMRIGHT',-20,18)
-    local revert=button(frame,'Revert edits',110,function() self.pending=nil;self:LoadUnit() end);revert:SetPoint('RIGHT',apply,'LEFT',-10,0)
+    end,22);layout:SetPoint('TOPRIGHT',-18,-50)
+    local note=W:Label(frame,'Only supported settings are shown; other imported settings are kept unchanged.',10,.62,.62,.6)
+    note:SetPoint('TOPLEFT',18,-84);note:SetWidth(744)
+    self.unitButtons={}
+    for index,unit in ipairs(ns.UnitFrameImport.units) do
+        local control=W:Button(frame,unit,160,function() self.unitIndex=index;self:LoadUnit() end,22)
+        control:SetPoint('TOPLEFT',18,-108-(index-1)*24)
+        self.unitButtons[index]=control
+    end
+    local scroll,body=W:Scroll(frame)
+    scroll:SetPoint('TOPLEFT',190,-108);scroll:SetPoint('BOTTOMRIGHT',-28,56)
+    body:SetSize(BODY_WIDTH,1)
+    self.scroll,self.body=scroll,body
+    self.message=W:Label(frame,'',10);self.message:SetPoint('BOTTOMLEFT',18,16);self.message:SetSize(500,24)
+    self.message:SetJustifyV('MIDDLE')
+    local apply=W:Button(frame,'Apply',100,function() self:Apply() end);apply:SetPoint('BOTTOMRIGHT',-18,16)
+    local revert=W:Button(frame,'Revert edits',110,function() self.pending=nil;self:LoadUnit() end);revert:SetPoint('RIGHT',apply,'LEFT',-10,0)
     self.frame=frame
-    if UISpecialFrames then table.insert(UISpecialFrames,'SquanchOnUFOptions') end
-    if ns.TrackMenuFrame then ns:TrackMenuFrame(frame) end
     return frame
 end
 function Options:Open()

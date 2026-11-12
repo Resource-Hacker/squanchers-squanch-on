@@ -279,16 +279,12 @@ function ns:OpenTooltipOptions()
     if not settings() then print('Squanch-On: import the complete tooltip profile before editing it.');return end
     Tooltip:Refresh()
     if not Tooltip.options then
-        local frame=CreateFrame('Frame','SquanchOnTooltipOptions',UIParent,'BasicFrameTemplateWithInset')
-        frame:SetSize(440,420);frame:SetPoint('CENTER');frame:SetFrameStrata('DIALOG')
-        frame.TitleText:SetText('Squanch-On: Tooltip presentation')
-        table.insert(UISpecialFrames,'SquanchOnTooltipOptions')
-        if self.TrackMenuFrame then self:TrackMenuFrame(frame) end
-        local caption=frame:CreateFontString(nil,'OVERLAY','GameFontHighlight')
-        caption:SetPoint('TOPLEFT',20,-40);caption:SetWidth(400);caption:SetJustifyH('LEFT')
-        caption:SetText('Move the fixed anchor with /sqedit. Blizzard owns content and item comparison. Imported content preferences are preserved; custom ElvUI content extensions are unavailable.')
-        local check=CreateFrame('CheckButton',nil,frame,'UICheckButtonTemplate')
-        check:SetPoint('TOPLEFT',16,-108);check.Text:SetText('Anchor default tooltips to the cursor')
+        local W=self.OptionWidgets
+        local frame=W:Window('SquanchOnTooltipOptions',380,340,'Squanch-On · Tooltip')
+        local caption=W:Label(frame,'Move the fixed anchor with /sqedit. Blizzard owns content and item comparison. Imported content preferences are preserved; custom ElvUI content extensions are unavailable.',10,.62,.62,.6)
+        caption:SetPoint('TOPLEFT',18,-50);caption:SetWidth(344)
+        local check=W:Check(frame);check:SetPoint('TOPLEFT',18,-108)
+        local checkLabel=W:Label(frame,'Anchor default tooltips to the cursor',10);checkLabel:SetPoint('LEFT',check,'RIGHT',8,0)
         check:SetScript('OnClick',function(button)
             settings().cursorAnchor=button:GetChecked()==true;Tooltip:Refresh()
         end)
@@ -297,10 +293,9 @@ function ns:OpenTooltipOptions()
             {'smallTextFontSize','Comparison text size',6,40},{'colorAlpha','Background opacity',0,1},
             {'xOffset','Fixed anchor horizontal offset',-1000,1000},{'yOffset','Fixed anchor vertical offset',-1000,1000},
             {'healthHeight','Health bar height',1,40}}) do
-            local field=CreateFrame('EditBox',nil,frame,'InputBoxTemplate')
-            field:SetSize(65,20);field:SetPoint('TOPRIGHT',-30,-143-(i-1)*32);field:SetAutoFocus(false)
-            local label=frame:CreateFontString(nil,'OVERLAY','GameFontHighlight')
-            label:SetPoint('RIGHT',field,'LEFT',-15,0);label:SetText(spec[2])
+            local field=W:Edit(frame,70);field:SetHeight(20)
+            field:SetPoint('TOPLEFT',292,-142-(i-1)*26)
+            local label=W:Label(frame,spec[2],10);label:SetPoint('LEFT',frame,'TOPLEFT',18,-152-(i-1)*26)
             local function read() local db=settings();return spec[1]=='healthHeight' and (db.healthBar or {}).height or setting(db,spec[1]) end
             field:SetScript('OnEscapePressed',function(box) box:SetText(tostring(read() or ''));box:ClearFocus() end)
             field:SetScript('OnEnterPressed',function(box)
