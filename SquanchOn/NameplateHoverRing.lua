@@ -239,10 +239,10 @@ local function show(ring, frame)
 end
 
 -- Called with every mouseover change of a plate, and when the target changes.
--- Motion: the ring and emblem appear over 0.1 s and leave over 0.25 s; the name
+-- Motion: the ring and emblem appear and leave over 0.15 s; the name
 -- glides between its two places instead of jumping. Alpha and Translation
 -- animations only: nothing is measured and nothing runs per frame in Lua.
-local APPEAR, LEAVE = 0.1, 0.25
+local APPEAR, LEAVE = 0.15, 0.15
 local function alphaAnim(region, key)
   local group = region[key]
   if not group then
