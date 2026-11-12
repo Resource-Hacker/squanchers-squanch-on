@@ -93,6 +93,8 @@ local function semantic(frame,level)
     end
     root.HealthGlow=root.healthGlow;root.MainGlow=root.healthGlow;root.PowerGlow=root.powerGlow
     root.SetVertexColor=function() end
+    -- Lit only by RefreshGlows or the threat element, never by default.
+    root:Hide()
     return root
 end
 local function positionGlow(frame,root)
@@ -173,7 +175,7 @@ function UF:LayoutGlows(frame)
 end
 function UF:RefreshGlows(frame)
     local c=self.db.colors.frameGlow or {};local unit=frame.__unit
-    if not unit then return end
+    if not unit then reveal(frame.TargetGlow,false);reveal(frame.MouseGlow,false);reveal(frame.FocusGlow,false);return end
     -- The hover edge follows mainGlow; mouseoverGlow owns the wash over the health fill.
     local target=c.targetGlow or {};local main=c.mainGlow or {};local wash=c.mouseoverGlow or {};local focus=c.focusGlow or {}
     local hover=not frame.db.disableMouseoverGlow and hovered(frame,unit)

@@ -209,26 +209,93 @@ local function shouldShowMicro(info)
     return true
 end
 
+-- The micro menu lives in the chat header strip, flush against the panel's
+-- inner right rim with Friends as its last cell. Native buttons keep their
+-- scripts; only parent, scale and anchors change.
 function Bars:LayoutMicroMenu()
     if InCombatLockdown() then self.pending = true; return end
-    if self.menuLayout or not MicroMenu or MicroMenu:GetParent() ~= MicroMenuContainer then return end
+    local skin = ns.DarkSkin
+    local panel, strip = skin and skin.chatPanel, skin and skin.chatIconStrip
+    if self.menuLayout or not panel or not strip or not strip:GetRight() or not MicroMenu or MicroMenu:GetParent() ~= MicroMenuContainer then return end
+    -- DynamicCam temporarily owns parentage while hiding the UI.
+    if MicroMenuContainer.ludius_parentBeforeFadeOut then self.pending = true; return end
     self.menuLayout = true
-    local buttons = {}
+    local friends = QuickJoinToastButton
+    if friends and not (friends:GetParent() == panel and friends:IsShown()) then friends = nil end
+    if MicroMenuContainer:GetParent() ~= panel then MicroMenuContainer:SetParent(panel) end
+    scale(MicroMenuContainer, 1)
+    local strata, level = "LOW", panel:GetFrameLevel() + 8
+    MicroMenuContainer:SetFrameStrata(strata); MicroMenuContainer:SetFrameLevel(level)
+    MicroMenu:SetFrameStrata(strata); MicroMenu:SetFrameLevel(level + 1)
+    local buttons, rawWidth, rawHeight = {}, 0, 0
     for _, info in ipairs(MicroMenu:GenerateButtonInfos()) do
         local button = info.button
         if button then
             if shouldShowMicro(info) then
                 buttons[#buttons + 1] = button
                 button:Show()
+                button:SetFrameStrata(strata); button:SetFrameLevel(level + 2)
+                rawWidth = rawWidth + button:GetWidth()
+                rawHeight = math.max(rawHeight, button:GetHeight())
                 observeHover(button)
             else
                 button:Hide()
             end
         end
     end
-    ns.MinimapPanel:LayoutMicroMenu(buttons)
+    rawWidth, rawHeight = math.max(1, rawWidth), math.max(1, rawHeight)
+    -- Friends is one more cell of the same raw size as a micro button.
+    local cellWidth = #buttons > 0 and rawWidth / #buttons or rawHeight * 0.8
+    local totalWidth = rawWidth + (friends and cellWidth or 0)
+    -- Room between the left group (chat tabs, then the voice controls) and the
+    -- panel's inner right rim, in panel units. Cells fill the header height and
+    -- shrink before tabs yield; half height is the floor that keeps them usable.
+    local unit = panel:GetEffectiveScale()
+    local leftRight = panel:GetLeft() * unit
+    local function reach(frame)
+        if frame and frame:IsShown() and frame:GetRight() then
+            leftRight = math.max(leftRight, frame:GetRight() * frame:GetEffectiveScale())
+        end
+    end
+    for _, chat in ipairs(GeneralDockManager and GeneralDockManager.DOCKED_CHAT_FRAMES or {}) do
+        reach(_G[chat:GetName() .. "Tab"])
+    end
+    for _, control in ipairs({ ChatFrameChannelButton, TextToSpeechButton }) do
+        if control and control:GetParent() == panel then reach(control) end
+    end
+    local header = strip:GetHeight()
+    if not header or header < 1 then header = 20 end
+    local room = (strip:GetRight() * strip:GetEffectiveScale() - leftRight) / unit - 4
+    local useScale = math.max(header * 0.5 / rawHeight, math.min(header / rawHeight, room / totalWidth))
+    scale(MicroMenu, useScale)
+    local x = 0
+    for _, button in ipairs(buttons) do
+        point(button, "TOPLEFT", MicroMenu, "TOPLEFT", x, 0)
+        x = x + button:GetWidth()
+    end
+    MicroMenu:SetSize(rawWidth, rawHeight)
+    MicroMenuContainer:SetSize(rawWidth * useScale, rawHeight * useScale)
+    point(MicroMenu, "CENTER", MicroMenuContainer, "CENTER")
+    -- Cell widths in panel units, from the right rim leftward.
+    local widths = {}
+    if friends then
+        skin:PinChatFriends(cellWidth, rawHeight, useScale)
+        widths[1] = cellWidth * useScale
+        point(MicroMenuContainer, "RIGHT", friends, "LEFT")
+    else
+        point(MicroMenuContainer, "RIGHT", strip, "RIGHT")
+    end
+    for index = #buttons, 1, -1 do widths[#widths + 1] = buttons[index]:GetWidth() * useScale end
+    skin:FitChatIconStrip(widths)
+    for _, key in ipairs({"BorderArt", "BackgroundArt"}) do if MicroMenu[key] then MicroMenu[key]:SetAlpha(0) end end
     self.menuLayout = false
-    if ns.DarkSkin and ns.DarkSkin.BarControls then ns.DarkSkin:BarControls() end
+    if skin.BarControls then skin:BarControls() end
+end
+
+function Bars:QueueMicroMenu()
+    if self.menuQueued then return end
+    self.menuQueued = true
+    C_Timer.After(0, function() self.menuQueued = nil; self:LayoutMicroMenu() end)
 end
 
 function Bars:LayoutBags()
@@ -474,6 +541,11 @@ function Bars:Initialize()
         if MicroMenuContainer.ApplySystemAnchor then hooksecurefunc(MicroMenuContainer, "ApplySystemAnchor", function() self:LayoutMicroMenu() end) end
         if MicroMenu.UpdateScale then hooksecurefunc(MicroMenu, "UpdateScale", function() self:LayoutMicroMenu() end) end
         observeHover(MicroMenuContainer)
+        -- Chat geometry and tab changes move the room this row may use.
+        if ns.DarkSkin then
+            hooksecurefunc(ns.DarkSkin, "LayoutChat", function() self:QueueMicroMenu() end)
+            hooksecurefunc(ns.DarkSkin, "AlignChatTabs", function() self:QueueMicroMenu() end)
+        end
     end
     for _, frame in ipairs({ PlayerCastingBarFrame or CastingBarFrame, MainMenuBarVehicleLeaveButton, ExtraAbilityContainer or ExtraActionBarFrame }) do
         if frame and frame.ApplySystemAnchor then hooksecurefunc(frame, "ApplySystemAnchor", function() self:LayoutCastAndExtras() end) end

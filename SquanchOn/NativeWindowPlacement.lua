@@ -37,7 +37,7 @@ function Placement:Import(name, id, frame)
         and finite(point.PX) and finite(point.PY)
     local scaled = size and finite(size.SCALE) and size.SCALE > 0
     if positioned or scaled then
-        record = {scale = scale, importedGeometry = true}
+        record = {scale = scale, importedGeometry = true, clampToScreen = source.clampToScreen}
         if positioned then
             -- Same UIParent anchor/scale coordinate convention as the native
             -- SetPoint API; convert to editor physical pixels on the next edit.

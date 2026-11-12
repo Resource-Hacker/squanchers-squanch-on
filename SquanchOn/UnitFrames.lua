@@ -369,7 +369,24 @@ local function configureAura(frame,key,config)
     local sign=signs[anchorPoint] or signs.CENTER;local sx,sy=sign[1],sign[2]
     local x=sx*fx+(config.xOffset or 0)+(relative==frame and frame.ORIENTATION~='LEFT' and frame.POWERBAR_OFFSET or 0)
     local y=sy*fy+(config.yOffset or 0)
-    setPoint(c,c.initialAnchor,relative,anchorPoint,x,y)
+    -- Split rows clear an attached class bar while it shows segments.
+    c.squancherPlace=function()
+        local bar,first=frame.db.classbar,frame.ClassPower and frame.ClassPower[1]
+        local lifted=side and first and first:IsShown() and frame.ClassBarHolder:IsShown() and not (bar and bar.detachFromFrame)
+        c.classLift=lifted and (bar and bar.height or 10)+3 or 0
+        c:ClearAllPoints();setPoint(c,c.initialAnchor,relative,anchorPoint,x,y+c.classLift)
+    end
+    c.squancherPlace()
+    if side and frame.ClassPower and frame.ClassPower[1] and not frame.squancherClassLift then
+        frame.squancherClassLift=true
+        -- Aura rows, glows and aura bars are unprotected children: safe in combat.
+        local function place()
+            for _,row in ipairs({frame.Buffs,frame.Debuffs}) do if row.squancherPlace then row.squancherPlace() end end
+            if UF.LayoutGlows and frame.squancherState then UF:LayoutGlows(frame) end
+            if UF.RefreshAuraBars and frame.db then UF:RefreshAuraBars(frame) end
+        end
+        frame.ClassPower[1]:HookScript('OnShow',place);frame.ClassPower[1]:HookScript('OnHide',place)
+    end
     c.disableMouse=config.clickThrough or false
     c.showType=key=='Debuffs';c.showStealableBuffs=key=='Buffs'
     c.onlyShowPlayer=config.onlyShowPlayer or false
@@ -870,6 +887,8 @@ local function style(frame,unit,key)
     end
     UF.objects[#UF.objects+1]=frame
     UF:ConfigureFrame(frame)
+    -- A header child built in combat had its protected sizing refused; redo it after.
+    if InCombatLockdown() then UF.pending=true end
     frame.squancherBuilding=nil
 end
 
@@ -1227,8 +1246,13 @@ function UF:RangeState(unit)
             if kind=='ENEMY' then
                 local library=LibStub and LibStub('LibRangeCheck-3.0',true)
                 local checker=library and library.GetHarmChecker and library:GetHarmChecker(5)
-                if rangeBoolean(checker,unit)==true then return true end
-                if not InCombatLockdown() and rangeBoolean(CheckInteractDistance,unit,3)==true then return true end
+                local melee=rangeBoolean(checker,unit)
+                if melee==true then return true end
+                if not InCombatLockdown() then
+                    if rangeBoolean(CheckInteractDistance,unit,3)==true then return true end
+                -- No way to judge melee reach in combat: unknown, never "out of
+                -- range", so a frame does not fade while fighting in melee.
+                elseif melee==nil then return nil end
             end
             return false
         end

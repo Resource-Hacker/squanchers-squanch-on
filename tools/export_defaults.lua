@@ -4,9 +4,17 @@
 -- Diagnostics, migration receipts and import sources are left out.
 dofile(arg[1])
 local db = assert(SquanchOnDB, 'SquanchOnDB missing')
+-- Not exported: cameraFraming (names the author's DynamicCam profiles and would
+-- block /sqms camera setup), itemWindowSizing and minimapItemSizing (measured
+-- per install; their presence skips the one-time icon match).
 local tables = { unitFrames = true, tooltipImport = true, layout = true, nativeWindowImport = true,
-  appearance = true, nameplateIndicators = true, targetCrosshairs = true, cameraFraming = true,
-  itemWindowSizing = true, minimapItemSizing = true }
+  appearance = true, nameplateIndicators = true, targetCrosshairs = true }
+-- Of the appearance receipts only two describe the shipped data itself: the
+-- bars are already centred, and a new install has no earlier font scale to restore.
+if type(db.appearance) == 'table' then
+  db.appearance = { centeredBars30020261110 = db.appearance.centeredBars30020261110 and true or nil,
+    previousSizeRestored = db.appearance.previousSizeRestored and true or nil }
+end
 -- Per-character records never ship.
 if type(db.nameplateIndicators) == 'table' then db.nameplateIndicators.profileKeys = nil end
 if type(db.unitFrames) == 'table' then db.unitFrames.localTextRev = nil end

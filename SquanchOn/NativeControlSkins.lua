@@ -77,6 +77,46 @@ end
 local function dropdownAtlas(atlas)
     return atlas == "common-dropdown-textholder" or atlas:find("^common%-dropdown%-[bc]%-button")
 end
+local function sliderTrackAtlas(atlas)
+    return atlas == "Minimal_SliderBar_Left" or atlas == "Minimal_SliderBar_Right"
+        or atlas == "_Minimal_SliderBar_Middle"
+end
+-- The native minimal checkbox paints a black square over its whole 30-unit hit
+-- frame. Keep that frame, state and click area; draw one stepper-sized face.
+local checkFaces = setmetatable({}, { __mode = "k" })
+local function compactCheck(button, enabled)
+    local face = checkFaces[button]
+    if not face then
+        face = CreateFrame("Frame", nil, button)
+        checkFaces[button] = face
+        face.ignoreInLayout = true
+        face:EnableMouse(false)
+        -- The fill is a region of the button so the native check stays above it.
+        face.fill = button:CreateTexture(nil, "BACKGROUND")
+        face.fill:SetAllPoints(face)
+        face.fill:SetColorTexture(0.055, 0.055, 0.055, 0.9)
+        ns.DarkSkin:Panel(face, "inner", 0)
+    end
+    local height = button:GetHeight()
+    local size = height > 4 and math.min(16, height) or 16
+    face:ClearAllPoints()
+    face:SetPoint("LEFT", button, "LEFT", 1, 0)
+    face:SetSize(size, size)
+    for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
+        local texture = button[method] and button[method](button)
+        if texture then texture:SetAlpha(0) end
+    end
+    for _, method in ipairs({ "GetCheckedTexture", "GetDisabledCheckedTexture", "GetHighlightTexture" }) do
+        local texture = button[method] and button[method](button)
+        if texture then
+            texture:ClearAllPoints()
+            texture:SetAllPoints(face)
+            if method ~= "GetHighlightTexture" then
+                ns.DarkSkin:TintChrome(texture, enabled and method == "GetCheckedTexture")
+            end
+        end
+    end
+end
 local function neutralChrome(texture, allowed, enabled)
     local atlas = texture and texture.GetAtlas and texture:GetAtlas()
     if not atlas or not allowed(atlas) then return end
@@ -94,10 +134,7 @@ local function refreshChrome(button, role)
         -- Arrow, selected text, checks and menu remain under native ownership.
         neutralChrome(button.Background, dropdownAtlas, enabled)
     elseif role == "settingscheck" then
-        local function checkboxBase(atlas) return atlas == "checkbox-minimal" end
-        -- Checked/DisabledChecked are separate native glyphs and stay untouched.
-        neutralChrome(button:GetNormalTexture(), checkboxBase, enabled)
-        neutralChrome(button:GetPushedTexture(), checkboxBase, enabled)
+        compactCheck(button, enabled)
     else
         local atlases = role == "close" and closeAtlases or modelAtlases
         for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }) do
@@ -240,8 +277,14 @@ function Controls:Style(frame, explicit)
     local dropdown = frame.intrinsic == "DropdownButton"
     local settingsTab = SettingsPanel and (frame == SettingsPanel.GameTab or frame == SettingsPanel.AddOnsTab)
     local button = dropdown or kind == "Button" and (explicit or textButton(frame))
-    if not (edit or check or slider or button) then return end
-    local raised = kind == "Button" and not dropdown and not settingsTab and textButton(frame)
+    -- The tab frame is taller than its art, a minimal slider taller than its
+    -- track: a frame-sized rim there is a stray box. finishSettingsTab,
+    -- finishSettingsControls and compactCheck own those three.
+    if settingsTab or not (edit or check or slider or button) then return end
+    local normal = check and frame:GetNormalTexture()
+    if normal and normal:GetAtlas() == "checkbox-minimal" then finishChromeButton(frame, "settingscheck"); return end
+    if slider and frame.Left and frame.Left.GetAtlas and sliderTrackAtlas(frame.Left:GetAtlas()) then return end
+    local raised = kind == "Button" and not dropdown and textButton(frame)
     -- Ordinary three-slice text art is replaced by the shared raised face.
     -- Keep native icons, selected tabs, checks, thumbs and dropdown glyphs.
     if raised then
@@ -250,10 +293,8 @@ function Controls:Style(frame, explicit)
             local texture = frame[key]
             if texture and texture.IsObjectType and texture:IsObjectType("Texture") then texture:Hide() end
         end
-    elseif edit or button and not dropdown and not settingsTab then hideTrim(frame) end
+    elseif edit or button and not dropdown then hideTrim(frame) end
     if dropdown then finishChromeButton(frame, "dropdown") end
-    local normal = check and frame:GetNormalTexture()
-    if normal and normal:GetAtlas() == "checkbox-minimal" then finishChromeButton(frame, "settingscheck") end
     if styled[frame] then return end
     styled[frame] = true
     local border = raised and ns.DarkSkin:RaisedButton(frame, "inner") or ns.DarkSkin:Panel(frame, "inner", 0)
@@ -358,15 +399,39 @@ local function finishSideCategories(pane)
         end
     end
 end
+-- Native settings layout is drawn for 12-unit text at scale 1. NativeText's
+-- 8-unit body would shrink with the compact window, so size it in screen units.
+local function settingsText(root, limit)
+    local text = ns.NativeText
+    if not text or not root or not SettingsPanel then return end
+    local scale = SettingsPanel:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if not (scale > 0) then return end
+    local count = 0
+    local function visit(frame, depth)
+        if depth > 7 or count >= limit or not frame.GetObjectType or ownedElsewhere(frame) then return end
+        count = count + 1
+        if frame:GetObjectType() == "EditBox" then text:Region(frame, false, 8 / scale) end
+        for _, region in ipairs({ frame:GetRegions() }) do
+            if region.IsObjectType and region:IsObjectType("FontString") then
+                text:Region(region, false, (text.headers[region] and 12 or 8) / scale)
+            end
+        end
+        for _, child in ipairs({ frame:GetChildren() }) do visit(child, depth + 1) end
+    end
+    visit(root, 0)
+end
 local function settingsCategory(row)
     if row.Background then hideTexture(row.Background); ns.DarkSkin:Panel(row, 'inner', 0) end
+    -- Selected/hover bar: SetAtlas keeps this tint; muted gold, not bright yellow.
+    local bar = row.Texture
+    if bar and bar.IsObjectType and bar:IsObjectType("Texture") then
+        ns.DarkSkin:TintChrome(bar)
+        bar:SetAlpha(0.6)
+    end
+    settingsText(row, 32)
 end
 local settingsSliderHooks, settingsTabHooks = {}, {}
-local settingsBackground, settingsDivider
-local function sliderTrackAtlas(atlas)
-    return atlas == "Minimal_SliderBar_Left" or atlas == "Minimal_SliderBar_Right"
-        or atlas == "_Minimal_SliderBar_Middle"
-end
+local settingsBackground, settingsUnderlay, settingsDivider
 local function refreshSettingsSlider(slider)
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
         neutralChrome(slider[key], sliderTrackAtlas, slider:IsEnabled())
@@ -405,7 +470,6 @@ local function finishSettingsTab(tab)
         hooksecurefunc(tab, "UpdateAtlas", refresh)
     end
     refresh(tab)
-    ns.DarkSkin:Panel(tab, "inner", 0)
 end
 local function hideAtlas(owner, atlas)
     for _, region in ipairs({ owner:GetRegions() }) do
@@ -450,23 +514,64 @@ local function finishSettingsBackground(frame)
         for _, key in ipairs({ "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }) do hideTexture(bg[key]) end
     end
     if not settingsBackground then
-        settingsBackground = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+        -- Dense text needs a readable backing: near-black beneath the shared fill.
+        settingsUnderlay = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+        settingsUnderlay:SetColorTexture(0.02, 0.02, 0.02, 0.85)
+        settingsBackground = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
     end
     local border = ns.DarkSkin:Panel(frame, "dialog", 0)
+    ns.DarkSkin:FitPanelBackground(settingsUnderlay, border)
     ns.DarkSkin:StylePanelBackground(settingsBackground, border)
     hideAtlas(frame, "Options_InnerFrame")
     finishSettingsTab(frame.GameTab)
     finishSettingsTab(frame.AddOnsTab)
 end
 local function settingsRow(row)
-    if row.NineSlice then hideTrim(row); ns.DarkSkin:Panel(row, 'inner', 0) end
+    -- A section's native group trim goes; rows are not controls and get no rim.
+    if row.NineSlice then hideTrim(row) end
     Controls:Style(row.Button, true)
     finishSettingsControls(row)
     Controls:Scan(row, 128)
+    settingsText(row, 128)
     if row.EvaluateVisibility and not expansionHooks[row] then
         expansionHooks[row] = true
-        hooksecurefunc(row, 'EvaluateVisibility', function(self) Controls:Scan(self, 128) end)
+        hooksecurefunc(row, 'EvaluateVisibility', function(self)
+            Controls:Scan(self, 128); settingsText(self, 128)
+        end)
     end
+end
+-- 920x724 native units x 0.64 = 589x463 UI units; 8-unit body text is then
+-- 12.5 native units, the size this layout was drawn for.
+local SETTINGS_SCALE = 0.64
+local function compactSettings(frame)
+    frame:SetClampedToScreen(true)
+    -- HUD panels are MEDIUM; popups and menus stay above at DIALOG and higher.
+    local strata = frame:GetFrameStrata()
+    if strata == "BACKGROUND" or strata == "LOW" or strata == "MEDIUM" then frame:SetFrameStrata("HIGH") end
+    local db = ns.db
+    if not db or db.settingsCompactScale then return end
+    -- One-time, through the window's geometry owner (LayoutWindows reapplies the
+    -- stored scale after native resets); later editor resizing wins.
+    local id, editor, windows = "window_SettingsPanel", ns.LayoutEditor, ns.LayoutWindows
+    local record = editor and editor:Copy(editor:Read(id))
+    local old = record and type(record.scale) == "number" and record.scale > 0 and record.scale or frame:GetScale()
+    if old > SETTINGS_SCALE then
+        if record then
+            local anchor = record.nativeAnchor
+            -- Offsets are in the window's own scale: keep the same screen anchor.
+            if anchor then anchor[3], anchor[4] = anchor[3] * old / SETTINGS_SCALE, anchor[4] * old / SETTINGS_SCALE end
+            record.scale = SETTINGS_SCALE
+        else
+            record = { scale = SETTINGS_SCALE, nativeAnchor = { "CENTER", "CENTER", 0, 0 } }
+        end
+        if editor and windows then
+            editor:Store(id, record)
+            windows:Apply(id, frame)
+        else
+            frame:SetScale(SETTINGS_SCALE)
+        end
+    end
+    db.settingsCompactScale = SETTINGS_SCALE
 end
 function Controls:FinishWindow(frame)
     if InCombatLockdown() then pending[frame] = 'window'; return end
@@ -502,6 +607,7 @@ function Controls:FinishWindow(frame)
         finishList(player and player.ScrollBox, characterCategory)
         finishList(pet and pet.ScrollBox, characterCategory)
     elseif frame == SettingsPanel then
+        compactSettings(frame)
         finishSettingsBackground(frame)
         local categories, container = frame.CategoryList, frame.Container
         if categories then ns.DarkSkin:Panel(categories, 'inner', 0) end
@@ -519,6 +625,7 @@ function Controls:FinishWindow(frame)
         end
         finishList(list and list.ScrollBox, settingsRow)
         self:Style(frame.ClosePanelButton, true)
+        settingsText(frame, 512)
     end
 end
 

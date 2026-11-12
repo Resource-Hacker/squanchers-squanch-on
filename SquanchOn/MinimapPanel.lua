@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- One owner for the XP -> map -> micro menu -> bags stack. Native controls keep
+-- One owner for the XP -> map -> bags stack (the micro menu lives in the chat header). Native controls keep
 -- their own scripts, bindings, state drivers and secure action ownership.
 local _, ns = ...
 local Panel = { width = 174.933349609375 }
@@ -36,7 +36,7 @@ function Panel:Ensure()
     local rules = CreateFrame("Frame", nil, frame)
     rules:SetAllPoints(); rules:EnableMouse(false); rules.ignoreInLayout = true
     rules:SetFrameLevel(200)
-    -- The icon cells own the other two seams; do not stack a second rim there.
+    -- The bag cells own the map/bag seam; do not stack a second rim there.
     self.xpDivider = ns.DarkSkin:Divider(rules, self.width)
     ns.DarkSkin:Panel(frame, "minimap", 0)
     return frame
@@ -88,10 +88,6 @@ function Panel:LayoutStack()
     end
     point(self.xpDivider, "TOPLEFT", frame, "TOPLEFT", 0, -10 + self.xpDivider.paintCenter)
     y = y + width
-    if self.microHeight then
-        point(MicroMenuContainer, "TOP", frame, "TOP", 0, -y)
-        y = y + self.microHeight
-    end
     if self.bagHeight then
         point(BagsBar, "TOP", frame, "TOP", 0, -y / BagsBar:GetScale())
         y = y + self.bagHeight
@@ -117,7 +113,7 @@ function Panel:QueueActionSlotMatch()
                 local before = { record = editor:Copy(editor:Read('minimap_panel')), scale = frame:GetScale() }
                 local ratio = wanted / current
                 rect.w, rect.h = rect.w * ratio, rect.h * ratio
-                -- Scale the common parent: XP, map, microbuttons and bag row
+                -- Scale the common parent: XP, map and bag row
                 -- retain their relative sizes and contiguous native layout.
                 editor:Store('minimap_panel', rect)
                 self:LayoutStack()
@@ -128,38 +124,6 @@ function Panel:QueueActionSlotMatch()
         end
         self.slotMatchQueued = nil
     end)
-end
-
-function Panel:LayoutMicroMenu(buttons)
-    local frame = self:Ensure()
-    adopt(MicroMenuContainer, frame); scale(MicroMenuContainer, 1)
-    -- Native map art must stay below the complete control subtree, including rims.
-    MicroMenuContainer:SetFrameStrata("MEDIUM")
-    MicroMenuContainer:SetFrameLevel(frame:GetFrameLevel() + 10)
-    MicroMenu:SetFrameStrata("MEDIUM")
-    MicroMenu:SetFrameLevel(MicroMenuContainer:GetFrameLevel() + 1)
-    local rawWidth, rawHeight = 0, 0
-    for _, button in ipairs(buttons) do
-        button:SetFrameStrata("MEDIUM")
-        button:SetFrameLevel(MicroMenu:GetFrameLevel() + 1)
-        rawWidth = rawWidth + button:GetWidth()
-        rawHeight = math.max(rawHeight, button:GetHeight())
-    end
-    local gap, padding = 0, 0
-    local useScale = math.min(0.55, (self.width - 2 * padding - gap * math.max(0, #buttons - 1)) / math.max(1, rawWidth))
-    scale(MicroMenu, useScale)
-    local width = rawWidth + gap * math.max(0, #buttons - 1) / useScale
-    local x = 0
-    for _, button in ipairs(buttons) do
-        point(button, "TOPLEFT", MicroMenu, "TOPLEFT", x, 0)
-        x = x + button:GetWidth() + gap / useScale
-    end
-    MicroMenu:SetSize(math.max(1, width), math.max(1, rawHeight))
-    self.microHeight = rawHeight * useScale + 2 * padding
-    MicroMenuContainer:SetSize(self.width, self.microHeight)
-    point(MicroMenu, "CENTER", MicroMenuContainer, "CENTER")
-    for _, key in ipairs({"BorderArt", "BackgroundArt"}) do if MicroMenu[key] then MicroMenu[key]:SetAlpha(0) end end
-    self:LayoutStack()
 end
 
 -- Camelot adds both an outer atlas and pooled dividers. Their native layout

@@ -163,7 +163,7 @@ local menuWindowNames = {
   "CharacterFrame", "MerchantFrame", "GossipFrame", "QuestFrame", "PlayerSpellsFrame",
   "FriendsFrame", "WorldMapFrame", "BankFrame", "TradeFrame", "ItemTextFrame",
   "LootFrame", "ContainerFrameCombinedBags", "SettingsPanel", "AddonList", "MacroFrame",
-  "MailFrame", "ProfessionsFrame", "CollectionsJournal", "PVEFrame", "AchievementFrame",
+  "MailFrame", "ProfessionsFrame", "ProfessionsBookFrame", "CollectionsJournal", "PVEFrame", "AchievementFrame",
   "DressUpFrame", "ChannelFrame", "InspectFrame", "PetStableFrame", "QuestLogFrame",
   "AuctionHouseFrame", "ClassTrainerFrame", "GuildBankFrame", "CalendarFrame", "TaxiFrame",
   "FlightMapFrame", "HelpFrame", "KeyBindingFrame", "ReadyCheckFrame", "DeathRecapFrame",
@@ -1311,7 +1311,9 @@ function addon:OnEvent(event, ...)
     end
 
     -- First run: start from the shipped layout. The table is released either way.
-    if SquanchOnDB == nil and addon.DefaultProfile then SquanchOnDB = addon.DefaultProfile end
+    if SquanchOnDB == nil and addon.DefaultProfile then
+      SquanchOnDB = addon.SeedDefaults and addon:SeedDefaults(addon.DefaultProfile) or addon.DefaultProfile
+    end
     addon.DefaultProfile = nil
     SquanchOnDB = SquanchOnDB or {}
     copyDefaults(defaults, SquanchOnDB)

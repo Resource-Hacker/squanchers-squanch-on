@@ -237,19 +237,16 @@ end
 local function refreshColors(state) classColor(state) end
 function Lighting:Refit(state)
     syncHealthOcclusion(state)
-    if InCombatLockdown() then
-        -- Do not leave old rectangles behind after a native visibility change.
-        hidePieces(state)
-        ns.OriginalUnitFrameBorders.pending=true
-        return
-    end
+    -- An existing light is refitted in combat too: its host, textures and mask
+    -- are unprotected children. The borders still get their pass afterwards.
+    if InCombatLockdown() then ns.OriginalUnitFrameBorders.pending=true end
     self:Attach(state.frame,state.panel)
 end
 function Lighting:Attach(frame,panel)
     if not self:IsUnitFrame(frame) or not panel then return end
-    if InCombatLockdown() then ns.OriginalUnitFrameBorders.pending=true;return end
     local state=self.states[frame]
     if not state then
+        if InCombatLockdown() then ns.OriginalUnitFrameBorders.pending=true;return end
         local host=CreateFrame('Frame',nil,frame)
         host:EnableMouse(false);host.ignoreInLayout=true;host:SetAllPoints(frame)
         state={frame=frame,panel=panel,host=host,edgeShades={},shadowAlphas={},pieces={},activePieces=0}
@@ -277,7 +274,8 @@ function Lighting:Attach(frame,panel)
     ns.DarkSkin:FitPanelBackground(state.classFill,panel)
     -- A unit button that has just been shown can report child geometry one
     -- frame late. Retry once instead of leaving the frame without its light.
-    if fitPieces(state)==false and not state.retry and (state.retries or 0)<5 then
+    local fitted=fitPieces(state)
+    if (fitted==false or state.activePieces==0) and not state.retry and (state.retries or 0)<5 then
         state.retry=true;state.retries=(state.retries or 0)+1
         C_Timer.After(0,function() state.retry=nil;if frame:IsShown() then Lighting:Refit(state) end end)
     end

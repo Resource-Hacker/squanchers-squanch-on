@@ -268,6 +268,12 @@ function Drawer:Initialize()
     ]])
     frame:SetFrameRef('handle',handle)
     frame:SetAttribute('_onshow',[[self:GetFrameRef('handle'):Hide()]])
+    -- Same half-second ease as the chat drawers, applied to the drawer root (shell and tracker are its descendants).
+    frame:HookScript('OnShow',function()
+        local windows=ns.LayoutWindows
+        if not windows then return end
+        windows:Slide(frame,40)
+    end)
     frame:SetAttribute('_onhide',[[self:GetFrameRef('handle'):Show()]])
     local content=CreateFrame('Frame',nil,frame)
     content:SetPoint('TOPLEFT',frame,'TOPLEFT',0,-self.contentPadding)

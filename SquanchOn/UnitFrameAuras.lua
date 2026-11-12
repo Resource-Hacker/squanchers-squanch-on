@@ -10,6 +10,26 @@ local function point(object,...)
     local args={...};for i,v in ipairs(args) do if type(v)=='number' then args[i]=UF:Scale(v) end end
     object:SetPoint(unpack(args))
 end
+local empty,auraKeys={},{'Buffs','Debuffs'}
+-- One read of a unit's auras per filter serves every row drawn for the same
+-- event (unit frame rows, aura bars, the player's bars). Outside the aura
+-- event handler nothing is kept.
+local shared
+local function auraAt(unit,filter,index)
+    if not shared then return C_UnitAuras.GetAuraDataByIndex(unit,index,filter) end
+    local byUnit=shared[unit]
+    if not byUnit then byUnit={};shared[unit]=byUnit end
+    local list=byUnit[filter]
+    if not list then
+        list={};byUnit[filter]=list
+        for i=1,255 do
+            local aura=C_UnitAuras.GetAuraDataByIndex(unit,i,filter)
+            if not aura then break end
+            list[i]=aura
+        end
+    end
+    return list[index]
+end
 local function entry(filters,list,id)
     local filter=filters and filters[list]
     local spell=filter and filter.spells and filter.spells[id]
@@ -57,7 +77,7 @@ function UF:FilterAura(config,unit,aura,button)
                     if group.useBlocklist and public(id) and entry(self.db.auraFilters,group.blockList,id) then valid=false end
                     if group.useAllowlist and public(id) and not entry(self.db.auraFilters,group.allowList,id) then valid=false end
                     if number(duration) and (group.maxDuration or 0)>0 and duration>group.maxDuration then valid=false end
-                    for key,wanted in pairs(group.candidates or {}) do
+                    for key,wanted in pairs(group.candidates or empty) do
                         if wanted==true or wanted==1 then
                             local actual=candidate(aura,key)
                             if actual~=nil and (wanted==true and not actual or wanted==1 and actual) then valid=false end
@@ -87,34 +107,47 @@ function UF:FilterAura(config,unit,aura,button)
     return not public(duration) or not public(aura.sourceUnit)
 end
 
+local sorted,sortConfig,sortDescending={},empty,false
+local function auraOrder(a,b)
+    if a.sqRank~=b.sqRank then return (a.sqRank or 0)<(b.sqRank or 0) end
+    local x,y=a.sqAura or empty,b.sqAura or empty
+    local left,right
+    if sortConfig.sortMethod=='NAME' then
+        left=public(x.name) and x.name or '';right=public(y.name) and y.name or ''
+    else
+        left=number(x.expirationTime) and x.expirationTime or 0
+        right=number(y.expirationTime) and y.expirationTime or 0
+    end
+    if left==right then return a.sqIndex<b.sqIndex end
+    if sortDescending then return left>right else return left<right end
+end
 function UF:SortAuraButtons(container)
-    local shown={};local config=container.config or {}
+    local config=container.config or empty
+    local count=0
     for index=1,container.createdButtons or #container do
         local button=container[index]
-        if button and button:IsShown() then shown[#shown+1]=button;button.sqIndex=index end
+        if button and button:IsShown() then count=count+1;sorted[count]=button;button.sqIndex=index end
     end
-    local descending=config.sortDirection=='DESCENDING'
-    table.sort(shown,function(a,b)
-        if a.sqRank~=b.sqRank then return (a.sqRank or 0)<(b.sqRank or 0) end
-        local x,y=a.sqAura or {},b.sqAura or {}
-        local left,right
-        if config.sortMethod=='NAME' then
-            left=public(x.name) and x.name or '';right=public(y.name) and y.name or ''
+    for index=#sorted,count+1,-1 do sorted[index]=nil end
+    sortConfig=config;sortDescending=config.sortDirection=='DESCENDING'
+    table.sort(sorted,auraOrder)
+    local per=math.max(1,config.perrow or 8)
+    -- One quantised pitch for every cell, so neighbours share an edge exactly
+    -- (rounding each offset on its own left 1 px seams).
+    local cell=self:Scale(container.size)+self:Scale(container.spacing or config.spacing or 1)
+    local anchor=container.initialAnchor
+    local dx=((container['growth-x'] or config.growthX)=='LEFT' and -1 or 1)*cell
+    local dy=((container['growth-y'] or config.growthY)=='DOWN' and -1 or 1)*cell
+    local limit=container.visibleLimit or count
+    for index=1,count do
+        local button=sorted[index]
+        if index>limit then button:Hide()
         else
-            left=number(x.expirationTime) and x.expirationTime or 0
-            right=number(y.expirationTime) and y.expirationTime or 0
-        end
-        if left==right then return a.sqIndex<b.sqIndex end
-        if descending then return left>right else return left<right end
-    end)
-    local per=math.max(1,config.perrow or 8);local stride=container.size+(container.spacing or config.spacing or 1)
-    local sx=(container['growth-x'] or config.growthX)=='LEFT' and -1 or 1
-    local sy=(container['growth-y'] or config.growthY)=='DOWN' and -1 or 1
-    for index,button in ipairs(shown) do
-        if index>(container.visibleLimit or #shown) then button:Hide()
-        else
-            button:ClearAllPoints()
-            point(button,container.initialAnchor,container,container.initialAnchor,((index-1)%per)*stride*sx,math.floor((index-1)/per)*stride*sy)
+            if button.sqSlot~=index or button.sqPer~=per or button.sqDX~=dx or button.sqDY~=dy or button.sqAnchor~=anchor then
+                button.sqSlot,button.sqPer,button.sqDX,button.sqDY,button.sqAnchor=index,per,dx,dy,anchor
+                button:ClearAllPoints()
+                button:SetPoint(anchor,container,anchor,((index-1)%per)*dx,math.floor((index-1)/per)*dy)
+            end
             if button.sqCountConfig~=config then
                 -- Count style depends only on the row's settings; set it once per button.
                 button.sqCountConfig=config
@@ -156,12 +189,15 @@ function UF:RefreshAuraBars(frame)
     friendly=public(friendly) and friendly or false
     local filter=friendly and config.friendlyAuraType or config.enemyAuraType
     filter=filter or 'HARMFUL'
-    local filterConfig=ns.UnitFrameImport:Copy(config)
+    -- FilterAura only reads this table: one reused shallow overlay, no deep copy per event.
+    local filterConfig=holder.filterConfig or {};holder.filterConfig=filterConfig
+    wipe(filterConfig)
+    for key,value in pairs(config) do filterConfig[key]=value end
     local subset=friendly and config.friendlyFilter or config.enemyFilter
     if subset then for key,value in pairs(subset) do filterConfig[key]=value end end
     local auras={}
     for index=1,255 do
-        local aura=C_UnitAuras.GetAuraDataByIndex(unit,index,filter)
+        local aura=auraAt(unit,filter,index)
         if not aura then break end
         if self:FilterAura(filterConfig,unit,aura) then auras[#auras+1]=aura end
     end
@@ -173,8 +209,25 @@ function UF:RefreshAuraBars(frame)
     end)
     local h=config.height or 15;local spacing=config.spacing or 5;local max=config.maxBars or 3
     local w=frame.db.width-3-4*(self.BORDER+self.SPACING)-h+1
-    local region=config.attachTo=='DEBUFFS' and frame.Debuffs or config.attachTo=='BUFFS' and frame.Buffs or frame
-    holder:ClearAllPoints();point(holder,'BOTTOMLEFT',region,'TOPLEFT',h+spacing+3,config.yOffset or 0)
+    holder:ClearAllPoints()
+    local split=frame.Buffs and frame.Buffs.cellsAcross and frame.Buffs
+    if split then
+        -- Split rows are narrow corner blocks, not a frame-wide strip: the bars
+        -- stay on the frame and clear however many rows are in use.
+        local rows=0
+        for _,key in ipairs(auraKeys) do
+            local row=frame[key]
+            if row and row:IsShown() then
+                local per=math.max(1,row.config and row.config.perrow or 8)
+                rows=math.max(rows,math.ceil(math.min(row.visibleButtons or 0,row.visibleLimit or 0)/per))
+            end
+        end
+        holder:SetPoint('BOTTOMLEFT',frame,'TOPLEFT',self:Scale(h+spacing+3),
+            self:Scale((config.yOffset or 0)+5+(split.classLift or 0))+rows*self:Scale(split.size))
+    else
+        local region=config.attachTo=='DEBUFFS' and frame.Debuffs or config.attachTo=='BUFFS' and frame.Buffs or frame
+        point(holder,'BOTTOMLEFT',region,'TOPLEFT',h+spacing+3,config.yOffset or 0)
+    end
     holder:SetSize(self:Scale(w),self:Scale(max*(h+spacing)))
     for index=1,math.max(max,#holder.bars) do
         local bar=holder.bars[index]
@@ -187,7 +240,7 @@ function UF:RefreshAuraBars(frame)
             self:ApplyFont(bar.Name,self.db.font,self.db.fontSize,self.db.fontOutline)
             self:ApplyFont(bar.Time,self.db.font,self.db.fontSize,self.db.fontOutline)
             bar.Name:SetText(aura.name);bar.auraInstanceID=aura.auraInstanceID
-            local duration=not timed and C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
+            local duration=C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
             if duration and bar.SetTimerDuration then
                 bar:SetTimerDuration(duration,Enum.StatusBarInterpolation.Immediate,Enum.StatusBarTimerDirection.RemainingTime)
             elseif number(aura.duration) and number(aura.expirationTime) then
@@ -234,13 +287,19 @@ end
 local function paintIcon(button,container,frame,unit,aura,key)
     local config=container.config or {}
     local size=UF:Scale(container.size)
-    button:SetSize(size,size)
-    -- Same cell material as the action bars: cells touch and share one rim line,
-    -- the icon sits inside the painted inner edge.
-    button.Icon:SetSize(size*37/43,size*37/43)
-    if ns.DarkSkin and ns.DarkSkin.RawSlotBorder then ns.DarkSkin:RawSlotBorder(button,frame,1) end
-    button:EnableMouse(not container.disableMouse)
-    button.auraInstanceID=not aura.test and aura.auraInstanceID or nil
+    if button.sqSize~=size then
+        -- Geometry and the 58-piece rim follow the cell size only, not each repaint.
+        button.sqSize=size
+        button:SetSize(size,size)
+        -- Same cell material as the action bars: cells touch and share one rim line,
+        -- the icon sits inside the painted inner edge.
+        button.Icon:SetSize(size*37/43,size*37/43)
+        if ns.DarkSkin and ns.DarkSkin.RawSlotBorder then ns.DarkSkin:RawSlotBorder(button,frame,1) end
+    end
+    local mouse=not container.disableMouse
+    if button.sqMouse~=mouse then button.sqMouse=mouse;button:EnableMouse(mouse) end
+    if not aura.test and public(aura.auraInstanceID) then button.auraInstanceID=aura.auraInstanceID
+    else button.auraInstanceID=nil end
     button.Icon:SetTexture(aura.icon)
     button.Icon:SetDesaturated(key=='Debuffs' and config.desaturate==true and personal(aura)==false)
     local timed=aura.test==true
@@ -280,7 +339,7 @@ SlashCmdList.SQUANCHONAURAS=function(message)
 end
 function UF:RefreshAuraIcons(frame)
     local unit=frame.__unit
-    for _,key in ipairs({'Buffs','Debuffs'}) do
+    for _,key in ipairs(auraKeys) do
         local container=frame[key];local config=container and container.config
         if container then
             local used=0
@@ -295,8 +354,9 @@ function UF:RefreshAuraIcons(frame)
                     paintIcon(button,container,frame,unit or 'player',aura,key)
                 end
             elseif config and config.enable~=false and unit and frame:IsShown() and C_UnitAuras.GetAuraDataByIndex then
+                local filter=container.filter or (key=='Buffs' and 'HELPFUL' or 'HARMFUL')
                 for index=1,255 do
-                    local aura=C_UnitAuras.GetAuraDataByIndex(unit,index,container.filter or (key=='Buffs' and 'HELPFUL' or 'HARMFUL'))
+                    local aura=auraAt(unit,filter,index)
                     if not aura then break end
                     local button=container[used+1]
                     if not button then button=newIcon(container,frame);container[used+1]=button end
@@ -318,18 +378,49 @@ function UF:ConfigureState(frame)
     configure(self,frame)
     if not frame.squancherAuraShow then
         frame.squancherAuraShow=true
-        frame:HookScript('OnShow',function() UF:RefreshAuraIcons(frame) end)
+        -- oUF runs this on show and whenever a group button is given another
+        -- unit, which raises no aura event. Its timed poll of eventless units
+        -- ('OnUpdate') is left out: those rows follow UNIT_TARGET as before.
+        local function refresh(_,event)
+            if event~='OnUpdate' then UF:RefreshAuraIcons(frame);UF:RefreshAuraBars(frame) end
+        end
+        if frame.UpdateAllElements then hooksecurefunc(frame,'UpdateAllElements',refresh)
+        else frame:HookScript('OnShow',refresh) end
     end
     self:RefreshAuraIcons(frame);self:RefreshAuraBars(frame)
 end
-local events=CreateFrame('Frame');events:RegisterEvent('UNIT_AURA');events:RegisterEvent('PLAYER_TARGET_CHANGED');events:RegisterEvent('UNIT_TARGET');events:RegisterEvent('PLAYER_FOCUS_CHANGED');events:RegisterEvent('UNIT_PET')
-events:SetScript('OnEvent',function(_,event,unit)
+-- Only frames whose unit the event can have changed are redrawn.
+local scans={}
+local function dispatch(event,unit)
+    local exact,second,prefix
+    if event=='PLAYER_TARGET_CHANGED' then prefix='^target'
+    elseif event=='PLAYER_FOCUS_CHANGED' then prefix='^focus'
+    elseif event=='INSTANCE_ENCOUNTER_ENGAGE_UNIT' then prefix='^boss'
+    elseif event=='ARENA_OPPONENT_UPDATE' then prefix='^arena'
+    elseif not public(unit) or type(unit)~='string' then return
+    elseif event=='UNIT_AURA' then exact=unit
+    elseif event=='UNIT_TARGET' then exact=unit..'target'
+    else -- UNIT_PET: the owner's pet and that pet's target
+        exact=unit=='player' and 'pet' or (unit:gsub('^(%a+)(%d+)$','%1pet%2'));second=exact..'target'
+    end
+    local bars=event=='UNIT_AURA' or event=='PLAYER_TARGET_CHANGED'
     for _,frame in ipairs(UF.objects) do
         local own=frame.__unit
-        if own and (unit==own or event=='PLAYER_TARGET_CHANGED' or event=='PLAYER_FOCUS_CHANGED' or event=='UNIT_PET'
-            or event=='UNIT_TARGET' and type(unit)=='string' and own==unit..'target') then UF:RefreshAuraIcons(frame) end
-        if frame.db.aurabar and frame.db.aurabar.enable and (unit==frame.__unit or event=='PLAYER_TARGET_CHANGED') then UF:RefreshAuraBars(frame) end
+        if own and (own==exact or own==second or prefix and own:find(prefix)) then
+            UF:RefreshAuraIcons(frame)
+            if bars and frame.db and frame.db.aurabar and frame.db.aurabar.enable then UF:RefreshAuraBars(frame) end
+        end
     end
+    if event=='UNIT_AURA' and unit=='player' then UF:RefreshPlayerBars() end
+end
+local events=CreateFrame('Frame');events:RegisterEvent('UNIT_AURA');events:RegisterEvent('PLAYER_TARGET_CHANGED');events:RegisterEvent('UNIT_TARGET');events:RegisterEvent('PLAYER_FOCUS_CHANGED');events:RegisterEvent('UNIT_PET')
+-- Boss and arena tokens change hands without an aura event; not every client has both events.
+pcall(events.RegisterEvent,events,'INSTANCE_ENCOUNTER_ENGAGE_UNIT');pcall(events.RegisterEvent,events,'ARENA_OPPONENT_UPDATE')
+events:SetScript('OnEvent',function(_,event,unit)
+    wipe(scans);shared=scans
+    local ok,err=pcall(dispatch,event,unit)
+    shared=nil
+    if not ok then geterrorhandler()(err) end
 end)
 if UF.Initialized then for _,frame in ipairs(UF.objects) do UF:RefreshAuraIcons(frame);UF:RefreshAuraBars(frame) end end
 
@@ -359,31 +450,31 @@ local function cancel(button)
         end
     end
 end
+local function playerIcon(bar,index)
+    local button=bar[index]
+    if not button then
+        button=newIcon(bar,bar);bar[index]=button
+        if button.Cooldown.SetHideCountdownNumbers then button.Cooldown:SetHideCountdownNumbers(false) end
+        if button.Cooldown.SetCountdownFont then
+            if not UF.auraCountdownFont then
+                UF.auraCountdownFont=CreateFont('SquanchOnAuraCountdown')
+                UF.auraCountdownFont:SetFont(UF:Font(UF.db.font),11,'OUTLINE')
+            end
+            button.Cooldown:SetCountdownFont('SquanchOnAuraCountdown')
+        end
+        if bar.key=='Buffs' then
+            button:RegisterForClicks('RightButtonUp');button:SetScript('OnClick',cancel)
+        end
+    end
+    return button
+end
 function UF:RefreshPlayerBars()
     if not self.db then return end
     for _,bar in ipairs(playerBars) do
         local used=0
-        local function take()
-            local button=bar[used+1]
-            if not button then
-                button=newIcon(bar,bar);bar[used+1]=button
-                button.Cooldown:SetHideCountdownNumbers(false)
-                if button.Cooldown.SetCountdownFont then
-                    if not UF.auraCountdownFont then
-                        UF.auraCountdownFont=CreateFont('SquanchOnAuraCountdown')
-                        UF.auraCountdownFont:SetFont(UF:Font(UF.db.font),11,'OUTLINE')
-                    end
-                    button.Cooldown:SetCountdownFont('SquanchOnAuraCountdown')
-                end
-                if bar.key=='Buffs' then
-                    button:RegisterForClicks('RightButtonUp');button:SetScript('OnClick',cancel)
-                end
-            end
-            return button
-        end
         if self.auraTest then
             for index=1,self.auraTest do
-                local button=take()
+                local button=playerIcon(bar,index)
                 local aura={test=true,icon=testIcons[bar.key][(index-1)%#testIcons[bar.key]+1],duration=30+index*15,
                     expirationTime=GetTime()+index*20,applications=index%3==0 and index or 1,name=bar.key..index}
                 button.sqAura=aura;button.sqRank=0;used=index
@@ -391,10 +482,10 @@ function UF:RefreshPlayerBars()
             end
         else
             for index=1,255 do
-                local aura=C_UnitAuras.GetAuraDataByIndex('player',index,bar.filter)
+                local aura=auraAt('player',bar.filter,index)
                 if not aura then break end
-                local button=take()
-                button.sqAura=aura;button.sqRank=0;used=used+1
+                local button=playerIcon(bar,index)
+                button.sqAura=aura;button.sqRank=0;used=index
                 paintIcon(button,bar,bar,'player',aura,bar.key)
             end
         end
@@ -403,23 +494,44 @@ function UF:RefreshPlayerBars()
         self:SortAuraButtons(bar)
     end
 end
+-- The bars are plain frames, so a first placement is legal in combat (login or
+-- /reload mid-fight). The saved /sqedit geometry is applied by LayoutTargets,
+-- which waits for combat to end itself; returns false while that is outstanding.
 function UF:PlacePlayerBars()
-    if InCombatLockdown() then return end
+    local combat=InCombatLockdown()
     for _,bar in ipairs(playerBars) do
-        bar:SetScale(1);bar:ClearAllPoints();bar:SetPoint('TOPRIGHT',UIParent,'TOPRIGHT',-263,bar.defaultY)
-        if ns.LayoutTargets then ns.LayoutTargets:ApplyScale('player_'..bar.key:lower(),bar) end
+        if not combat or not bar.placed then
+            bar.placed=true
+            bar:SetScale(1);bar:ClearAllPoints();bar:SetPoint('TOPRIGHT',UIParent,'TOPRIGHT',-263,bar.defaultY)
+            if ns.LayoutTargets then ns.LayoutTargets:ApplyScale('player_'..bar.key:lower(),bar) end
+        end
     end
+    return not combat
 end
+-- The game's own rows are parked under a hidden parent and stop listening.
+-- No Show hook and no Hide call: nothing here runs in combat, so it is safe
+-- whether or not this client protects those frames, and SetShown or a
+-- parent-driven show cannot bring them back.
+local attic=CreateFrame('Frame');attic:Hide()
 local function retire(native)
-    if not native or native.squanchOnRetired then return end
-    native.squanchOnRetired=true
-    hooksecurefunc(native,'Show',function(self) self:Hide() end)
-    native:Hide()
+    if not native or native:GetParent()==attic then return true end
+    if InCombatLockdown() then return false end
+    native:UnregisterAllEvents();native:SetParent(attic)
+    return true
+end
+local playerPending
+local function settle()
+    local retired=retire(BuffFrame)
+    retired=retire(DebuffFrame) and retired
+    local placed=UF:PlacePlayerBars()
+    -- UF.db is missing until the unit frames initialise, which also waits for combat.
+    playerPending=not (retired and placed and UF.db) or nil
+    UF:RefreshPlayerBars()
 end
 local playerEvents=CreateFrame('Frame')
-playerEvents:RegisterEvent('PLAYER_LOGIN');playerEvents:RegisterEvent('PLAYER_ENTERING_WORLD');playerEvents:RegisterEvent('UNIT_AURA')
-playerEvents:SetScript('OnEvent',function(_,event,unit)
-    if event=='UNIT_AURA' then if unit=='player' then UF:RefreshPlayerBars() end;return end
-    retire(BuffFrame);retire(DebuffFrame)
-    UF:PlacePlayerBars();UF:RefreshPlayerBars()
+playerEvents:RegisterEvent('PLAYER_LOGIN');playerEvents:RegisterEvent('PLAYER_ENTERING_WORLD');playerEvents:RegisterEvent('PLAYER_REGEN_ENABLED')
+playerEvents:SetScript('OnEvent',function(_,event)
+    if event~='PLAYER_REGEN_ENABLED' then settle()
+    -- Next frame: the unit frames finish their own post-combat start first.
+    elseif playerPending then C_Timer.After(0,settle) end
 end)

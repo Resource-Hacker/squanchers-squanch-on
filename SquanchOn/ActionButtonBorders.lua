@@ -118,33 +118,12 @@ local function uniformMicroOpacity(button)
     button:SetAlpha(1)
 end
 
-local function fitMicroBackground(texture, rim, bagRim)
-    Skin:FitPanelBackground(texture, rim)
-    if not bagRim or not bagRim:GetTop() or not rim:GetBottom() then return end
-    -- The bag row owns the shared bevel. End at its painted upper edge,
-    -- accounting for the different scales of the two rows.
-    local scale = texture:GetParent():GetEffectiveScale()
-    local seam = (bagRim:GetTop() - bagRim.cornerSize * 4.5 / 13) * bagRim:GetEffectiveScale()
-    local inset = rim.cornerSize * 9 / 13 * rim:GetEffectiveScale() / scale
-    local bottom = (seam - rim:GetBottom() * rim:GetEffectiveScale()) / scale
-    texture:SetPoint("BOTTOMRIGHT", rim, "BOTTOMRIGHT", -inset, bottom)
-end
-
--- Individual controls belong to the combined minimap panel, not the old
--- fixed-width overlay which extended past the map and missed their own edges.
+-- Micro buttons are plain cells of the chat header strip. The chat panel owns
+-- their top/right rim, divider and fill; DarkSkin draws one seam per cell.
 function Skin:BarControls()
     if not CharacterMicroButton then return end
-    local bagStyles = self.byFrame[MainMenuBarBackpackButton]
-    local bagRim = bagStyles and bagStyles.icon
     if MicroMenu and MicroMenu.GenerateButtonInfos then
-        local infos = MicroMenu:GenerateButtonInfos()
-        local first, last
-        for _, info in ipairs(infos) do
-            if info.button and info.button:IsShown() then
-                first, last = first or info.button, info.button
-            end
-        end
-        for _, info in ipairs(infos) do
+        for _, info in ipairs(MicroMenu:GenerateButtonInfos()) do
             local button = info.button
             if button then
                 if not microOpacityHooks[button] then
@@ -152,32 +131,22 @@ function Skin:BarControls()
                     button:HookScript("OnDisable", uniformMicroOpacity)
                 end
                 uniformMicroOpacity(button)
-                local rim = self:ControlBorder(button, "icon", MicroMenuContainer, 0.9)
+                -- Retire the per-cell diamond rim and fill of the former layout.
+                local rim = self.byFrame[button] and self.byFrame[button].icon
+                if rim then
+                    rim:Hide()
+                    if rim.slotFill then rim.slotFill:Hide() end
+                end
                 for _, key in ipairs({"Background", "PushedBackground"}) do
                     local texture = button[key]
                     if texture then
                         -- Native SetNormal shows Background again; keep its pixel
-                        -- transparent so only the shared fill darkens the resting cell.
+                        -- transparent so only the chat fill darkens the resting cell.
                         texture:SetColorTexture(0, 0, 0, key == "PushedBackground" and 0.65 or 0)
-                        if rim then fitMicroBackground(texture, rim, bagRim) end
+                        texture:ClearAllPoints()
+                        texture:SetAllPoints(button)
                     end
                 end
-                if rim and not InCombatLockdown() then
-                    fitMicroBackground(self:BagSlotFill(rim, button), rim, bagRim)
-                    -- The bag row owns this seam. Omit only the micro row's
-                    -- lower bevel; let its vertical dividers reach the seam.
-                    rim.BottomEdge:Hide()
-                    rim.BottomLeftCorner:Hide()
-                    rim.BottomRightCorner:Hide()
-                    local outer = rim.cornerSize * 4.5 / 13
-                    rim.LeftEdge:ClearAllPoints()
-                    rim.LeftEdge:SetPoint("TOPLEFT", rim.TopLeftCorner, "BOTTOMLEFT", outer, 0)
-                    rim.LeftEdge:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -6 + outer, 0)
-                    rim.RightEdge:ClearAllPoints()
-                    rim.RightEdge:SetPoint("TOPRIGHT", rim.TopRightCorner, "BOTTOMRIGHT", -outer, 0)
-                    rim.RightEdge:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 6 - outer, 0)
-                end
-
             end
         end
     end

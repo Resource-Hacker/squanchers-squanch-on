@@ -16,7 +16,8 @@ local windows = {
     { 'SettingsPanel', 'Settings' }, { 'AddonList', 'Addons' },
     { 'MacroFrame', 'Macros' }, { 'MailFrame', 'Mail' },
     { 'OpenMailFrame', 'Open mail' }, { 'LootFrame', 'Loot' },
-    { 'ProfessionsFrame', 'Professions' }, { 'TradeSkillFrame', 'Tradeskill' },
+    { 'ProfessionsFrame', 'Professions' }, { 'ProfessionsBookFrame', 'Professions book' },
+    { 'TradeSkillFrame', 'Tradeskill' },
     { 'CraftFrame', 'Crafting' }, { 'CollectionsJournal', 'Collections' },
     { 'PVEFrame', 'Group finder' }, { 'AchievementFrame', 'Achievements' },
     { 'DressUpFrame', 'Dressing room' }, { 'ChannelFrame', 'Channels' },
@@ -48,6 +49,13 @@ local windows = {
     { 'ZoneAbilityFrame', 'Zone ability' }, { 'TotemFrame', 'Totems' },
     { 'VehicleSeatIndicator', 'Vehicle seats' }, { 'DurabilityFrame', 'Durability' },
 }
+
+-- Windows opened from the chat-header micro buttons default to drawers above
+-- chat: scaled to the chat panel's width, bottom-left on its top-left.
+local drawers = { CharacterFrame = true, PlayerSpellsFrame = true, SpellBookFrame = true,
+    PlayerTalentFrame = true, ProfessionsBookFrame = true, QuestLogFrame = true,
+    CommunitiesFrame = true, PVEFrame = true, LFGParentFrame = true,
+    CollectionsJournal = true, AchievementFrame = true, EncounterJournal = true }
 
 local function finite(n)
     return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
@@ -138,8 +146,40 @@ end
 function module:ActionArtWidth() return actionArtWidth() end
 function module:IconArtWidth(button, owner) return artWidth(iconFor(button), owner) end
 
+-- Drawers ease out of their anchor over half a second. Render-only animation:
+-- it never changes points, scale or visibility, so it is safe on any frame.
+local slides = setmetatable({}, { __mode = 'k' })
+function module:Slide(frame, distance)
+    if not frame or not frame.CreateAnimationGroup then return end
+    local group = slides[frame]
+    if not group then
+        group = frame:CreateAnimationGroup()
+        group.drop = group:CreateAnimation('Translation'); group.drop:SetOrder(1); group.drop:SetDuration(0)
+        group.rise = group:CreateAnimation('Translation'); group.rise:SetOrder(2); group.rise:SetDuration(.5)
+        group.rise:SetSmoothing('OUT')
+        group.fade = group:CreateAnimation('Alpha'); group.fade:SetOrder(2); group.fade:SetDuration(.5)
+        group.fade:SetFromAlpha(0); group.fade:SetToAlpha(1); group.fade:SetSmoothing('OUT')
+        slides[frame] = group
+    end
+    local height = frame:GetHeight()
+    distance = distance or math.max(24, math.min(120, (height and height > 0 and height or 120) * .35))
+    group.drop:SetOffset(0, -distance); group.rise:SetOffset(0, distance)
+    group:Stop(); group:Play()
+end
+
+-- Returns the chat panel while a window still uses its default drawer place.
+-- Only an owner /sqedit record (never an imported legacy one) replaces it.
+function module:DrawerChat(id, frame)
+    if not drawers[frame:GetName()] then return end
+    local record = ns.LayoutEditor:Read(id)
+    -- Only a position the owner set in /sqedit counts; automatic sizing does not.
+    if record and record.placed then return end
+    return ns.DarkSkin and ns.DarkSkin.chatPanel
+end
+
 function module:MatchItemWindow(frame)
     local name, id = frame:GetName(), self.native[frame]
+    if self:DrawerChat(id, frame) then return end
     local sample = itemSamples[name] and _G[itemSamples[name]]
     if name == 'QuestFrame' then
         local rewards = QuestInfoRewardsFrame and QuestInfoRewardsFrame.RewardButtons
@@ -159,7 +199,7 @@ function module:MatchItemWindow(frame)
     local spec, ratio = ns.LayoutEditor.specs[id], wanted / current
     local saved = spec.snapshot()
     rect.w, rect.h = rect.w * ratio, rect.h * ratio
-    local called, ok, err = pcall(spec.commit, rect, true)
+    local called, ok, err = pcall(spec.commit, rect, true, true)
     if not called or not ok then
         spec.restore(saved)
         error((called and err or ok) or 'Could not size item window')
@@ -198,10 +238,22 @@ function module:Apply(id, frame)
     if ns.SocialDrawer and ns.SocialDrawer:Owns(frame) then ns.SocialDrawer:Queue();return end
     if InCombatLockdown() or self.applying[frame] or not frame:IsVisible() then return end
     if ns.NativeWindowPlacement then ns.NativeWindowPlacement:Import(frame:GetName(), id, frame) end
+    local chat = self:DrawerChat(id, frame)
     local record = ns.LayoutEditor:Read(id)
-    if not record or not finite(record.scale) or record.scale <= 0 then return end
+    if not chat and (not record or not finite(record.scale) or record.scale <= 0) then return end
+    local target, rect = chat and ns.LayoutEditor:Rect(chat), chat and ns.LayoutEditor:Rect(frame)
+    if chat and (not target or not rect) then return end
     self.applying[frame] = true
     local ok, err = pcall(function()
+        if chat then
+            -- Width-match by scale; cap so the window fits the room above chat
+            -- (rect.y is the physical-pixel distance from the screen top).
+            local ratio = math.min(target.w / rect.w, math.max(1, target.y - 12) / rect.h)
+            if math.abs(ratio - 1) > 0.0005 then frame:SetScale(frame:GetScale() * ratio) end
+            frame:ClearAllPoints()
+            frame:SetPoint('BOTTOMLEFT', chat, 'TOPLEFT', 0, 0)
+            return
+        end
         if maximizedMap(frame) then
             applyMaximizedMap(frame, record.nativeScale or self.mapDefaultScale)
         else
@@ -212,6 +264,16 @@ function module:Apply(id, frame)
                 frame:SetPoint(point[1], UIParent, point[2], point[3], point[4])
             else
                 ns.LayoutEditor:Place(frame, record)
+            end
+            if record.clampToScreen then
+                -- Shipped placement fitted to another screen shape (DefaultSeed.lua):
+                -- the window's size is first known here.
+                local rect, pw, ph = ns.LayoutEditor:Rect(frame), ns.LayoutEditor:Metrics()
+                if rect then
+                    local x = math.max(0, math.min(rect.x, pw - rect.w))
+                    local y = math.max(0, math.min(rect.y, ph - rect.h))
+                    if x ~= rect.x or y ~= rect.y then ns.LayoutEditor:Place(frame, { x = x, y = y }) end
+                end
             end
         end
     end)
@@ -236,7 +298,7 @@ local function native(definition)
             for i = 1, frame:GetNumPoints() do saved.points[i] = { frame:GetPoint(i) } end
             return saved
         end,
-        commit = function(rect, resizing)
+        commit = function(rect, resizing, automatic)
             if InCombatLockdown() then return false, 'Combat' end
             if not editable(frame) or not valid(rect) then return false, 'Unavailable' end
             local current = editor:Rect(frame)
@@ -247,6 +309,7 @@ local function native(definition)
             -- a later open to be stretched back to an old width/height.
             local previous = editor:Read(id)
             editor:Store(id, { x = rect.x, y = rect.y, scale = scale,
+                placed = not automatic or (previous and previous.placed) or nil,
                 nativeScale = frame == WorldMapFrame and (previous and previous.nativeScale or module.mapDefaultScale) or nil })
             return module:Apply(id, frame)
         end,
@@ -276,8 +339,10 @@ local function native(definition)
         module:Refresh()
     end
     frame:HookScript('OnShow', update)
+    if drawers[name] then frame:HookScript('OnShow', function() if module:DrawerChat(id, frame) then module:Slide(frame) end end) end
     frame:HookScript('OnHide', function() module:Refresh() end)
-    frame:HookScript('OnSizeChanged', function() module:Refresh() end)
+    -- A drawer refits when its native width changes (e.g. the stats pane).
+    frame:HookScript('OnSizeChanged', drawers[name] and update or function() module:Refresh() end)
     -- UIPanel positioning can run after OnShow and when adjacent panels close.
     -- Posthook only this allowlisted frame; never mutate UIPanelWindows,
     -- UIPanelLayout attributes, protected visibility or user-placed flags.
@@ -300,6 +365,14 @@ function module:Register()
         end)
     end
     for _, definition in ipairs(windows) do native(definition) end
+    if not self.chatHooked and ns.DarkSkin and ns.DarkSkin.LayoutChat then
+        self.chatHooked = true
+        hooksecurefunc(ns.DarkSkin, 'LayoutChat', function()
+            for frame, id in pairs(self.native) do
+                if drawers[frame:GetName()] then self:Apply(id, frame) end
+            end
+        end)
+    end
     -- A natural show/position event in combat is deferred until this event path.
     for frame, id in pairs(self.native) do self:Apply(id, frame); self:QueueItemSizing(frame) end
     self:Refresh()

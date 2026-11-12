@@ -258,11 +258,25 @@ local function controlAlpha(border)
     border:SetAlpha(border.baseAlpha * inherited * fade)
     if border.slotFill then border.slotFill:SetAlpha(inherited * fade) end
 end
+-- Rims are kept per alpha owner, so a fading frame visits only its own.
+local function ownRim(border, owner)
+    local previous = border.alphaOwner
+    if previous and previous ~= owner and alphaOwners[previous] then alphaOwners[previous][border] = nil end
+    border.alphaOwner = owner
+    local rims = alphaOwners[owner]
+    if not rims then
+        rims = {}
+        alphaOwners[owner] = rims
+        hooksecurefunc(owner, "SetAlpha", function() for rim in pairs(rims) do controlAlpha(rim) end end)
+    end
+    rims[border] = true
+end
 function Skin:ControlBorder(frame, style, alphaOwner, restingAlpha)
     local existing = self.byFrame[frame] and self.byFrame[frame][style]
     if InCombatLockdown() and not existing then return end
     local border = existing or self:Panel(frame, style, 0)
-    border.control, border.alphaOwner = frame, alphaOwner or frame
+    border.control = frame
+    ownRim(border, alphaOwner or frame)
     border.restingAlpha = restingAlpha or 1
     if not controlBorders[border] then
         controlBorders[border] = true
@@ -271,13 +285,6 @@ function Skin:ControlBorder(frame, style, alphaOwner, restingAlpha)
     if not InCombatLockdown() then
         border:SetScale(style == "icon" and 1 or UIParent:GetEffectiveScale() / frame:GetEffectiveScale())
         self:FitPanelBorder(border, frame, styles[style])
-    end
-    if not alphaOwners[border.alphaOwner] then
-        local owner = border.alphaOwner
-        alphaOwners[owner] = true
-        hooksecurefunc(owner, "SetAlpha", function()
-            for rim in pairs(controlBorders) do if rim.alphaOwner == owner then controlAlpha(rim) end end
-        end)
     end
     controlAlpha(border)
     return border
@@ -342,18 +349,12 @@ function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
         fill.texture:SetColorTexture(PANEL_GREY,PANEL_GREY,PANEL_GREY,PANEL_ALPHA)
         border.slotFill=fill
         border.baseAlpha=BORDER_ALPHA
-        border.control, border.alphaOwner=frame, alphaOwner or frame
+        border.control=frame
         border.restingAlpha=restingAlpha or 1
+        ownRim(border, alphaOwner or frame)
         controlBorders[border]=true
         self.byFrame[frame]=byStyle or {}
         self.byFrame[frame].rawSlot=border
-        local owner=border.alphaOwner
-        if not alphaOwners[owner] then
-            alphaOwners[owner]=true
-            hooksecurefunc(owner,"SetAlpha",function()
-                for rim in pairs(controlBorders) do if rim.alphaOwner==owner then controlAlpha(rim) end end
-            end)
-        end
     end
     border:SetPoint("CENTER",frame,"CENTER")
     border:SetSize(frame:GetWidth()*55/43,frame:GetHeight()*55/43)
@@ -842,6 +843,11 @@ local chatTabPlates = {}
 local function chatBorderWidth(frame)
     return 2 * PixelUtil.GetPixelToUIUnitFactor() / frame:GetEffectiveScale()
 end
+-- The compact panel rim is a scale-1 child of the chat panel, so its painted
+-- inner boundary (FitPanelBackground's 9/13 rule) is constant in panel units.
+local function chatInnerInset()
+    return styles.compact.edge * 9 / 13 - styles.compact.offset
+end
 local function fitChatTabBorder(tab, state)
     local border = state.border
     -- Blizzard reparents docked tabs. Keep their rim above the native face,
@@ -956,7 +962,19 @@ function Skin:AlignChatTabs(dock)
             local joined
             if chat.isStaticDocked then
                 joined = lastStatic ~= nil
-                if lastStatic then tab:SetPoint("LEFT", lastStatic, "RIGHT", 0, 0) end
+                if lastStatic then
+                    tab:SetPoint("LEFT", lastStatic, "RIGHT", 0, 0)
+                else
+                    -- The primary tab starts exactly on the dock's left edge,
+                    -- which is the panel rim's painted inner boundary.
+                    for i = 1, tab:GetNumPoints() do
+                        local point, relative, relativePoint, _, y = tab:GetPoint(i)
+                        if relative == dock and point:find("LEFT") then
+                            tab:SetPoint(point, relative, relativePoint, 0, y)
+                            break
+                        end
+                    end
+                end
                 lastStatic = tab
             else
                 joined = lastDynamic ~= nil or hasStatic
@@ -966,6 +984,60 @@ function Skin:AlignChatTabs(dock)
             nativeTabStyle(tab, chat == selected, joined)
         end
     end
+    -- The voice control follows the last tab; nothing else anchors to it.
+    local voice = ChatFrameChannelButton
+    local last = dock.overflowButton and dock.overflowButton:IsShown() and dock.overflowButton or lastDynamic or lastStatic
+    if voice and voice.squancherPinned and last then
+        voice:ClearAllPoints()
+        voice:SetPoint("LEFT", last, "RIGHT", 2, 0)
+    end
+end
+
+-- Header icon strip: micro buttons, then Friends, ending on the panel rim's
+-- inner right boundary. The panel's top rim, right rim and tab divider are its
+-- outer edges; each cell owns only one thin seam on its left, drawn with the
+-- chat tabs' seam slice and thickness. NativeActionBars supplies cell widths
+-- in panel units, from the right rim leftward.
+function Skin:FitChatIconStrip(widths)
+    local strip = self.chatIconStrip
+    if not strip then return end
+    local width = chatBorderWidth(strip)
+    local x = 0
+    for index, cell in ipairs(widths) do
+        x = x + cell
+        local seam = strip.seams[index]
+        if not seam then
+            seam = strip:CreateTexture(nil, "BORDER")
+            atlasSlice(seam, 46, 13, 50, 42)
+            seam:SetAlpha(BORDER_ALPHA)
+            strip.seams[index] = seam
+        end
+        seam:ClearAllPoints()
+        -- End on the divider's upper edge so the junction is not doubled.
+        seam:SetPoint("TOPLEFT", strip, "TOPRIGHT", -x, 0)
+        seam:SetPoint("BOTTOMLEFT", strip, "BOTTOMRIGHT", -x, width * .5)
+        seam:SetWidth(width)
+        seam:Show()
+    end
+    for index = #widths + 1, #strip.seams do strip.seams[index]:Hide() end
+    strip:SetWidth(math.max(1, x))
+end
+
+-- Friends is the strip's last cell: a micro-button-sized cell with no chrome
+-- of its own. Native click, tooltip, count and toasts stay with the button.
+function Skin:PinChatFriends(width, height, cellScale)
+    local friends, strip = QuickJoinToastButton, self.chatIconStrip
+    if not friends or not strip or friends.squancherPinning then return end
+    if InCombatLockdown() then self.pending = true; return end
+    if width then self.chatIconCell = { width, height, cellScale } end
+    local cell = self.chatIconCell or { 32, 40, 0.5 }
+    friends.squancherPinning = true
+    friends:SetParent(self.chatPanel);friends:ClearAllPoints()
+    friends:SetSize(cell[1], cell[2]);friends:SetScale(cell[3])
+    friends:SetPoint("RIGHT", strip, "RIGHT")
+    friends:SetFrameStrata("LOW")
+    friends:SetFrameLevel(self.chatPanel:GetFrameLevel() + 8)
+    friends.squancherPinning = nil
 end
 
 -- Rename the existing primary window once; its normal conversation/reward
@@ -1111,8 +1183,10 @@ function Skin:Chat()
     if dock and not self.chatDockPlaced then
         self.chatDockPlaced=true
         dock:SetParent(panel);dock:ClearAllPoints()
-        dock:SetPoint("TOPLEFT",panel,"TOPLEFT",5,-2)
-        dock:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-5,-2)
+        -- Tabs start on the left rim's painted inner boundary.
+        local inset=chatInnerInset()
+        dock:SetPoint("TOPLEFT",panel,"TOPLEFT",inset,-2)
+        dock:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-inset,-2)
         dock:SetHeight(22)
         if GeneralDockManagerScrollFrame then GeneralDockManagerScrollFrame:SetHeight(22) end
         if GeneralDockManagerScrollFrameChild then GeneralDockManagerScrollFrameChild:SetHeight(22) end
@@ -1127,16 +1201,30 @@ function Skin:Chat()
         local width = chatBorderWidth(panel)
         line:SetAlpha(1)
         line:SetHeight(width * 1.5)
-        line:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", -1, -width * .5)
-        line:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 1, -width * .5)
+        line:SetPoint("BOTTOMLEFT", dock, "BOTTOMLEFT", 0, -width * .5)
+        line:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -width * .5)
         self.chatTabDivider = line
     end
-    -- Keep the original native voice action in the tab row; remove its default
-    -- button chrome, and remove the separate TTS frame omitted by the old owner.
+    if dock and not self.chatIconStrip then
+        -- Top rim boundary down to the tab divider, flush with the right rim.
+        local strip=CreateFrame("Frame",nil,panel)
+        mouseTransparent(strip)
+        strip:SetFrameStrata("BACKGROUND");strip:SetFrameLevel(panel:GetFrameLevel()+2)
+        local inset=chatInnerInset()
+        strip:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-inset,-inset)
+        strip:SetPoint("BOTTOMRIGHT",dock,"BOTTOMRIGHT")
+        strip:SetWidth(1)
+        strip.seams={}
+        self.chatIconStrip=strip
+    end
+    -- Keep the original native voice action in the tab row, immediately right of
+    -- the last tab (AlignChatTabs anchors it); remove its default button chrome
+    -- and the separate TTS frame omitted by the old owner.
     local voice=ChatFrameChannelButton
     if voice and dock and not voice.squancherPinned then
         voice.squancherPinned=true;voice:SetParent(panel);voice:ClearAllPoints()
-        voice:SetPoint("RIGHT",dock,"RIGHT",2,0)
+        voice:SetScale(22/math.max(1,voice:GetHeight()))
+        voice:SetPoint("LEFT",dock,"LEFT")
         if voice.Icon then voice.Icon:SetDesaturated(true) end
         for _,method in ipairs({"GetNormalTexture","GetPushedTexture","GetHighlightTexture","GetDisabledTexture"}) do
             local texture=voice[method] and voice[method](voice)
@@ -1144,11 +1232,15 @@ function Skin:Chat()
         end
     end
     conceal(TextToSpeechButtonFrame)
-    if TextToSpeechButton and dock and not TextToSpeechButton.squancherPinned then
+    if TextToSpeechButton and voice and dock and not TextToSpeechButton.squancherPinned then
         TextToSpeechButton.squancherPinned=true;TextToSpeechButton:SetParent(panel)
-        TextToSpeechButton:ClearAllPoints();TextToSpeechButton:SetPoint("RIGHT",dock,"RIGHT",2,0)
-        if voice and GetCVarBool and GetCVarBool("textToSpeech") then
-            voice:ClearAllPoints();voice:SetPoint("RIGHT",TextToSpeechButton,"LEFT")
+        TextToSpeechButton:SetScale(22/math.max(1,TextToSpeechButton:GetHeight()))
+        TextToSpeechButton:ClearAllPoints()
+        -- As before: beside the voice control when TTS is on, otherwise over it.
+        if GetCVarBool and GetCVarBool("textToSpeech") then
+            TextToSpeechButton:SetPoint("LEFT",voice,"RIGHT")
+        else
+            TextToSpeechButton:SetPoint("CENTER",voice,"CENTER")
         end
     end
     -- The dock/chat message frames live in BACKGROUND. Native controls must
@@ -1157,30 +1249,24 @@ function Skin:Chat()
         voice:SetFrameStrata("LOW")
         voice:SetFrameLevel(math.max(panel:GetFrameLevel(),dock:GetFrameLevel())+4)
     end
-    -- Keep the native Friends action/count/toasts in the same tab row.
+    -- Keep the native Friends action/count/toasts as the strip's last cell.
     local friends=QuickJoinToastButton
-    if friends and voice and dock then
-        local function pinFriends()
-            if friends.squancherPinning then return end
-            if InCombatLockdown() then Skin.pending=true;return end
-            friends.squancherPinning=true
-            friends:SetParent(panel);friends:ClearAllPoints()
-            friends:SetPoint("RIGHT",voice,"LEFT",-2,0)
-            friends:SetFrameStrata(voice:GetFrameStrata())
-            friends:SetFrameLevel(voice:GetFrameLevel())
-            friends:SetScale(18/math.max(1,friends:GetWidth(),friends:GetHeight()))
-            friends.squancherPinning=nil
-        end
+    if friends and self.chatIconStrip then
         if not friends.squancherPinHooked then
             friends.squancherPinHooked=true
+            local function pinFriends() Skin:PinChatFriends() end
             hooksecurefunc(friends,"SetPoint",pinFriends)
             hooksecurefunc(friends,"SetParent",pinFriends)
             friends:HookScript("OnShow",pinFriends)
         end
-        pinFriends()
+        self:PinChatFriends()
         if friends.FriendsButton then self:TintChrome(friends.FriendsButton) end
-        local rim=self:Panel(friends,"inner",PANEL_ALPHA)
-        if rim.background then rim.background:SetColorTexture(PANEL_GREY,PANEL_GREY,PANEL_GREY,PANEL_ALPHA) end
+        -- Retire the separate box the former layout drew around Friends.
+        local box=self.byFrame[friends] and self.byFrame[friends].inner
+        if box then
+            box:Hide()
+            if box.background then box.background:Hide() end
+        end
     end
     if not self.chatTabHooked and FCFTab_UpdateColors then
         self.chatTabHooked=true;hooksecurefunc("FCFTab_UpdateColors",nativeTabStyle)
