@@ -60,6 +60,7 @@ PlaterIconSkins.lua
 AuxiliaryLayout.lua
 LayoutTargets.lua
 NativeWindowPlacement.lua
+DrawerMotion.lua
 LayoutWindows.lua
 SocialDrawer.lua
 QuestDrawer.lua

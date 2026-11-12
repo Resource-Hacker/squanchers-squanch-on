@@ -146,27 +146,6 @@ end
 function module:ActionArtWidth() return actionArtWidth() end
 function module:IconArtWidth(button, owner) return artWidth(iconFor(button), owner) end
 
--- Drawers ease out of their anchor over half a second. Render-only animation:
--- it never changes points, scale or visibility, so it is safe on any frame.
-local slides = setmetatable({}, { __mode = 'k' })
-function module:Slide(frame, distance)
-    if not frame or not frame.CreateAnimationGroup then return end
-    local group = slides[frame]
-    if not group then
-        group = frame:CreateAnimationGroup()
-        group.drop = group:CreateAnimation('Translation'); group.drop:SetOrder(1); group.drop:SetDuration(0)
-        group.rise = group:CreateAnimation('Translation'); group.rise:SetOrder(2); group.rise:SetDuration(.5)
-        group.rise:SetSmoothing('OUT')
-        group.fade = group:CreateAnimation('Alpha'); group.fade:SetOrder(2); group.fade:SetDuration(.5)
-        group.fade:SetFromAlpha(0); group.fade:SetToAlpha(1); group.fade:SetSmoothing('OUT')
-        slides[frame] = group
-    end
-    local height = frame:GetHeight()
-    distance = distance or math.max(24, math.min(120, (height and height > 0 and height or 120) * .35))
-    group.drop:SetOffset(0, -distance); group.rise:SetOffset(0, distance)
-    group:Stop(); group:Play()
-end
-
 -- Returns the chat panel while a window still uses its default drawer place.
 -- Only an owner /sqedit record (never an imported legacy one) replaces it.
 function module:DrawerChat(id, frame)
@@ -353,7 +332,12 @@ local function native(definition)
         module:Refresh()
     end
     frame:HookScript('OnShow', update)
-    if drawers[name] then frame:HookScript('OnShow', function() if module:DrawerChat(id, frame) then module:Slide(frame) end end) end
+    if drawers[name] then
+        frame:HookScript('OnShow', function()
+            local chat = module:DrawerChat(id, frame)
+            if chat then ns.DrawerMotion:Open(frame, chat) end
+        end)
+    end
     frame:HookScript('OnHide', function() module:Refresh() end)
     -- A drawer refits when its native width changes (e.g. the stats pane).
     frame:HookScript('OnSizeChanged', drawers[name] and update or function() module:Refresh() end)

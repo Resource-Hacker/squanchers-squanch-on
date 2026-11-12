@@ -83,6 +83,8 @@ local function sliderTrackAtlas(atlas)
 end
 -- The native minimal checkbox paints a black square over its whole 30-unit hit
 -- frame. Keep that frame, state and click area; draw one stepper-sized face.
+-- Its rim is four solid pixel-snapped lines: at the compact Options scale the
+-- sampled atlas rim loses its horizontal edges at fractional row offsets.
 local checkFaces = setmetatable({}, { __mode = "k" })
 local function compactCheck(button, enabled)
     local face = checkFaces[button]
@@ -91,17 +93,34 @@ local function compactCheck(button, enabled)
         checkFaces[button] = face
         face.ignoreInLayout = true
         face:EnableMouse(false)
-        -- The fill is a region of the button so the native check stays above it.
+        -- Regions of the button, so the native check stays above them.
         face.fill = button:CreateTexture(nil, "BACKGROUND")
         face.fill:SetAllPoints(face)
-        face.fill:SetColorTexture(0.055, 0.055, 0.055, 0.9)
-        ns.DarkSkin:Panel(face, "inner", 0)
+        face.fill:SetColorTexture(0.11, 0.11, 0.11, 1)
+        face.rim = {}
+        for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+            local line = button:CreateTexture(nil, "BORDER")
+            if side == "TOP" or side == "BOTTOM" then
+                line:SetPoint(side .. "LEFT", face, side .. "LEFT")
+                line:SetPoint(side .. "RIGHT", face, side .. "RIGHT")
+            else
+                line:SetPoint("TOP" .. side, face, "TOP" .. side)
+                line:SetPoint("BOTTOM" .. side, face, "BOTTOM" .. side)
+            end
+            face.rim[side] = line
+        end
     end
     local height = button:GetHeight()
     local size = height > 4 and math.min(16, height) or 16
     face:ClearAllPoints()
     face:SetPoint("LEFT", button, "LEFT", 1, 0)
     face:SetSize(size, size)
+    local pixel = PixelUtil.GetPixelToUIUnitFactor() / button:GetEffectiveScale()
+    local color, shade = ns.DarkSkin.innerBorderColor, enabled and 1 or 0.5
+    for side, line in pairs(face.rim) do
+        if side == "TOP" or side == "BOTTOM" then line:SetHeight(2 * pixel) else line:SetWidth(2 * pixel) end
+        line:SetColorTexture(color[1] * shade, color[2] * shade, color[3] * shade, 1)
+    end
     for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
         local texture = button[method] and button[method](button)
         if texture then texture:SetAlpha(0) end
@@ -399,6 +418,52 @@ local function finishSideCategories(pane)
         end
     end
 end
+-- Options text: soft off-white body, gold headings. Native white (selected),
+-- grey (disabled/unbound) and red (warning) colours keep their meaning.
+local BODY_TEXT, HEADER_TEXT = { 0.9, 0.9, 0.86 }, { 0.90, 0.684, 0.378 }
+local settingsColorHooks = setmetatable({}, { __mode = "k" })
+local settingsFonts, settingsFontCount = {}, 0
+local function nativeYellow(r, g, b)
+    if type(r) ~= "number" or issecretvalue and issecretvalue(r) then return false end
+    return r > 0.95 and g > 0.7 and g < 0.9 and b < 0.2
+end
+local function settingsColor(region)
+    local state = settingsColorHooks[region]
+    if not state or state.busy then return end
+    local r, g, b, a = region:GetTextColor()
+    local header = ns.NativeText and ns.NativeText.headers[region]
+    local yellow = nativeYellow(r, g, b)
+    local color = header and (yellow or r > 0.95 and g > 0.95 and b > 0.95) and HEADER_TEXT
+        or not header and yellow and BODY_TEXT
+    if not color then return end
+    state.busy = true
+    region:SetTextColor(color[1], color[2], color[3], a)
+    state.busy = false
+end
+local function settingsTextColor(region)
+    if not settingsColorHooks[region] then
+        settingsColorHooks[region] = {}
+        -- Native rows reassign font objects on reuse, selection and enable.
+        hooksecurefunc(region, "SetTextColor", settingsColor)
+        hooksecurefunc(region, "SetFontObject", settingsColor)
+    end
+    settingsColor(region)
+end
+-- A Button re-applies its normal font object on every state change, outside
+-- the FontString hooks above: give it an off-white copy of that exact font.
+local function settingsButtonFont(button)
+    local font = button.GetNormalFontObject and button:GetNormalFontObject()
+    if not font or not font.GetTextColor or not nativeYellow(font:GetTextColor()) then return end
+    local clone = settingsFonts[font]
+    if not clone then
+        settingsFontCount = settingsFontCount + 1
+        clone = CreateFont("SquanchOnSettingsText" .. settingsFontCount)
+        clone:CopyFontObject(font)
+        clone:SetTextColor(BODY_TEXT[1], BODY_TEXT[2], BODY_TEXT[3])
+        settingsFonts[font] = clone
+    end
+    button:SetNormalFontObject(clone)
+end
 -- Native settings layout is drawn for 12-unit text at scale 1. NativeText's
 -- 8-unit body would shrink with the compact window, so size it in screen units.
 local function settingsText(root, limit)
@@ -411,17 +476,49 @@ local function settingsText(root, limit)
         if depth > 7 or count >= limit or not frame.GetObjectType or ownedElsewhere(frame) then return end
         count = count + 1
         if frame:GetObjectType() == "EditBox" then text:Region(frame, false, 8 / scale) end
+        settingsButtonFont(frame)
         for _, region in ipairs({ frame:GetRegions() }) do
             if region.IsObjectType and region:IsObjectType("FontString") then
                 text:Region(region, false, (text.headers[region] and 12 or 8) / scale)
+                settingsTextColor(region)
             end
         end
         for _, child in ipairs({ frame:GetChildren() }) do visit(child, depth + 1) end
     end
     visit(root, 0)
 end
+-- Rims inside the 0.64 window are drawn at the ordinary UI scale, like every
+-- other window's: at 0.64 the 2px atlas rim loses its horizontal edges.
+local function settingsRim(frame)
+    local skin = ns.DarkSkin
+    local border = skin:Panel(frame, "inner", 0)
+    border:SetScale(UIParent:GetEffectiveScale() / frame:GetEffectiveScale())
+    skin:FitPanelBorder(border, frame, skin.styles.inner)
+    if border.raisedFace then skin:FitPanelBackground(border.raisedFace, border) end
+    return border
+end
+-- One solid two-pixel gold rule on the owner's bottom edge.
+local settingsRules = setmetatable({}, { __mode = "k" })
+local function settingsRule(owner)
+    local line = settingsRules[owner]
+    if not line then
+        line = owner:CreateTexture(nil, "BORDER")
+        settingsRules[owner] = line
+        local color = ns.DarkSkin.innerBorderColor
+        line:SetColorTexture(color[1], color[2], color[3], ns.DarkSkin.borderAlpha)
+        line:SetPoint("BOTTOMLEFT", owner, "BOTTOMLEFT")
+        line:SetPoint("BOTTOMRIGHT", owner, "BOTTOMRIGHT")
+    end
+    line:SetHeight(2 * PixelUtil.GetPixelToUIUnitFactor() / owner:GetEffectiveScale())
+end
 local function settingsCategory(row)
-    if row.Background then hideTexture(row.Background); ns.DarkSkin:Panel(row, 'inner', 0) end
+    -- Header rows (Gameplay/Accessibility/System) own Background. A full rim
+    -- there doubled the list box's top edge: one rule under the title instead.
+    if row.Background then
+        hideTexture(row.Background)
+        if ns.NativeText then ns.NativeText:Header(row.Label) end
+        settingsRule(row)
+    end
     -- Selected/hover bar: SetAtlas keeps this tint; muted gold, not bright yellow.
     local bar = row.Texture
     if bar and bar.IsObjectType and bar:IsObjectType("Texture") then
@@ -430,11 +527,80 @@ local function settingsCategory(row)
     end
     settingsText(row, 32)
 end
-local settingsSliderHooks, settingsTabHooks = {}, {}
-local settingsBackground, settingsUnderlay, settingsDivider
+local settingsSliderHooks = {}
 local function refreshSettingsSlider(slider)
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
         neutralChrome(slider[key], sliderTrackAtlas, slider:IsEnabled())
+    end
+end
+-- Settings buttons are not three-slice text buttons (keybinding buttons are a
+-- nine-piece stretch template, the value face an intrinsic dropdown, steppers
+-- state-texture squares), so textButton() never gave them the raised face.
+local settingsArt = setmetatable({}, { __mode = "k" }) -- textures this file draws
+local settingsButtonHooks = setmetatable({}, { __mode = "k" })
+local keptArt = { "Arrow", "SelectedHighlight", "Icon", "icon" }
+local function ownRaised(button)
+    local panels = ns.DarkSkin.byFrame[button]
+    local border = panels and panels.inner
+    if not border or not border.raisedFace then return end
+    settingsArt[border.raisedFace] = true
+    for _, edge in pairs(border.raisedEdges) do settingsArt[edge] = true end
+end
+local function stripArt(button)
+    ownRaised(button)
+    local highlight = button.GetHighlightTexture and button:GetHighlightTexture()
+    for index, region in ipairs({ button:GetRegions() }) do
+        if index > 64 then break end
+        if region ~= highlight and not settingsArt[region] and region.IsObjectType and region:IsObjectType("Texture") then
+            local keep = false
+            for _, key in ipairs(keptArt) do keep = keep or button[key] == region end
+            if not keep then region:SetAlpha(0) end
+        end
+    end
+    local slice = button.NineSlice
+    if slice and slice.SetAlpha then slice:SetAlpha(0) end
+end
+-- direction: -1/1 for a stepper, which gets its own arrow glyph; nil otherwise.
+local function settingsButton(button, direction)
+    if not button or not button.HookScript or not button.GetRegions or not button.IsEnabled
+        or button.IsForbidden and button:IsForbidden() then return end
+    stripArt(button)
+    ns.DarkSkin:RaisedButton(button, "inner")
+    ownRaised(button)
+    settingsRim(button)
+    local state = settingsButtonHooks[button]
+    if not state then
+        state = {}
+        settingsButtonHooks[button] = state
+        if direction then
+            local glyph = button:CreateTexture(nil, "ARTWORK")
+            settingsArt[glyph] = true
+            glyph:SetTexture([[Interface\ChatFrame\ChatFrameExpandArrow]])
+            if direction < 0 then glyph:SetTexCoord(1, 0, 0, 1) end
+            glyph:SetPoint("CENTER")
+            state.glyph = glyph
+        end
+        local function refresh(self)
+            -- Native enable/disable swaps or re-shows its state textures.
+            stripArt(self)
+            local enabled = self:IsEnabled()
+            if state.glyph then ns.DarkSkin:TintChrome(state.glyph, enabled) end
+            if self.Arrow then ns.DarkSkin:TintChrome(self.Arrow, enabled) end
+        end
+        state.refresh = refresh
+        button:HookScript("OnEnable", refresh)
+        button:HookScript("OnDisable", refresh)
+        button:HookScript("OnShow", refresh)
+    end
+    if state.glyph then
+        local size = math.max(6, math.min(button:GetWidth(), button:GetHeight()) * 0.5)
+        state.glyph:SetSize(size, size)
+    end
+    state.refresh(button)
+end
+local function settingsBindings(owner)
+    for _, key in ipairs({ "Button1", "Button2", "CustomButton", "PushToTalkKeybindButton" }) do
+        settingsButton(owner[key])
     end
 end
 local function finishSettingsControls(owner, depth)
@@ -452,24 +618,81 @@ local function finishSettingsControls(owner, depth)
         end
         refreshSettingsSlider(slider)
     end
-    for index, control in ipairs(owner.Controls or {}) do
-        if index > 16 then break end
-        finishSettingsControls(control, (depth or 0) + 1)
+    -- SettingsDropdownWithButtons: value face plus previous/next steppers.
+    local control = owner.Control
+    if type(control) == "table" or type(control) == "userdata" then
+        settingsButton(control.Dropdown)
+        settingsButton(control.DecrementButton, -1)
+        settingsButton(control.IncrementButton, 1)
     end
-end
-local function finishSettingsTab(tab)
-    if not tab or tab.upLeftTexture ~= "Options_Tab_Left" then return end
-    local function refresh(self)
-        for _, key in ipairs({ "Left", "Middle", "Right" }) do
-            -- Preserve native selected/unselected atlas and alpha differences.
-            neutralChrome(self[key], function(atlas) return atlas:find("^Options_Tab_") end, self:IsEnabled())
+    settingsBindings(owner)
+    local pool = owner.bindingsPool
+    if pool and pool.EnumerateActive then
+        local count = 0
+        for panel in pool:EnumerateActive() do
+            count = count + 1
+            if count > 128 then break end
+            settingsBindings(panel)
         end
     end
-    if not settingsTabHooks[tab] then
-        settingsTabHooks[tab] = true
-        hooksecurefunc(tab, "UpdateAtlas", refresh)
+    for index, child in ipairs(owner.Controls or {}) do
+        if index > 16 then break end
+        finishSettingsControls(child, (depth or 0) + 1)
     end
-    refresh(tab)
+end
+-- Game/AddOns: one charcoal plate per tab, from the native art's top (the
+-- selected tab stands taller) down onto the category box's top edge.
+local settingsTabs = {}
+local function refreshSettingsTab(tab)
+    local state = settingsTabs[tab]
+    if not state then return end
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        local texture = tab[key]
+        if texture and texture.IsObjectType and texture:IsObjectType("Texture") then texture:SetAlpha(0) end
+    end
+    local left = tab.Left
+    local atlas = left and left.GetAtlas and left:GetAtlas()
+    local selected
+    if tab.IsSelected then selected = tab:IsSelected() and true or false
+    else selected = atlas ~= nil and tab.upLeftTexture ~= nil and atlas ~= tab.upLeftTexture end
+    -- Regions and the tab share one coordinate space.
+    local top, artTop, bottom = tab:GetTop(), left and left.GetTop and left:GetTop(), tab:GetBottom()
+    local box = SettingsPanel and SettingsPanel.CategoryList
+    local boxTop = box and box:GetTop()
+    local height = tab:GetHeight()
+    local drop = top and artTop and top - artTop or 0
+    local reach = bottom and boxTop and bottom - boxTop or 0
+    -- Unexpected geometry falls back to the tab's own rectangle.
+    if drop < 0 or drop >= height then drop = 0 end
+    if math.abs(reach) >= height then reach = 0 end
+    state.holder:ClearAllPoints()
+    state.holder:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -drop)
+    state.holder:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, -reach)
+    local high, low = 0.12, 0.045
+    if selected then high, low = 0.23, 0.085 elseif state.hovered then high, low = 0.17, 0.055 end
+    state.fill:SetGradient("VERTICAL", CreateColor(low, low, low, 1), CreateColor(high, high, high, 1))
+end
+local function finishSettingsTab(tab)
+    if not tab or not tab.HookScript or not ns.DarkSkin then return end
+    if not settingsTabs[tab] then
+        local state = { holder = CreateFrame("Frame", nil, tab) }
+        settingsTabs[tab] = state
+        state.holder.ignoreInLayout = true
+        state.holder:EnableMouse(false)
+        -- The fill is a region of the tab, so the native label stays above it.
+        state.fill = tab:CreateTexture(nil, "BACKGROUND")
+        state.fill:SetTexture([[Interface\Buttons\WHITE8X8]])
+        local border = settingsRim(state.holder)
+        ns.DarkSkin:FitPanelBackground(state.fill, border)
+        for _, method in ipairs({ "UpdateAtlas", "SetSelected" }) do
+            if type(tab[method]) == "function" then hooksecurefunc(tab, method, refreshSettingsTab) end
+        end
+        tab:HookScript("OnShow", refreshSettingsTab)
+        tab:HookScript("OnSizeChanged", refreshSettingsTab)
+        tab:HookScript("OnEnter", function(self) state.hovered = true; refreshSettingsTab(self) end)
+        tab:HookScript("OnLeave", function(self) state.hovered = false; refreshSettingsTab(self) end)
+    end
+    refreshSettingsTab(tab)
 end
 local function hideAtlas(owner, atlas)
     for _, region in ipairs({ owner:GetRegions() }) do
@@ -505,23 +728,30 @@ local function finishCharacterBackground(frame)
     hideTexture(pet and pet.ClassBackground)
 end
 
+local function clearBackdrop(owner)
+    if not owner then return end
+    for _, key in ipairs({ "Bg", "BG", "Background", "InsetBg" }) do hideTexture(owner[key]) end
+    hideTexture(owner.NineSlice and owner.NineSlice.Center)
+end
+local settingsBackground
 local function finishSettingsBackground(frame)
-    -- SettingsFrameTemplate.Bg is a FRAME with four flat panel pieces, not the
-    -- Texture Bg handled by the generic native-window adapter. Replace only
-    -- these known decorative pieces with one chat-matched underlay.
+    -- SettingsFrameTemplate.Bg is a FRAME of flat panel pieces, not the Texture
+    -- Bg handled by the generic native-window adapter. Every decorative layer
+    -- goes, so the body is exactly the one shared chat fill: nothing darker.
     local bg = frame.Bg
-    if bg then
-        for _, key in ipairs({ "BottomLeft", "BottomRight", "BottomEdge", "TopSection" }) do hideTexture(bg[key]) end
+    if bg and bg.GetRegions and not (bg.IsObjectType and bg:IsObjectType("Texture")) then
+        for index, region in ipairs({ bg:GetRegions() }) do
+            if index > 32 then break end
+            hideTexture(region)
+        end
     end
-    if not settingsBackground then
-        -- Dense text needs a readable backing: near-black beneath the shared fill.
-        settingsUnderlay = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-        settingsUnderlay:SetColorTexture(0.02, 0.02, 0.02, 0.85)
-        settingsBackground = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
-    end
-    local border = ns.DarkSkin:Panel(frame, "dialog", 0)
-    ns.DarkSkin:FitPanelBackground(settingsUnderlay, border)
-    ns.DarkSkin:StylePanelBackground(settingsBackground, border)
+    local container = frame.Container
+    local list = container and container.SettingsList
+    local categories = frame.CategoryList
+    clearBackdrop(frame); clearBackdrop(categories); clearBackdrop(container); clearBackdrop(list)
+    clearBackdrop(categories and categories.ScrollBox); clearBackdrop(list and list.ScrollBox)
+    if not settingsBackground then settingsBackground = frame:CreateTexture(nil, "BACKGROUND", nil, -7) end
+    ns.DarkSkin:StylePanelBackground(settingsBackground, ns.DarkSkin:Panel(frame, "dialog", 0))
     hideAtlas(frame, "Options_InnerFrame")
     finishSettingsTab(frame.GameTab)
     finishSettingsTab(frame.AddOnsTab)
@@ -530,15 +760,58 @@ local function settingsRow(row)
     -- A section's native group trim goes; rows are not controls and get no rim.
     if row.NineSlice then hideTrim(row) end
     Controls:Style(row.Button, true)
-    finishSettingsControls(row)
     Controls:Scan(row, 128)
+    finishSettingsControls(row)
     settingsText(row, 128)
     if row.EvaluateVisibility and not expansionHooks[row] then
         expansionHooks[row] = true
         hooksecurefunc(row, 'EvaluateVisibility', function(self)
-            Controls:Scan(self, 128); settingsText(self, 128)
+            if InCombatLockdown() then pending[self] = "scan"; return end
+            Controls:Scan(self, 128); finishSettingsControls(self); settingsText(self, 128)
         end)
     end
+end
+-- Free dragging by any part of the window that is not a control. The drop is
+-- an owner placement: it goes through the window's LayoutWindows record (the
+-- same non-automatic commit /sqedit makes), which then re-places the frame.
+local SETTINGS_ID = "window_SettingsPanel"
+local settingsMoving, settingsDragHooked
+local function commitSettingsDrop(frame)
+    if InCombatLockdown() then pending[frame] = "settingsdrop"; return end
+    local editor = ns.LayoutEditor
+    local spec = editor and editor.specs and editor.specs[SETTINGS_ID]
+    local rect = spec and editor:Rect(frame)
+    if not rect then return end
+    local ok, result = pcall(spec.commit, editor:Clamp(rect), false, false)
+    if not ok then geterrorhandler()(result) end
+end
+local function stopSettingsDrag(frame)
+    if not settingsMoving then return end
+    settingsMoving = false
+    frame:StopMovingOrSizing()
+    -- The layout record is the one position owner, not the client layout cache.
+    if frame.SetUserPlaced then frame:SetUserPlaced(false) end
+    if frame:IsVisible() then commitSettingsDrop(frame) end
+end
+local function settingsDraggable(frame)
+    if settingsDragHooked then return end
+    settingsDragHooked = true
+    if frame:GetScript("OnDragStart") then
+        -- Already natively draggable: keep its handlers, only persist the drop.
+        frame:HookScript("OnDragStop", function(self) if self:IsVisible() then commitSettingsDrop(self) end end)
+        return
+    end
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:HookScript("OnDragStart", function(self)
+        if InCombatLockdown() and self:IsProtected() then return end
+        if ns.LayoutEditor and ns.LayoutEditor.active then return end
+        settingsMoving = true
+        self:StartMoving()
+    end)
+    frame:HookScript("OnDragStop", stopSettingsDrag)
+    frame:HookScript("OnHide", stopSettingsDrag)
 end
 -- 920x724 native units x 0.64 = 589x463 UI units; 8-unit body text is then
 -- 12.5 native units, the size this layout was drawn for.
@@ -608,23 +881,23 @@ function Controls:FinishWindow(frame)
         finishList(pet and pet.ScrollBox, characterCategory)
     elseif frame == SettingsPanel then
         compactSettings(frame)
+        settingsDraggable(frame)
         finishSettingsBackground(frame)
         local categories, container = frame.CategoryList, frame.Container
-        if categories then ns.DarkSkin:Panel(categories, 'inner', 0) end
-        if container then ns.DarkSkin:Panel(container, 'inner', 0) end
+        if categories then settingsRim(categories) end
+        if container then settingsRim(container) end
         finishList(categories and categories.ScrollBox, settingsCategory)
         local list = container and container.SettingsList
         local header = list and list.Header
         if header then
             hideAtlas(header, "Options_HorizontalDivider")
-            if not settingsDivider then
-                settingsDivider = ns.DarkSkin:Divider(header, header:GetWidth())
-                settingsDivider:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, settingsDivider.paintCenter)
-            end
-            ns.DarkSkin:SizeDivider(settingsDivider, header:GetWidth())
+            settingsRule(header)
+            settingsButton(header.DefaultsButton)
         end
         finishList(list and list.ScrollBox, settingsRow)
         self:Style(frame.ClosePanelButton, true)
+        settingsButton(frame.CloseButton)
+        settingsButton(frame.ApplyButton)
         settingsText(frame, 512)
     end
 end
@@ -639,6 +912,7 @@ events:SetScript("OnEvent", function()
         elseif mode == "sidecategories" then finishSideCategories(frame)
         elseif mode == "chrome" then Controls:FinishChrome(frame)
         elseif mode == 'window' then Controls:FinishWindow(frame)
+        elseif mode == "settingsdrop" then commitSettingsDrop(frame)
         elseif mode == "scan" then Controls:Scan(frame)
         else Controls:Style(frame, mode ~= "auto") end
     end

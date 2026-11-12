@@ -138,7 +138,7 @@ function Drawer:Initialize()
  if not frame or not ns.DarkSkin.chatPanel or self.initialized then return end
  if InCombatLockdown() then self.pending=true;return end
  self.initialized=true;self.scrollHooks=setmetatable({}, {__mode='k'})
- frame:HookScript('OnShow',function() self:Queue();if ns.LayoutWindows then ns.LayoutWindows:Slide(frame) end end)
+ frame:HookScript('OnShow',function() self:Queue();ns.DrawerMotion:Open(frame,ns.DarkSkin.chatPanel) end)
  frame:HookScript('OnSizeChanged',function() self:Queue() end)
  for _,method in ipairs({'SetPoint','SetScale','RefreshTabs','SelectTab','TryRefreshUIPanelPositions'}) do
   if frame[method] then hooksecurefunc(frame,method,function() self:Queue() end) end
