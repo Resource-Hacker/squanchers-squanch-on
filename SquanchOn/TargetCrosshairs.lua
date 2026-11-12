@@ -235,9 +235,13 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local shown = display:IsShown()
     display:SetParent(host or WorldFrame)
     display:SetFrameStrata(host and host:GetFrameStrata() or "BACKGROUND")
-    local level = host and host:GetFrameLevel() or 1
-    display:SetFrameLevel(level)
-    for _, child in ipairs({ display:GetChildren() }) do child:SetFrameLevel(level) end
+    local level = host and math.max(0, host:GetFrameLevel() - 2) or 1
+    local function sink(frame)
+      if frame.SetFixedFrameLevel then frame:SetFixedFrameLevel(host ~= nil) end
+      frame:SetFrameLevel(level)
+      for _, child in ipairs({ frame:GetChildren() }) do sink(child) end
+    end
+    sink(display)
     if display.SetIgnoreParentAlpha then display:SetIgnoreParentAlpha(host ~= nil) end
     if display.SetIgnoreParentScale then display:SetIgnoreParentScale(host ~= nil) end
     if host and display.SetIgnoreParentScale then display:SetScale(WorldFrame:GetEffectiveScale()) else display:SetScale(1) end
@@ -319,9 +323,39 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local ringGloss = image(ringFrame, "ring-gloss-5", "OVERLAY")
   ringGloss:SetDrawLayer("OVERLAY", 2)
   ringGloss:Hide()
+  local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
+  -- The plate bar is translucent, so a ring behind it would show through.
+  -- A mask cuts the band behind the bar out of every ring texture: the art is
+  -- opaque except for a strip a quarter of its height, clamped to opaque beyond.
+  local bandMask = ringFrame:CreateMaskTexture()
+  bandMask:SetTexture(artwork .. "band-mask.tga", "CLAMPTOWHITE", "CLAMPTOWHITE")
+  local masked = false
+  local function cutBand(health)
+    local on = barLook and available(health) and health:IsShown()
+    if on then
+      local own, theirs = ringFrame:GetEffectiveScale(), health:GetEffectiveScale()
+      local _, barY = health:GetCenter()
+      local _, ringY = ringFrame:GetCenter()
+      if not (own and theirs and barY and ringY and own > 0) then on = false else
+        local pixel = PixelUtil.GetPixelToUIUnitFactor() / own
+        local band = health:GetHeight() * theirs / own + 2 * pixel
+        bandMask:ClearAllPoints()
+        bandMask:SetSize(ringFrame:GetWidth() * 3, band * 4)
+        bandMask:SetPoint("CENTER", ringFrame, "CENTER", 0, barY * theirs / own - ringY)
+        -- The bar's own opacity, so equal colours read as equal.
+        local alpha = health:GetEffectiveAlpha()
+        if type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then ringFrame:SetAlpha(alpha) end
+      end
+    end
+    if on ~= masked then
+      masked = on
+      for _, texture in ipairs({ ring, ringGloss, ringEdges[1], ringEdges[2] }) do
+        if on then texture:AddMaskTexture(bandMask) else texture:RemoveMaskTexture(bandMask) end
+      end
+    end
+  end
   -- Bar look: which units take it, the ring face of the bar texture in use, and
   -- the colour the selected plate's health bar shows right now.
-  local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
   local function barLookWanted()
     -- NPCs of either side keep the plain ring and its white-to-red health colour
     -- unless asked otherwise; players wear their plate bar's look.
@@ -851,6 +885,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local thickness = height and height > 0 and 1536 / height or 1
     -- The bar look is as opaque as the bar it copies.
     ringFrame:SetAlpha(barLook and 1 or alpha)
+    cutBand(nestedIn and nestedIn.Health)
     ringSpin:Stop()
     ringTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
     for index, guide in ipairs(guides) do
