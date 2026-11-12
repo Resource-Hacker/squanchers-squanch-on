@@ -1224,6 +1224,36 @@ function UF:KnownRangeSpells(kind)
     return known
 end
 
+-- The game gives no exact distance to a friendly unit outside the group, only
+-- yes/no checks. These item ranges are 40 yards (the usual friendly reach).
+local FRIEND_REACH_ITEMS={1713,5205,5323,18662,18640}
+local FRIEND_REACH_YARDS=40
+-- true = within about 40 yards, false = beyond, nil = cannot tell (no fade).
+function UF:FriendlyReach(unit)
+    -- Item and interact checks are blocked in combat for friendly units, and
+    -- pcall does not hide the blocked-action error: never call them there.
+    if not InCombatLockdown() then
+        if C_Item and C_Item.IsItemInRange then
+            for _,item in ipairs(FRIEND_REACH_ITEMS) do
+                local reach=rangeBoolean(C_Item.IsItemInRange,item,unit)
+                if reach~=nil then return reach end
+            end
+        end
+        -- Follow distance (28 yards): true is enough, false is not "out".
+        if rangeBoolean(CheckInteractDistance,unit,4)==true then return true end
+    end
+    -- A nameplate exists only inside nameplateMaxDistance; absence proves nothing.
+    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+        local limit=tonumber(GetCVar('nameplateMaxDistance'))
+        if limit and limit<=FRIEND_REACH_YARDS+1 then
+            local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,unit)
+            if ok and plate then return true end
+        end
+    end
+    if rangeBoolean(UnitIsVisible,unit)==false then return false end
+    return nil
+end
+
 function UF:RangeState(unit)
     if not public(unit) or type(unit)~='string' then return nil end
     if rangeBoolean(UnitIsConnected,unit)==false then return nil end
@@ -1262,17 +1292,7 @@ function UF:RangeState(unit)
     if ok and public(inRange) and public(checked) and checked==true then
         if inRange==true then return true elseif inRange==false then return false end
     end
-    -- No spell and no group answer (e.g. a class with no friendly spell looking
-    -- at another player): use the range library's distance estimate. Past its
-    -- farthest check (about 28 yards or more) the unit counts as out of range.
-    local library=kind and LibStub and LibStub('LibRangeCheck-3.0',true)
-    if library and library.GetRange then
-        local called,minimum,maximum=pcall(library.GetRange,library,unit)
-        if called and public(minimum) and public(maximum) then
-            if type(maximum)=='number' then return true end
-            if type(minimum)=='number' and minimum>=28 then return false end
-        end
-    end
+    if kind=='FRIENDLY' or kind=='RESURRECT' then return self:FriendlyReach(unit) end
     return nil
 end
 
