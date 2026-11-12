@@ -38,6 +38,24 @@ local function characterRegion(region)
     end
     return false
 end
+-- Drawer windows are rescaled to the chat width (LayoutWindows) and the Friends
+-- drawer shares their look: text there keeps one on-screen size, header 10 and
+-- body 8 UIParent units. CharacterFrame keeps its own compensation above.
+Text.scaledRoots = setmetatable({}, {__mode = 'k'})
+local function scaledRoot(region)
+    if not next(Text.scaledRoots) then return end
+    local parent = region
+    for _ = 1, 32 do
+        parent = parent and parent.GetParent and parent:GetParent()
+        if not parent or parent == CharacterFrame then return end
+        if Text.scaledRoots[parent] then return parent end
+    end
+end
+local function truncated(region)
+    if not region.IsTruncated then return false end
+    local ok, cut = pcall(region.IsTruncated, region)
+    return ok and public(cut) and cut == true
+end
 local function refresh(region)
     local record = Text.records[region]
     if not record or record.busy or not safe(region) then return end
@@ -55,10 +73,87 @@ local function refresh(region)
             wanted = (Text.headers[region] and 10 or math.max(record.size or 8, 8)) * uiScale / scale
         end
     end
+    -- An explicit owner size (quest text, settings) is never overridden.
+    local drawer = not record.character and not record.size and scaleOwner
+        and scaleOwner.GetEffectiveScale and UIParent and scaledRoot(region)
+    if drawer then
+        local scale = scaleOwner:GetEffectiveScale()
+        local uiScale = UIParent:GetEffectiveScale()
+        if not (public(scale) and public(uiScale) and type(scale) == 'number'
+            and type(uiScale) == 'number' and scale > 0 and uiScale > 0) then return end
+        -- Quarter units keep the set of sizes (and Button font copies) small.
+        wanted = math.floor((Text.headers[region] and 10 or 8) * uiScale / scale * 4 + .5) / 4
+        if record.kept == wanted then return end
+        record.kept = nil
+        -- `got` is what the client reported after the last write of `set`.
+        if size == wanted or record.set == wanted and size == record.got then return end
+        record.busy = true
+        pcall(region.SetFont, region, path, wanted, flags)
+        record.set, record.got = wanted, select(2, font(region))
+        -- A fixed-width label the larger text no longer fits keeps its native
+        -- size, unless that was already cut off natively.
+        local native = record.nativeSize
+        if native and native < wanted - .01 and truncated(region) then
+            pcall(region.SetFont, region, path, native, flags)
+            if truncated(region) then pcall(region.SetFont, region, path, wanted, flags)
+            else record.kept = wanted end
+        end
+        record.busy = nil
+        return
+    end
     if size == wanted then return end
     record.busy = true
     pcall(region.SetFont, region, path, wanted, flags)
     record.busy = nil
+end
+-- A Button re-applies its state font objects in the client, outside every
+-- FontString hook: give a drawer button sized copies of those exact fonts.
+local buttonFonts, buttonSources, buttonFontCount = {}, {}, 0
+function Text:Button(button, header)
+    local label = button.GetFontString and button:GetFontString()
+    if not label or not scaledRoot(label) then return end
+    if header then self.headers[label] = true end
+    local scale, uiScale = button:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if not (scale > 0 and uiScale > 0) then return end
+    local size = math.floor((self.headers[label] and 10 or 8) * uiScale / scale * 4 + .5) / 4
+    for _, state in ipairs({'Normal', 'Highlight', 'Disabled'}) do
+        local get, set = button['Get' .. state .. 'FontObject'], button['Set' .. state .. 'FontObject']
+        local object = get and set and get(button)
+        object = object and (buttonSources[object] or object)
+        if object then
+            local bySize = buttonFonts[object]
+            if not bySize then bySize = {}; buttonFonts[object] = bySize end
+            local clone = bySize[size]
+            if not clone then
+                buttonFontCount = buttonFontCount + 1
+                clone = CreateFont('SquanchOnDrawerText' .. buttonFontCount)
+                clone:CopyFontObject(object)
+                local file, _, flags = clone:GetFont()
+                clone:SetFont(file, size, flags)
+                bySize[size] = clone
+                buttonSources[clone] = object
+            end
+            if get(button) ~= clone then set(button, clone) end
+        end
+    end
+end
+-- Registers a window whose text follows the on-screen rule; a later change of
+-- its scale re-sizes every region already styled inside it.
+function Text:ScaledRoot(frame)
+    if not frame or frame == CharacterFrame or self.scaledRoots[frame] then return end
+    self.scaledRoots[frame] = true
+    local function queue()
+        if Text.scaledRefreshQueued then return end
+        Text.scaledRefreshQueued = true
+        C_Timer.After(0, function()
+            Text.scaledRefreshQueued = nil
+            for region, record in pairs(Text.records) do
+                if not record.character then record.kept = nil; refresh(region) end
+            end
+        end)
+    end
+    hooksecurefunc(frame, 'SetScale', queue)
+    queue()
 end
 local function queueCharacterRefresh()
     if Text.characterRefreshQueued then return end

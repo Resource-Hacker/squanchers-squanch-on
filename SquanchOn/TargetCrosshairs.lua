@@ -420,7 +420,12 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         -- Class tiles are square (clear their corners); faction emblems are round.
         local radius = kind == "class" and math.sqrt(width * width + height * height) / 2
           or math.max(width, height) / 2
-        return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER, baseSize, 1, 2048)
+        -- Owner: 25% tighter than the geometric fit (the emblem art has transparent padding).
+        -- The emblem's art sits slightly right of and above its texture centre
+        -- (measured about 4% of its size on screen); centre on the art.
+        local dx = kind == "faction" and width * 0.04 * scale / own or 0
+        local dy = kind == "faction" and height * 0.045 * scale / own or 0
+        return icon, limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER * 0.75, baseSize, 1, 2048), dx, dy
       end
     end
   end
@@ -573,7 +578,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if not available(destination) then destination = plate end
     hookIcons()
     -- Hostile and icon-less targets keep the configured size on the health bar.
-    local icon, size = iconFit(plate)
+    local icon, size, dx, dy = iconFit(plate)
     local anchor = icon or destination
     size = size or baseSize
     if size ~= fitted then
@@ -582,7 +587,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     end
     if destination ~= bound or anchor ~= anchored then
       display:ClearAllPoints()
-      local ok = pcall(display.SetPoint, display, "CENTER", anchor, "CENTER", 0, 0)
+      local ok = pcall(display.SetPoint, display, "CENTER", anchor, "CENTER", dx or 0, dy or 0)
       if not ok then self:HideTarget(); return end
       bound, anchored = destination, anchor
     end
@@ -682,6 +687,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       if unit == "target" then marker:RefreshTarget() end
     elseif event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED"
       or event == "PLAYER_LOGIN" then
+      -- Install before Plater builds its first indicators, or a plate already
+      -- carrying its icon keeps the unfitted ring until it is rebuilt.
+      hookIcons()
       marker:ApplyStyle()
     else
       marker:RefreshTarget()

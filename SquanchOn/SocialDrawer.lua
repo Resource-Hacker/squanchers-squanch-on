@@ -138,6 +138,8 @@ function Drawer:Initialize()
  if not frame or not ns.DarkSkin.chatPanel or self.initialized then return end
  if InCombatLockdown() then self.pending=true;return end
  self.initialized=true;self.scrollHooks=setmetatable({}, {__mode='k'})
+ -- Same on-screen text sizes as the other chat drawers: header 10, body 8.
+ if ns.NativeText then ns.NativeText:ScaledRoot(frame) end
  -- Fit in the same frame as the show so the drawer is already on the chat when
  -- its open motion checks the anchor; a later queued fit settles list heights.
  frame:HookScript('OnShow',function()

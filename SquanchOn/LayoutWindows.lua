@@ -3,7 +3,7 @@
 -- Item windows receive one measured size match; later editor changes stay owned.
 -- Discovery never opens UI or constructs inventory widgets.
 local _, ns = ...
-local module = { native = {}, applying = {}, itemQueued = {} }
+local module = { native = {}, applying = {}, itemQueued = {}, contentQueued = {}, contentPending = {} }
 ns.LayoutWindows = module
 
 local windows = {
@@ -204,6 +204,134 @@ function module:QueueItemSizing(frame)
     end)
 end
 
+-- Drawer contents. The window's scale belongs to the chat-width rule, so its
+-- text is sized in screen units by NativeText and, in the windows below, each
+-- square icon button is scaled about its own centre until its artwork matches
+-- the action bar's. CharacterFrame keeps its own fit and is never visited.
+local iconRoots = { PlayerSpellsFrame = true, SpellBookFrame = true, PlayerTalentFrame = true,
+    ProfessionsBookFrame = true, CollectionsJournal = true }
+local iconButtons = setmetatable({}, { __mode = 'k' })
+local contentHooks = setmetatable({}, { __mode = 'k' })
+local dirX = { LEFT = -1, TOPLEFT = -1, BOTTOMLEFT = -1, RIGHT = 1, TOPRIGHT = 1, BOTTOMRIGHT = 1 }
+local dirY = { TOP = 1, TOPLEFT = 1, TOPRIGHT = 1, BOTTOM = -1, BOTTOMLEFT = -1, BOTTOMRIGHT = -1 }
+
+local function isTab(button, tabs)
+    if tabs[button] then return true end
+    local name = button.GetName and button:GetName()
+    return type(name) == 'string' and name:find('Tab%d*$') ~= nil
+end
+
+-- SetScale also scales the anchor offset. Rewrite the single native anchor so
+-- the button's centre stays where the native layout put it; an anchor on
+-- another scaled icon follows that icon's shrunken edge back to its native one.
+local function recentre(button)
+    local state = iconButtons[button]
+    if not state or state.busy or button:GetNumPoints() ~= 1 then return end
+    local point, rel, relPoint, x, y = button:GetPoint(1)
+    if not finite(x) or not finite(y) then return end
+    local wrote = state.wrote
+    if wrote and wrote.point == point and wrote.rel == rel and wrote.relPoint == relPoint
+        and math.abs(wrote.x - x) < .01 and math.abs(wrote.y - y) < .01 then
+        x, y = wrote.nx, wrote.ny
+    end
+    local k = button:GetScale() / state.base
+    if not wrote and math.abs(k - 1) < .001 then return end
+    local w, h = button:GetSize()
+    local dx, dy = (dirX[point] or 0) * w / 2, (dirY[point] or 0) * h / 2
+    local rx, ry = 0, 0
+    local other = rel and rel ~= button and iconButtons[rel]
+    if other then
+        local rk, rw, rh = rel:GetScale() / other.base, rel:GetSize()
+        rx, ry = (dirX[relPoint] or 0) * rw / 2 * (1 - rk), (dirY[relPoint] or 0) * rh / 2 * (1 - rk)
+    end
+    local fx, fy = (x - dx + rx) / k + dx, (y - dy + ry) / k + dy
+    state.wrote = { point = point, rel = rel, relPoint = relPoint, x = fx, y = fy, nx = x, ny = y }
+    state.busy = true
+    button:ClearAllPoints()
+    button:SetPoint(point, rel, relPoint, fx, fy)
+    state.busy = nil
+end
+
+local function matchIcon(button, root, wanted)
+    local w, h = button:GetSize()
+    if not (finite(w) and finite(h) and w >= 12 and h >= 12) or math.abs(w - h) > .15 * math.max(w, h) then return end
+    local icon = iconFor(button) or button.iconTexture
+    local current = artWidth(icon, root)
+    -- The icon must be the button's main artwork, not a small adornment.
+    if not current or icon == button or icon:GetWidth() < w * .5 then return end
+    local state = iconButtons[button]
+    if not state then
+        -- Buttons sized by two anchors have no free scale; leave them native.
+        if button:GetNumPoints() ~= 1 then return end
+        state = { base = button:GetScale() }
+        iconButtons[button] = state
+        hooksecurefunc(button, 'SetPoint', function(self)
+            if iconButtons[self].busy then return end
+            if InCombatLockdown() then module.contentPending[root] = true; return end
+            pcall(recentre, self)
+        end)
+    end
+    local scale = button:GetScale() * wanted / current
+    if not finite(scale) or scale < state.base * .3 or scale > state.base * 3 then return end
+    if math.abs(wanted / current - 1) > .01 then
+        state.busy = true
+        button:SetScale(scale)
+        state.busy = nil
+    end
+    recentre(button)
+end
+
+-- `node` is the window itself or one ScrollBox inside it whose rows changed.
+function module:DrawerContent(frame, node)
+    local text, name = ns.NativeText, frame:GetName()
+    if not frame:IsVisible() then return end
+    local combat = InCombatLockdown()
+    if combat then self.contentPending[frame] = true end
+    local wanted = not combat and iconRoots[name] and actionArtWidth()
+    local tabs, count = {}, 0
+    for _, list in ipairs({ frame.Tabs, frame.tabs, frame.TabSystem and frame.TabSystem.tabs }) do
+        if type(list) == 'table' then for _, tab in ipairs(list) do tabs[tab] = true end end
+    end
+    local function visit(child, depth)
+        if depth > 10 or count >= 1500 or child.IsForbidden and child:IsForbidden() then return end
+        count = count + 1
+        local button = child ~= frame and child.IsObjectType and child:IsObjectType('Button')
+        local tab = button and isTab(child, tabs)
+        if text then
+            if button then pcall(text.Button, text, child, tab) end
+            text:Frame(child)
+        end
+        if not contentHooks[child] then
+            -- Rows acquired by a ScrollBox and panels shown by a tab are styled
+            -- when the native owner fills or shows them; nothing polls.
+            if type(child.ForEachFrame) == 'function' and type(child.Update) == 'function' then
+                contentHooks[child] = true
+                hooksecurefunc(child, 'Update', function() module:QueueContent(frame, child) end)
+            elseif depth > 0 and depth <= 2 and child.HookScript and child:GetObjectType() == 'Frame' then
+                contentHooks[child] = true
+                child:HookScript('OnShow', function() module:QueueContent(frame) end)
+            end
+        end
+        if wanted and button and not tab then pcall(matchIcon, child, frame, wanted) end
+        if child.GetChildren then
+            for _, grandchild in ipairs({ child:GetChildren() }) do visit(grandchild, depth + 1) end
+        end
+    end
+    visit(node or frame, node and 3 or 0)
+end
+
+function module:QueueContent(frame, node)
+    node = node or frame
+    if self.contentQueued[node] or frame == CharacterFrame or not drawers[frame:GetName()] then return end
+    self.contentQueued[node] = true
+    -- Native OnShow/tab code allocates rows and talent buttons before this runs.
+    C_Timer.After(0, function()
+        self.contentQueued[node] = nil
+        local ok, err = pcall(self.DrawerContent, self, frame, node ~= frame and node or nil)
+        if not ok then geterrorhandler()(err) end
+    end)
+end
+
 function module:Refresh()
     if self.refreshQueued or not ns.LayoutEditor.active then return end
     self.refreshQueued = true
@@ -329,9 +457,18 @@ local function native(definition)
         if module.applying[frame] then return end
         module:Apply(id, frame)
         module:QueueItemSizing(frame)
+        module:QueueContent(frame)
         module:Refresh()
     end
     frame:HookScript('OnShow', update)
+    if drawers[name] and frame ~= CharacterFrame then
+        if ns.NativeText then ns.NativeText:ScaledRoot(frame) end
+        if frame == PlayerSpellsFrame and EventRegistry then
+            -- A page turn or filter re-acquires the pooled spell rows.
+            EventRegistry:RegisterCallback('PlayerSpellsFrame.SpellBookFrame.DisplayedSpellsChanged',
+                function() module:QueueContent(frame) end, module)
+        end
+    end
     if drawers[name] then
         frame:HookScript('OnShow', function()
             local chat = module:DrawerChat(id, frame)
@@ -352,6 +489,7 @@ local function native(definition)
     end
     module:Apply(id, frame)
     module:QueueItemSizing(frame)
+    module:QueueContent(frame)
 end
 
 function module:Register()
@@ -373,6 +511,8 @@ function module:Register()
     end
     -- A natural show/position event in combat is deferred until this event path.
     for frame, id in pairs(self.native) do self:Apply(id, frame); self:QueueItemSizing(frame) end
+    -- Icon sizing skipped in combat resumes here (PLAYER_REGEN_ENABLED).
+    for frame in pairs(self.contentPending) do self.contentPending[frame] = nil; self:QueueContent(frame) end
     self:Refresh()
 end
 
