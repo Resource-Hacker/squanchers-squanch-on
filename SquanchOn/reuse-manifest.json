@@ -366,7 +366,7 @@
       "files": [
         {
           "path": "HordeReticle.lua",
-          "sha256": "5a3cf3b687578040507a35689dc52bfab4405186995b10728ccee77327e028c3"
+          "sha256": "99bba4aa8d8689cf36c9ae0b048f5d2a1fc5b101b899f59eb14676b340b284b2"
         },
         {
           "path": "HordeReticleData.lua",

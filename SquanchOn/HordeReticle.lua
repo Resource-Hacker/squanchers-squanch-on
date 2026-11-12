@@ -145,12 +145,16 @@ local function makeFrame(id, index)
   foreground:SetBlendMode(d.blendMode)
   foreground:SetAllPoints(frame)
   if d.regionType == "progresstexture" then setProgressTexture(foreground, frame, d, 1) end
-  if id == "Mouseover Dot" or id == "Mouseover Glow" then
+  if id == "Mouseover Dot" then
     -- Aura104 supplies the central-diamond shape used by the dot. Its only
     -- nontransparent pixels occupy [51,77) x [32,62) in the 128px source.
-    -- Reuse that shape for both layers instead of spilling a circular glow.
     foreground:SetTexture(media .. "Aura104", "CLAMP", "CLAMP")
     foreground:SetTexCoord(51 / 128, 77 / 128, 32 / 128, 62 / 128)
+  elseif id == "Mouseover Glow" then
+    -- Owner: the soft round glow of the original aura (Aura22, additive)
+    -- around the dot while the hostile mouseover is in range.
+    foreground:SetTexture(media .. "Aura22", "CLAMP", "CLAMP")
+    foreground:SetTexCoord(0, 1, 0, 1)
   end
   frame.texture = foreground
   module.frames[id] = frame
@@ -224,6 +228,8 @@ function module:Refresh()
   end
   local mouseHostile = self.enabled and class == "HUNTER" and hostile("mouseover")
   local mouseInRange = mouseHostile and autoShotRange("mouseover")
+  -- /run SquanchOn.HordeReticle:Test() shows the dot and glow without a target.
+  if self.test then mouseHostile, mouseInRange = true, true end
   active(self.frames["Mouseover Glow"], mouseHostile)
   active(self.frames["Mouseover Dot"], mouseHostile)
   self.frames["Mouseover Glow"].inRange = mouseInRange
@@ -289,7 +295,14 @@ local function render(now, elapsed)
   end
   local scale = UIParent:GetEffectiveScale()
   mouseAnchor:ClearAllPoints()
-  mouseAnchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+  if module.test or (addon.IsNativeLockCentered and addon:IsNativeLockCentered()) then
+    -- Centre-locked: the dot and glow belong on the Horde art itself, so they
+    -- take its exact centre instead of a separately computed cursor position
+    -- (the two differed by a pixel or two).
+    mouseAnchor:SetPoint("CENTER", group, "CENTER", 0, 0)
+  else
+    mouseAnchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+  end
   for id, frame in pairs(module.frames) do
     if frame:IsShown() then
       transition(frame, now)
@@ -366,8 +379,12 @@ function module:ApplyReticleScale()
         local insetScale = math.max(0.0001, 1 - pixel
           * math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight)
           / (halfWidth * halfHeight))
-        frame.fillWidth = 2 * halfWidth * insetScale
-        frame.fillHeight = 2 * halfHeight * insetScale
+        if id == "Mouseover Dot" then
+          frame.fillWidth = 2 * halfWidth * insetScale
+          frame.fillHeight = 2 * halfHeight * insetScale
+        else
+          frame.fillWidth, frame.fillHeight = frame.data.width, frame.data.height
+        end
         -- The imported group's BOTTOMLEFT anchor adds its half-size to the
         -- screen center. Preserve that exact origin when following the cursor.
         local groupScale = group:GetEffectiveScale() / effectiveScale
@@ -454,4 +471,10 @@ for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "UI_SCALE_CHANG
   "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_SUCCEEDED",
   "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED"}) do
   driver:RegisterEvent(event)
+end
+
+function module:Test()
+  self.test = not self.test or nil
+  self:Refresh()
+  print("Squanch-On reticle: mouseover dot and glow preview " .. (self.test and "on" or "off"))
 end
