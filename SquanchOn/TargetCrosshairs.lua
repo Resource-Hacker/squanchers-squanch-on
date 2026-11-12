@@ -398,7 +398,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local anchored, fitted, baseSize
   -- Friendly targets: fit the ring around Plater's nameplate indicator icon
   -- (class icon when enabled, otherwise the faction emblem). Plater reuses
-  -- these textures, so record which one it assigned to each plate.
+  -- these textures, so record which one it assigned to each plate. Squanch-On's
+  -- own plates (Nameplates.lua) publish their emblem in the same
+  -- plate.IconIndicators list, which the fallback in iconFit reads.
   -- circle-dashed.tga paints radii 87.5..96.5 of its 128px half-width.
   local RING_INNER, ICON_CLEARANCE = 0.684, 1.5
   local plateIcons = setmetatable({}, { __mode = "k" })
@@ -483,7 +485,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       if healingRange() then
         mode = "healing"
       elseif publicQuery(UnitIsDeadOrGhost, "target") == false then
-        local range = Plater and Plater.RangeCheckRangeFriendly or 40
+        local range = Plater and Plater.RangeCheckRangeFriendly
+          or suite.Nameplates and suite.Nameplates:FriendlyRange() or 40
         -- Keep friendly/NPC proximity separate: it never lights healing arrows.
         local result = suite.Range and suite.Range:Within("target", range)
         if result == true or result == 1 then mode = "friendly" end

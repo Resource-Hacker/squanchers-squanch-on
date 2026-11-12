@@ -134,11 +134,10 @@ sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-f
   tooltip content, comparisons and native health handling.
 - **A layout you can tune:** `/sqedit` moves and resizes supported components with
   a centered alignment grid, width controls and session undo.
-- **Nameplates:** Squanch-On draws the target ring and nameplate indicators but
-  does not yet ship its own nameplates. A native nameplate module is planned,
-  not shipped. The author uses Plater for nameplates; it is not required. With
-  Plater loaded, a few small adapters style its icons and health-bar rim, and
-  the friendly ring hugs Plater's nameplate icon.
+- **Nameplates:** Squanch-On draws the target ring and nameplate indicators and
+  now ships its own nameplates (untested in game). They run only while Plater is
+  not loaded. With Plater loaded they stay off, and a few small adapters style
+  Plater's icons and health-bar rim; the friendly ring hugs its nameplate icon.
 
 The package is one complete **SquanchOn** addon folder, including its oUF,
 LibDispel, LibRangeCheck-3.0, LibSerialize, LibDeflate and LibStub libraries
@@ -162,8 +161,8 @@ GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
    ([installation page](docs/LOCAL-ASSEMBLY.md)).
 3. Disable other addons that own unit frames, tooltips, bags or the buff rows.
    Squanch-On's camera stays inactive while DynamicCam is loaded:
-   `/sqms camera takeover` imports its profile and disables it. A nameplate
-   addon such as Plater can stay; none is required.
+   `/sqms camera takeover` imports its profile and disables it. Plater can
+   stay: Squanch-On's own nameplates start only when Plater is not loaded.
 4. Log in. An existing `SquanchOnDB` is kept and migrated to a profile;
    otherwise the author's layout is used. Adjust positions with `/sqedit`.
 

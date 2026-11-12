@@ -61,12 +61,29 @@ takeover has not been verified in game.
 
 ### Nameplates
 
-Squanch-On does not ship nameplates. A native nameplate module is planned, not
-shipped. Squanch-On draws the target ring and nameplate indicators on whatever
-nameplates are shown. The author uses Plater; it is not required. When Plater is
-loaded, small adapters style its icons and health-bar rim, show a health bar on
-a selected friendly Horde player, and let the friendly target ring hug Plater's
-nameplate icon. Without Plater those adapters do nothing.
+Squanch-On ships its own nameplates (`Nameplates.lua`, `NameplateStyle.lua`,
+`NameplateCast.lua`, `NameplateAuras.lua`), built on the bundled oUF nameplate
+driver. They have not been tested in game. They start only when Plater is not
+loaded: both addons draw into the same plate field, so with Plater loaded the
+module prints one line at login and does nothing else. To try them, disable
+Plater in the AddOns list and reload; to go back, enable Plater again. While
+running they set a list of nameplate CVars and record the previous values,
+which are restored when the switch under Nameplates & Target ring > Squanch-On
+nameplates is turned off. Plates the client forbids addons to touch (friendly
+plates in instances on other clients) keep the game's look. Plates never take
+clicks. Settings are imported once from the Plater profile the character uses,
+while Plater is still loaded; Plater's saved variables are never written.
+
+`/sqplates test` shows a movable row of preview plates drawn by the same code
+with made-up units; it works while Plater is loaded, for a side-by-side
+comparison. `/sqplates test enh` adds the row with the optional enhancements,
+which are otherwise off while "Classic look" is on (the default).
+
+The target ring and nameplate indicators draw on whatever nameplates are shown.
+When Plater is loaded, small adapters style its icons and health-bar rim, show a
+health bar on a selected friendly Horde player, and let the friendly target ring
+hug Plater's nameplate icon. Without Plater those adapters do nothing; the
+native plates do the same themselves.
 
 The target ring is one solid line. On a friendly player it takes the class
 colour, with fit, width and line-thickness settings.

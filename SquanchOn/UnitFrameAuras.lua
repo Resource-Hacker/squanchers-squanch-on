@@ -336,6 +336,8 @@ local function paintIcon(button,container,frame,unit,aura,key)
     else button.Count:SetText('') end
     button:Show()
 end
+-- The cell constructor and painter, shared with the nameplate debuff row.
+UF.NewAuraIcon,UF.PaintAuraIcon=newIcon,paintIcon
 local testIcons={
     Buffs={136075,135932,136085,132333,135987,136048,135915,136096},
     Debuffs={136139,136118,136207,132090,136197,135817,136066,136188}}

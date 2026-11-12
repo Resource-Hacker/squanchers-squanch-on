@@ -45,8 +45,10 @@
   sized so that minimap plus meter equals the chat width.
 - Target ring: one solid line. On friendly players it hugs the nameplate icon
   and takes the class colour, with fit, width and thickness settings.
-- Nameplates are not shipped. A native nameplate module is planned; the author
-  uses Plater, which is not required.
+- Add Squanch-On's own nameplates (untested in game). They start only when
+  Plater is not loaded and reproduce the author's previous layout; optional
+  enhancements stay off behind a "Classic look" switch. `/sqplates test` shows
+  preview plates, also while Plater is loaded.
 - Add independently written tooltip presentation and anchor handling; Blizzard
   keeps content, item comparisons and native health values.
 - Ship the exact Horde reticle (`HordeReticle.lua`, `HordeReticleData.lua`,

@@ -73,9 +73,9 @@ Squanch-On has its own camera (`Camera.lua`): every DynamicCam setting, zoom
 curves and situations. It stays inactive while DynamicCam is loaded; `/sqms
 camera takeover` imports the DynamicCam profile once and disables DynamicCam.
 
-Squanch-On does not ship nameplates yet; a native nameplate module is planned.
-The author uses Plater for nameplates. It is not required; when it is loaded,
-the friendly ring hugs its nameplate icon and its icons take the shared look.
+Squanch-On ships its own nameplates (untested in game). They run only while
+Plater is not loaded. When Plater is loaded they stay off, the friendly ring
+hugs Plater's nameplate icon and its icons take the shared look.
 [Compatibility notes](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
 
 ## Source and attribution

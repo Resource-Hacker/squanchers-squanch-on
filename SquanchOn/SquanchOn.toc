@@ -55,6 +55,12 @@ UnitFrameImport.lua
 UnitFrames.lua
 UnitFrameState.lua
 UnitFrameAuras.lua
+Nameplates.lua
+NameplateStyle.lua
+NameplateCast.lua
+NameplateAuras.lua
+NameplateEnhance.lua
+NameplatePreview.lua
 UnitFrameOptions.lua
 CameraOptions.lua
 OriginalUnitFrameLighting.lua
@@ -82,6 +88,7 @@ options/Mouselook.lua
 options/Reticle.lua
 options/TargetRing.lua
 options/Nameplates.lua
+options/NameplatesNative.lua
 options/Tooltip.lua
 options/UnitFrames.lua
 options/Layout.lua
