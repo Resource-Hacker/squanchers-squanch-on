@@ -58,7 +58,7 @@ visible and adds range feedback.
 
 | Marker | Meaning | Evidence needed |
 | --- | --- | --- |
-| Solid ring | The selected target's visible nameplate; validated world clicks briefly pulse the whole ring. On a friendly player it takes the class colour. | Current target and matching visible nameplate. |
+| Solid ring | The selected target's visible nameplate; validated world clicks briefly pulse the whole ring. On players it wears the health bar's texture and colour by default. | Current target and matching visible nameplate. |
 | Cardinal blocks | Conservative five-yard melee reach on living hostile targets. | An affirmative five-yard check from the bundled LibRangeCheck-3.0. |
 | Rotating triangles, hostile | A learned ranged damage ability is in range. | Native spell range; Hunter Auto Shot retains its own check. |
 | Rotating triangles, friendly | A learned healing ability is in range. | A known spellbook rank with an affirmative native range result. |
@@ -73,9 +73,14 @@ the client blocks item and interact checks on units the player cannot attack, so
 friendly range there rests on spells, nameplates and visibility only. Unknown,
 restricted or unavailable range data never enables a range marker.
 
-On a friendly player the ring's fit, width and line thickness are settings
-(Nameplates & Target ring). Hugging the nameplate icon uses Plater's icon when
-Plater is loaded; Squanch-On does not ship its own nameplates yet.
+The ring lives inside the selected nameplate and is cut around its health bar.
+On a friendly target it fits around the faction emblem of Squanch-On's own
+nameplate; its fit, width and line thickness are settings (Nameplates & Target
+ring). On players it can wear the health bar's texture and colour ("health bar
+look", on by default for friendly and hostile players); NPCs keep the plain ring
+coloured by health. A hostile player's ring shifts from the class colour as
+health drops and pulses in execute range. For users who keep Plater, an adapter
+fits the ring to Plater's nameplate icon instead.
 
 Healing candidates cover learned spells for Druid, Paladin, Priest and Shaman on
 the target client. Hunter Mend Pet and Warlock Health Funnel are restricted to the

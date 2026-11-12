@@ -22,12 +22,13 @@ in the saved file. `/squanchon` opens the settings window.
 
 No other addon is required.
 
-- **Nameplates.** Squanch-On does not ship nameplates yet; a native nameplate
-  module is planned. The author uses **Plater**. It is not required, and the
-  range cues no longer depend on it: LibRangeCheck-3.0 is bundled. With Plater
-  loaded, the friendly target ring hugs its nameplate icon.
-- **DynamicCam.** Squanch-On has its own camera, which stays inactive while
-  DynamicCam is loaded. `/sqms camera takeover` imports the DynamicCam profile
+- **Plater.** Not needed: Squanch-On draws its own nameplates, and the range
+  cues use the bundled LibRangeCheck-3.0. If you keep Plater, Squanch-On's
+  nameplates stay off while it is loaded and the friendly target ring fits
+  Plater's nameplate icon. `/sqplates test` previews Squanch-On's plates either
+  way.
+- **DynamicCam.** Not needed: Squanch-On has its own camera. It stays inactive
+  while DynamicCam is loaded. `/sqms camera takeover` imports the DynamicCam profile
   in use and disables DynamicCam; `/sqms camera release` hands the camera back.
 - **LibSharedMedia.** Not bundled and not needed. If another addon has loaded
   it, Squanch-On registers its fonts and textures there.
@@ -41,6 +42,7 @@ works as well.
 
 ## Status
 
-Checked live only solo on the Forever client (interface 16001) by the author.
+Checked live only solo and out of combat on the Forever client (interface
+16001) by the author.
 See [compatibility](COMPATIBILITY.md#verification-status) for what has not been
 verified.

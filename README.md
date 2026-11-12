@@ -17,12 +17,14 @@ key when you need the interface; release it to return to mouselook.
 
 **0.3.0-rewrite · Forever interface 16001 · partly verified in game.**
 Everything is in one `SquanchOn/` folder: mouselook and reticle, camera, unit
-frames, buff and debuff bars, chat, drawers, a bag window, a damage meter,
-tooltip presentation, one settings window, profiles, fonts and textures. No
-other addon is required. The author has checked it live only solo on the Forever
-client. Combat, hostile-target debuffs, pet/party/raid frames, profile switching
-and import, theme recolouring, the camera takeover and most bag interactions
-have not been verified. See [compatibility](docs/COMPATIBILITY.md#verification-status).
+frames, nameplates, buff and debuff bars, chat, drawers, a bag window, a damage
+meter, tooltip presentation, one settings window, profiles, fonts and textures.
+No other addon is required; the author runs it without Plater or DynamicCam. The
+author has checked it live only solo and out of combat on the Forever client.
+Combat (including nameplates on hostile mobs, their cast bars, auras and threat
+colours), hostile-target debuffs, pet/party/raid frames, profile switching and
+import, theme recolouring, the camera while mounted or in combat and most bag
+interactions have not been verified. See [compatibility](docs/COMPATIBILITY.md#verification-status).
 
 ## What it looks like
 
@@ -37,6 +39,10 @@ have not been verified. See [compatibility](docs/COMPATIBILITY.md#verification-s
 | Camera with zoom curves | Chat header with the menu icons |
 | --- | --- |
 | ![Camera, Shoulder offset page showing the offset curve by zoom distance.](docs/images/ui-settings-camera.png) | ![Chat tabs, volume control, menu icons and Friends in one header strip.](docs/images/ui-chat-header.png) |
+
+![Rows of preview nameplates: enemy and friendly NPCs and players, casts, elite and rare units, threat states, a quest unit and a selected friendly player with the target ring.](docs/images/ui-nameplate-preview.png)
+
+*Squanch-On's nameplates in the `/sqplates test on` preview. The units are made up by the preview; this is not live combat.*
 
 ## The reticle is the control
 
@@ -69,7 +75,7 @@ the addon. [Controls, safeguards and implementation details →](docs/RETICLE.md
   </tr>
   <tr>
     <td><strong>The world reticle.</strong> A compact Horde marker keeps the aim point visible during the author's mouselook playstyle.</td>
-    <td><strong>The selected-target ring.</strong> A separate marker follows the target's visible nameplate. The ring is now drawn as one solid line; this capture shows the earlier dashed art.</td>
+    <td><strong>The selected-target ring.</strong> A separate marker follows the target's visible nameplate. The ring is now one solid line inside the selected plate; this capture shows the earlier dashed art.</td>
   </tr>
 </table>
 
@@ -87,9 +93,14 @@ earlier dashed art) and a brief whole-ring click pulse. Cardinal blocks indicate
 conservative five-yard melee reach on hostile targets. Rotating triangles
 indicate a learned ranged damage ability against a hostile target, or a learned
 healing ability against a friendly target. Hunter Auto Shot keeps its native
-range check; Mend Pet and Health Funnel apply only to the player's own pet. On a
-friendly player the ring takes the class colour; its fit, width and line
-thickness are settings.
+range check; Mend Pet and Health Funnel apply only to the player's own pet.
+
+The ring belongs to the selected nameplate: it is cut around the health bar and,
+on a friendly target, fits around the faction emblem. On players it wears the
+health bar's texture and colour by default ("health bar look"); a hostile
+player's ring shifts from the class colour as health drops and pulses in execute
+range. NPCs keep the plain ring coloured by health. Fit, width, line thickness
+and the health bar look per kind of target are settings.
 
 Range needs no other addon. **LibRangeCheck-3.0** (MIT) is bundled, and a shared
 range module (`SquanchOn/Range.lua`) answers distance questions from learned
@@ -121,23 +132,29 @@ sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-f
   buttons, search, sort and money. It slides out to the left of the minimap. The
   bank is not included yet and keeps the game's own window.
 - **Damage meter:** a drawer on the right of the minimap, sized so that minimap
-  plus meter equals the chat width. It shows the game's own `C_DamageMeter`
-  totals; addons cannot read the combat log on this client.
+  plus meter equals the chat width. It is a table with column headers (#, Name,
+  amount, DPS or HPS, %), first names only by default; the title plate is the
+  mode button and also lists earlier fights. It shows the game's own
+  `C_DamageMeter` totals; addons cannot read the combat log on this client.
 - **Its own camera:** every DynamicCam setting, including zoom curves and
-  situations, with a settings page. It stays inactive while DynamicCam is
-  loaded. A DynamicCam profile is imported once.
+  situations, with a settings page; wheel zoom follows DynamicCam's easing
+  algorithm (ported under MIT). DynamicCam is not needed. If it is loaded,
+  Squanch-On's camera stays inactive, and its profile is imported once.
 - **Theme, text and media:** rim, fill and text colours, text sizes, chat and
   drawer settings; generated status-bar textures and borders and bundled SIL OFL
-  fonts to choose from. LibSharedMedia is not bundled: Squanch-On registers its
+  fonts to choose from. Bags, the meter and the settings window have raised
+  title plates; headings are drawn like an unselected chat tab label. LibSharedMedia is not bundled: Squanch-On registers its
   media there only when another addon has loaded it.
 - **Tooltips:** shared presentation and default anchors while Blizzard retains
   tooltip content, comparisons and native health handling.
 - **A layout you can tune:** `/sqedit` moves and resizes supported components with
   a centered alignment grid, width controls and session undo.
-- **Nameplates:** Squanch-On draws the target ring and nameplate indicators and
-  now ships its own nameplates (untested in game). They run only while Plater is
-  not loaded. With Plater loaded they stay off, and a few small adapters style
-  Plater's icons and health-bar rim; the friendly ring hugs its nameplate icon.
+- **Nameplates:** Squanch-On draws its own nameplates, the target ring and the
+  nameplate indicators. The defaults reproduce the author's previous nameplate
+  layout; optional enhancements stay off while "Classic look" is on (the
+  default). A raid mark shows only on marked units. `/sqplates test` previews
+  the plates. Plater is not needed. If it is loaded, Squanch-On's nameplates
+  stay off and small adapters fit the ring and shared look to Plater's plates.
 
 The package is one complete **SquanchOn** addon folder, including its oUF,
 LibDispel, LibRangeCheck-3.0, LibSerialize, LibDeflate and LibStub libraries
@@ -146,10 +163,12 @@ the rewrite or loaded as dependencies.
 
 With no saved settings, the first run starts from the author's layout. Its
 positions were authored on a 5120x1440 display; on other resolutions, use
-`/sqedit` to move things. Text uses bundled SIL OFL fonts that stand in for the
-author's original fonts, which are not distributed, so text shapes are close but
-not identical. Bundled families: PT Sans Narrow, Overpass, Afacad, Oxanium,
-Almendra, Barlow Condensed, Saira Condensed, Archivo Narrow, Oswald, Bebas Neue,
+`/sqedit` to move things. The layout's text uses PT Sans Narrow and five
+bundled SIL OFL fonts made for it (Squanch Highway, Round, Square, Bolt and
+Comic): modified versions of Red Hat Display, Orbitron, Amarante and Comic Neue,
+rescaled and respaced to the layout's text metrics. The author's original fonts
+are not distributed, so letter shapes differ. Also bundled: Overpass, Afacad,
+Oxanium, Almendra, Barlow Condensed, Saira Condensed, Archivo Narrow, Oswald, Bebas Neue,
 Cinzel, Metamorphous, Silkscreen, Pixelify Sans and Share Tech Mono. Frame
 textures are original; the Horde reticle ships under
 GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
@@ -160,9 +179,10 @@ GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
 2. Copy the single `SquanchOn/` folder into `Interface/AddOns`
    ([installation page](docs/LOCAL-ASSEMBLY.md)).
 3. Disable other addons that own unit frames, tooltips, bags or the buff rows.
-   Squanch-On's camera stays inactive while DynamicCam is loaded:
-   `/sqms camera takeover` imports its profile and disables it. Plater can
-   stay: Squanch-On's own nameplates start only when Plater is not loaded.
+   Plater and DynamicCam are not needed. If you keep them, Squanch-On's
+   nameplates stay off while Plater is loaded and its camera stays inactive
+   while DynamicCam is loaded; `/sqms camera takeover` imports the DynamicCam
+   profile and disables DynamicCam.
 4. Log in. An existing `SquanchOnDB` is kept and migrated to a profile;
    otherwise the author's layout is used. Adjust positions with `/sqedit`.
 
@@ -174,6 +194,7 @@ GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
 | `/sqms off` | Disable Squanch-On mouselook control |
 | `/sqms nameplates` / `/sqms crosshairs` | Nameplate indicator and target ring settings |
 | `/sqauras [count]` | Preview placeholder buff and debuff icons; run again to stop |
+| `/sqplates test [on\|off\|enh]` / `/sqplates debug` | Preview nameplates with made-up units (`enh` adds the enhancements row) / print one line per visible plate |
 | `/sqms camera status` | Camera status |
 | `/sqms camera options` | Camera settings, zoom curves and situations |
 | `/sqms camera on` / `off` / `restore` | Drive the camera / stop / stop and put back the earlier camera CVars |

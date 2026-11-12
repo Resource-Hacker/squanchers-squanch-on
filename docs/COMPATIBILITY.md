@@ -3,7 +3,8 @@
 ## Client and evidence
 
 **0.3.0-rewrite targets Forever interface 16001 and is only partly verified.**
-The author has checked it live only solo on the Forever client. See
+The author has checked it live only solo and out of combat on the Forever
+client, without Plater or DynamicCam loaded. See
 [verification status](#verification-status) for what has and has not been
 exercised. Retail, other Classic clients and Windows gameplay are unverified.
 Changing a TOC number does not establish compatibility.
@@ -25,8 +26,8 @@ remains explicit and does not certify the rewrite.
 The package is one complete `SquanchOn/` addon; no other addon is required. It
 embeds separately licensed oUF, LibDispel, LibRangeCheck-3.0, LibSerialize and
 LibDeflate plus public-domain LibStub, the GPL-2.0 Horde reticle, and its fonts
-and textures. Squanch-On owns frame layout, buff and debuff icons, the camera,
-the bag window, the meter drawer, chat and drawer presentation, its settings
+and textures. Squanch-On owns frame layout, nameplates, buff and debuff icons,
+the camera, the bag window, the meter drawer, chat and drawer presentation, its settings
 window and profiles, tooltip presentation, reticle/mouselook and native UI
 adapters. oUF owns the secure unit-frame machinery and element lifecycle.
 ElvUI and BenikUI engines, original options addons and original profile managers
@@ -50,23 +51,41 @@ cue.
 
 `SquanchOn/Camera.lua` is Squanch-On's own camera: every DynamicCam standard
 setting, zoom curves, eased wheel zoom and situations built from DynamicCam's
-built-in conditions. Parts of its logic are ported from DynamicCam under MIT;
+built-in conditions. Wheel zoom follows DynamicCam's easing algorithm. Parts of its logic are ported from DynamicCam under MIT;
 the license is in `LICENSES/DynamicCam-MIT.txt`. It stays inactive while
 DynamicCam is loaded. `/sqms camera takeover` imports the DynamicCam profile in
 use once and disables DynamicCam; `release` hands the camera back; `status`
 reports the state; `options` opens the settings page. Situations with
 hand-written Lua conditions are kept as data and stay inactive, and of the
-hide-interface options only the whole-interface fade is implemented. The
-takeover has not been verified in game.
+hide-interface options only the whole-interface fade is implemented.
+
+DynamicCam is not needed. The author took the camera over from DynamicCam and
+now plays on Squanch-On's camera; the result was compared at four zoom
+distances. Behaviour while mounted, in combat and on cursor return has not been
+measured, and situations have not been exercised in play.
 
 ### Nameplates
 
-Squanch-On ships its own nameplates (`Nameplates.lua`, `NameplateStyle.lua`,
-`NameplateCast.lua`, `NameplateAuras.lua`), built on the bundled oUF nameplate
-driver. They have not been tested in game. They start only when Plater is not
-loaded: both addons draw into the same plate field, so with Plater loaded the
-module prints one line at login and does nothing else. To try them, disable
-Plater in the AddOns list and reload; to go back, enable Plater again. While
+Squanch-On draws its own nameplates (`Nameplates.lua`, `NameplateStyle.lua`,
+`NameplateCast.lua`, `NameplateAuras.lua`, `NameplateEnhance.lua`,
+`NameplatePreview.lua`), built on the bundled oUF nameplate driver. Plater is
+not needed, and the author plays without it. The defaults reproduce the
+author's previous nameplate layout: which kinds of unit draw a bar, the colour
+order, text formats, names with surnames, a guild line under player names and
+the selected-plate treatment. A raid mark is shown only on a marked unit.
+
+Seen live, solo and out of combat: friendly NPC and player plates, names with
+surnames and guild lines, the selected-plate treatment and the preview cases.
+Not seen live: hostile mobs in combat, cast bars and auras on real units, threat
+colours, the aggro flash, behaviour in instances, and the enhancements.
+
+Addons cannot measure the regions of a player's nameplate on this client, so
+anything fitted to a player plate (the target ring's cut around the bar, for
+example) is placed from the recorded layout settings, not from the drawn frame.
+
+The nameplates stay off while Plater is loaded: both addons draw into the same
+plate field, so with Plater loaded the module prints one line at login and does
+nothing else. To use Plater instead, enable it and reload. While
 running they set a list of nameplate CVars and record the previous values,
 which are restored when the switch under Nameplates & Target ring > Squanch-On
 nameplates is turned off. Plates the client forbids addons to touch (friendly
@@ -74,19 +93,28 @@ plates in instances on other clients) keep the game's look. Plates never take
 clicks. Settings are imported once from the Plater profile the character uses,
 while Plater is still loaded; Plater's saved variables are never written.
 
-`/sqplates test` shows a movable row of preview plates drawn by the same code
-with made-up units; it works while Plater is loaded, for a side-by-side
-comparison. `/sqplates test enh` adds the row with the optional enhancements,
-which are otherwise off while "Classic look" is on (the default).
+`/sqplates test [on|off]` shows movable rows of preview plates drawn by the
+same code with made-up units; it works while Plater is loaded, for a
+side-by-side comparison. `/sqplates test enh` adds the row with the optional
+enhancements, which are otherwise off while "Classic look" is on (the default).
+`/sqplates debug` prints one line per visible plate. A preview shows how a case
+is drawn; it does not show that the case occurs correctly on a real unit.
 
 The target ring and nameplate indicators draw on whatever nameplates are shown.
 When Plater is loaded, small adapters style its icons and health-bar rim, show a
 health bar on a selected friendly Horde player, and let the friendly target ring
-hug Plater's nameplate icon. Without Plater those adapters do nothing; the
-native plates do the same themselves.
+fit Plater's nameplate icon. Without Plater those adapters do nothing; Squanch-On's
+own plates do the same themselves.
 
-The target ring is one solid line. On a friendly player it takes the class
-colour, with fit, width and line-thickness settings.
+The target ring is one solid line that lives inside the selected plate. It is
+cut around the health bar, and on a friendly target it fits around the faction
+emblem at the size the plate had before the client enlarged it for selection.
+On players the ring can wear the health bar's texture and colour ("health bar
+look"): on by default for friendly and hostile players, off for NPCs, which keep
+the plain ring coloured by health. A hostile player's ring shifts from the class
+colour as health drops and pulses in execute range. With Plater's plates, or a
+bar texture the ring has no matching art for, the ring stays flat. The ring
+faces are generated files (`SquanchOn/media/Crosshairs/ring-*.tga`).
 
 ### Chat, drawers, bags and meter
 
@@ -99,8 +127,10 @@ colour, with fit, width and line-thickness settings.
   clean-up) and money. The bank is not included yet and keeps the game's window.
   The option to replace the game's bag windows takes effect after `/reload`.
 - The damage meter is a drawer on the right of the minimap, sized so that
-  minimap plus meter equals the chat width. It shows the game's `C_DamageMeter`
-  sessions. Addons cannot read the combat log on this client, and amounts are
+  minimap plus meter equals the chat width. It is a table with column headers
+  (#, Name, amount, DPS or HPS, %); names are first names only by default. Its
+  title plate is the mode button, and the same menu lists earlier fights. It
+  shows the game's `C_DamageMeter` sessions. Addons cannot read the combat log on this client, and amounts are
   hidden from addon arithmetic during combat, so the meter only displays what
   the client returns, in the client's order.
 
@@ -163,13 +193,20 @@ content and comparison logic remain independent of those controls.
 ## Fonts, textures and reticle
 
 Text uses bundled SIL OFL 1.1 fonts. The shipped layout uses PT Sans Narrow
-Bold, Overpass Bold, Afacad Medium, Oxanium Bold and Almendra Bold; they stand
-in for the author's original fonts (Expressway, Homizio, Forced Square, Harry
-P), which are not distributed, so text shapes are close but not identical. The
-font pickers also offer Barlow Condensed, Saira Condensed, Archivo Narrow,
+Bold and five fonts made for it: Squanch Highway, Round, Square, Bolt and Comic.
+They are modified versions of Red Hat Display, Orbitron, Amarante and Comic
+Neue, rescaled and respaced to the text metrics the layout was built with;
+Squanch Bolt is an original lightning-bolt redraw. They take the place of the
+author's original fonts (Expressway, Homizio, Forced Square, Harry P, Action
+Man), which are not distributed, so sizes and spacing match while letter shapes
+differ. The font pickers also offer Overpass, Afacad, Oxanium and Almendra (the
+earlier stand-ins), Barlow Condensed, Saira Condensed, Archivo Narrow,
 Oswald, Bebas Neue, Cinzel, Metamorphous, Silkscreen, Pixelify Sans and Share
-Tech Mono. Status-bar textures and borders are original and generated by
-`SquanchOn/asset-source/generate-frame-media.py`; ready-check icons use the
+Tech Mono. Status-bar textures, borders and the target-ring faces are generated
+by `SquanchOn/asset-source/generate-frame-media.py` from formulas; one ring
+face ("default") instead uses eight grey levels measured from the client's
+standard status-bar texture, so that it matches a bar drawn with that texture.
+Ready-check icons use the
 game's own files. LibSharedMedia is not bundled: Squanch-On registers its fonts
 and textures there only when another addon has loaded it. The Horde reticle
 ships exactly, under GPL-2.0. See [installation](LOCAL-ASSEMBLY.md) and
@@ -177,23 +214,25 @@ ships exactly, under GPL-2.0. See [installation](LOCAL-ASSEMBLY.md) and
 
 ## Verification status
 
-Everything below was checked by the author only, solo, on the Forever client
-(interface 16001). Nothing has been checked by anyone else, in a group, or on
-another client.
+Everything below was checked by the author only, solo and out of combat, on the
+Forever client (interface 16001), with neither Plater nor DynamicCam loaded.
+Nothing has been checked by anyone else, in a group, in combat, or on another
+client.
 
 | Area | Seen live, solo | Not verified |
 | --- | --- | --- |
 | Mouselook, reticle, mouseover gate | Ordinary solo use | Combat, focus loss with keys held, Windows input |
-| Target ring and range cues | Ring on selected targets, friendly class colour and icon fit | Range cues in combat, other classes |
+| Nameplates | Friendly NPC and player plates; names with surnames and guild lines; the selected-plate treatment; the `/sqplates test` preview cases | Hostile mobs in combat, cast bars on real units, auras on real units, threat colours, aggro flash, instances, the enhancements, the one-time import of Plater settings |
+| Target ring and range cues | Ring inside the selected plate on friendly NPCs and players, cut around the bar and fitted to the emblem | Hostile-player ring (class-colour shift, execute pulse), range cues in combat, other classes, the ring on Plater's plates since these changes |
 | Unit frames | Player, target, target-of-target with a self-target | Hostile targets in combat, pet, party and raid frames, class resources |
 | Buff and debuff icons | Buffs on the player and a self-target, `/sqauras` preview | Debuffs, hostile-target auras, combat |
 | Settings window | Opened out of combat | Every control; combat queueing |
 | Profiles | — | First-login migration beyond the author's own settings; switching, create/copy/rename/delete/reset, export and import in game |
 | Theme and text | The shipped look | Recolouring the theme in game |
-| Camera | — | The takeover from DynamicCam; zoom curves and situations in play |
+| Camera | Takeover from DynamicCam, compared at four zoom distances; wheel zoom in ordinary use | Mounted, combat and cursor-return behaviour (not measured); situations in play |
 | Chat header and drawers | Opening windows as drawers, Friends, quest drawer | Combat |
 | Bag window | Opening it | Use, drag, split, vendor, combat |
-| Damage meter | Drawer open out of combat | Meter in combat |
+| Damage meter | Drawer open out of combat, with its column headers and mode menu | Meter in combat |
 | Tooltip | — | Appearance, anchors, native content and comparisons |
 | Fresh install | Offline conversion check of the default layout only | A fresh install in game; other resolutions |
 

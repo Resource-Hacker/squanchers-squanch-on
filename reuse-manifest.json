@@ -602,7 +602,7 @@
       "name": "Selectable status-bar and border textures, bar-look target rings",
       "license": "MIT",
       "source": "This repository",
-      "modifications": "Generated numerically by asset-source/generate-frame-media.py (hash under Unit-frame media); original formulas, no source images.",
+      "modifications": "Generated numerically by asset-source/generate-frame-media.py (hash under Unit-frame media) from original formulas. No image is read or copied; the ring-default-* profile uses eight grey levels measured from the client's standard status-bar texture (Interface\\TargetingFrame\\UI-StatusBar), written as numbers in the generator.",
       "files": [
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-12.tga",

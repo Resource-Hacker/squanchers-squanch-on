@@ -11,7 +11,7 @@ or required. See [component licenses](../docs/COMPONENT-LICENSES.md).
 | Component | Scope and attribution | Terms |
 | --- | --- | --- |
 | TargetNameplateIndicator compatibility code | Port originally based on v1.67; copyright 2013–2016 Choonster. Adapted namespace, event lifecycle, configuration and artwork mapping. [Upstream](https://github.com/Choonster-WoW-AddOns/TargetNameplateIndicator). | [Full MIT notice](LICENSES/TargetNameplateIndicator-LICENSE.txt). Its historical image library is excluded; the code license does not license those images. |
-| Camera settings model | `Camera.lua` ports parts of [DynamicCam](https://github.com/Mpstark/DynamicCam) 2.21.5: the setting and situation catalogue, wheel-increment rules, situation precedence, transition and zoom-restore rules. Copyright 2016–2020 Michael P. Starkweather (mpstark), 2020–2026 LudiusMaximus. The driver, zoom and rotation tracking, condition model, import and settings page are original. | [MIT](LICENSES/DynamicCam-MIT.txt) |
+| Camera settings model | `Camera.lua` ports parts of [DynamicCam](https://github.com/Mpstark/DynamicCam) 2.21.5: the setting and situation catalogue, wheel-increment rules, situation precedence, transition and zoom-restore rules, and the wheel-zoom easing procedure of its LibCamera. Copyright 2016–2020 Michael P. Starkweather (mpstark), 2020–2026 LudiusMaximus. The driver, zoom and rotation tracking, condition model, import and settings page are original. | [MIT](LICENSES/DynamicCam-MIT.txt) |
 | PT Sans Narrow Bold 2.003 | Unmodified `media/fonts/ptsansnarrow_bold.ttf`; copyright 2010 ParaType Ltd.; Alexandra Korolkova, Olga Umpeleva and Vladimir Yefimov. Exact file matches [this pinned source](https://github.com/tukui-org/ElvUI/blob/9658ff3f7cdb83019aadffad6a4a7549508f7263/ElvUI/Game/Shared/Media/Fonts/PTSansNarrow.ttf). | [SIL OFL 1.1](LICENSES/PTSansNarrow-OFL.txt), also beside the font. Reserved names PT Sans and ParaType; the font remains OFL. SHA-256 `efc8710f9eb3e41405a7efaf9aba701e41dc0e9bcabd3aa0b08f111441fb247d`. |
 
 `TargetCrosshairs.lua`, its numerical circle/arrow artwork and generator are
@@ -28,7 +28,9 @@ GPL-2.0 data and media are listed in their section below.
 logic ported from DynamicCam (MIT; Michael P. Starkweather and LudiusMaximus,
 license text in `LICENSES/DynamicCam-MIT.txt`) alongside original code; the
 file header lists which is which. DynamicCam's libraries (LibCamera, LibEasing,
-Ace3), options, curve editor and interface-hiding module are not included.
+Ace3), options, curve editor and interface-hiding module are not included as
+files; the wheel-zoom easing follows LibCamera's procedure, rewritten inside
+`Camera.lua`.
 
 ## Bundled libraries and references
 
@@ -70,8 +72,12 @@ reference installed game resources, including the ready-check icons; no
 extracted Blizzard images, fonts, sounds, FrameXML or binaries are bundled.
 
 Plater is a separate nameplate addon with its own authors, license and update
-ownership; it is not required or bundled. DynamicCam is not required or
-bundled. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
+ownership; it is not required or bundled. Squanch-On's own nameplates
+(`Nameplates.lua` and the `Nameplate*.lua` files beside it) are original MIT
+code on the bundled oUF nameplate driver. Their defaults and rules reproduce
+what the author's Plater profile did, and settings can be read once from a
+Plater profile; they contain no Plater code or art. DynamicCam is not required
+or bundled. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
 Bagnon and Semlar's Crosshairs supplied functional/settings references; their
 complete implementations and assets are not part of this package. Their
 individual licenses differ; this is a statement of package contents, not a blanket
@@ -142,7 +148,13 @@ in `media/fonts` beside its own license text. Hashes are in `reuse-manifest.json
 
 The selectable status-bar faces (`media/textures/bar-*.tga`) and borders
 (`media/borders`) are original numerical constructions produced by
-`asset-source/generate-frame-media.py`, MIT. LibSharedMedia-3.0 is not
+`asset-source/generate-frame-media.py`, MIT. The same script produces the
+target rings that wear a status bar's look (`media/Crosshairs/ring-*.tga`).
+It reads and copies no image. One ring face, `ring-default-*`, is computed from
+eight grey levels measured from the client's standard status-bar texture
+(`Interface\TargetingFrame\UI-StatusBar`), written as numbers in the script, so
+that it matches a bar drawn with that game texture; the other faces come from
+the script's own formulas. LibSharedMedia-3.0 is not
 bundled; when another addon has loaded it, Squanch-On registers these fonts and
 textures with it and lists what it offers.
 
