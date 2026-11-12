@@ -498,31 +498,40 @@ local function stopEase()
 end
 local function startEase(target, duration, easing, wheel)
   local zoom = GetCameraZoom()
-  stopEase()
-  if duration < 0.03 then nudge(target - zoom); Camera:Wake(); return end
+  local sign = target >= zoom and 1 or -1
+  -- Re-aiming an ease that already travels this way must not halt the camera:
+  -- stopping and restarting on every wheel notch is felt as a stutter.
+  if not (ease and ease.direction == sign) then stopEase() end
+  if duration < 0.03 then stopEase(); nudge(target - zoom); Camera:Wake(); return end
   ease = {from = zoom, to = target, start = GetTime(), dur = duration, fn = EASE[easing] or EASE.Linear, wheel = wheel,
+    sign = sign, direction = ease and ease.direction or nil,
     speed = max(0.01, tonumber(GetCVar("cameraZoomSpeed")) or 1)}
   Camera:Wake()
 end
+-- An ease only ever moves toward its target. Overshoot (the client clamps at
+-- first person and at maximum distance, and frame times vary) is never
+-- corrected by driving backward: that reversal is the visible "bump back".
 local function stepEase(zoom, elapsed)
   local e = ease
   if not e then return false end
   local t = GetTime() - e.start
-  if t >= e.dur then
+  local remaining = (e.to - zoom) * e.sign
+  if t >= e.dur or remaining <= 0.02 then
     ease = nil
     haltZoom()
-    nudge(e.to - GetCameraZoom())
+    -- Finish only forward, and only a meaningful shortfall; never pull back.
+    if remaining > 0.05 then nudge(e.to - zoom) end
     return false
   end
   local ahead = max(elapsed, 0.005)
   local goal = e.from + (e.to - e.from) * e.fn(min(1, (t + ahead) / e.dur))
-  local speed = (goal - zoom) / ahead / e.speed
-  if speed >= 0 then
+  local speed = max(0, (goal - zoom) * e.sign) / ahead / e.speed
+  if e.sign == 1 then
     if e.direction == -1 then moveIn(0); stopIn() end
     e.direction = 1; moveOut(speed)
   else
     if e.direction == 1 then moveOut(0); stopOut() end
-    e.direction = -1; moveIn(-speed)
+    e.direction = -1; moveIn(speed)
   end
   return true
 end
@@ -732,6 +741,12 @@ local function wheel(zoomIn, increments)
   if target and abs(target - zoom) > zoomSetting("incAddDifference") then step = step + zoomSetting("addIncrements") end
   if target and ((zoomIn and target > zoom) or (not zoomIn and target < zoom)) then target = nil end
   target = target or zoom
+  -- At a limit there is nothing to ease toward; drop any pending ease so the
+  -- camera does not keep pushing against first person or maximum distance.
+  if (zoomIn and zoom <= 0.01) or (not zoomIn and zoom >= maxDistance() - 0.01) then
+    if ease and ease.wheel then stopEase() end
+    if zoomIn or zoom > 0 then return end
+  end
   if zoomIn then target = max(0, target - step)
   elseif zoom == 0 then                       -- first person -> nearest third person
     stopEase()
