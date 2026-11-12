@@ -262,7 +262,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   ringFrame:EnableMouse(false)
   -- One texture makes the entire dashed circle orbit its common center.
   -- Rotating separate Line regions rotates their individual local axes.
-  local ring = image(ringFrame, "circle-dashed", "OVERLAY")
+  -- Owner: every target ring is one solid line (the dashed art is retired).
+  local ring = image(ringFrame, "circle", "OVERLAY")
   local ringSpin = ring:CreateAnimationGroup()
   local ringTurn = ringSpin:CreateAnimation("Rotation")
   ringTurn:SetDegrees(-360)
@@ -588,7 +589,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local solid = icon ~= nil
     if solid ~= marker.solidRing then
       marker.solidRing = solid
-      ring:SetTexture(artwork .. (solid and "circle" or "circle-dashed") .. ".tga")
       ringFrame:SetAlpha(solid and 1 or alpha)
     end
     local anchor = icon or destination
