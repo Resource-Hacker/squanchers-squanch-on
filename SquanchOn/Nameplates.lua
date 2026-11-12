@@ -521,7 +521,11 @@ end
 watcher:SetScript('OnUpdate', function() NP:HoverCheck() end)
 local ticker
 local function tick() NP:Tick() end
-function NP:Tick()
+-- The mouseover gate (right mouse held under mouselook). Core calls this on
+-- the very press and release, so nothing about mouseover waits for the tick;
+-- the tick repeats it only as a safety net.
+function NP:GateChanged()
+  if not self.started then return end
   local gate = ns.IsNativeMouseoverOpen and ns:IsNativeMouseoverOpen() and true or false
   if gate ~= self.gate then
     self.gate = gate
@@ -529,6 +533,11 @@ function NP:Tick()
     if ns.NameplateAuras then ns.NameplateAuras:SetMouse(gate) end
     if self.hoverFrame and ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(self.hoverFrame) end
   end
+  -- Whatever is under the reticle right now (or no longer is), this frame.
+  self:HoverCheck()
+end
+function NP:Tick()
+  self:GateChanged()
   local Style, Auras = ns.NameplateStyle, ns.NameplateAuras
   self:HoverCheck()
   -- Range costs item and spell checks: each plate asks on its own tick out of

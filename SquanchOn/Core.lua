@@ -551,6 +551,8 @@ function addon:SetMouseoverHeld(held)
   end
   -- Release closes mouseover immediately without stopping the locked camera.
   self:ApplyCursorCentering(state.rightDown)
+  -- Nameplates learn of the gate on this very call, not on their next tick.
+  if self.Nameplates and self.Nameplates.GateChanged then self.Nameplates:GateChanged() end
   self:UpdateReticle()
   self:RecordNativeReceipt(state.rightDown and "mouseover-open" or "mouseover-closed")
 end
