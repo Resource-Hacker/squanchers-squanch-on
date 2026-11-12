@@ -529,15 +529,22 @@ local function configurePortrait(frame,config)
             setPoint(portrait,'TOPLEFT',health,'TOPLEFT');setPoint(portrait,'BOTTOMRIGHT',texture,'BOTTOMRIGHT')
         end
         portrait:SetAlpha(config.overlayAlpha or .5);portrait.backdrop:Hide()
+        frame.squancherPortraitPlace=nil
     else
-        local right=frame.ORIENTATION=='RIGHT';local B,S=UF.BORDER,UF.SPACING
-        local bar=(frame.USE_MINI_POWERBAR or frame.USE_POWERBAR_OFFSET or frame.USE_INSET_POWERBAR
-            or frame.POWERBAR_DETACHED or not frame.USE_POWERBAR) and frame.Health or frame.Power
-        setPoint(portrait.backdrop,right and 'TOPRIGHT' or 'TOPLEFT',frame,right and 'TOPRIGHT' or 'TOPLEFT',right and -S or S,-S)
-        setPoint(portrait.backdrop,right and 'BOTTOMLEFT' or 'BOTTOMRIGHT',bar.backdrop,
-            right and 'BOTTOMRIGHT' or 'BOTTOMLEFT',right and -B+3*S or B-3*S,0)
-        setPoint(portrait,'TOPLEFT',portrait.backdrop,'TOPLEFT',B,-B)
-        setPoint(portrait,'BOTTOMRIGHT',portrait.backdrop,'BOTTOMRIGHT',-B,B)
+        -- Re-applied whenever the unit button is shown again: the client can
+        -- leave these child anchors unresolved after a hide/show, drawing nothing.
+        local function place()
+            portrait:ClearAllPoints();portrait.backdrop:ClearAllPoints()
+            local right=frame.ORIENTATION=='RIGHT';local B,S=UF.BORDER,UF.SPACING
+            local bar=(frame.USE_MINI_POWERBAR or frame.USE_POWERBAR_OFFSET or frame.USE_INSET_POWERBAR
+                or frame.POWERBAR_DETACHED or not frame.USE_POWERBAR) and frame.Health or frame.Power
+            setPoint(portrait.backdrop,right and 'TOPRIGHT' or 'TOPLEFT',frame,right and 'TOPRIGHT' or 'TOPLEFT',right and -S or S,-S)
+            setPoint(portrait.backdrop,right and 'BOTTOMLEFT' or 'BOTTOMRIGHT',bar.backdrop,
+                right and 'BOTTOMRIGHT' or 'BOTTOMLEFT',right and -B+3*S or B-3*S,0)
+            setPoint(portrait,'TOPLEFT',portrait.backdrop,'TOPLEFT',B,-B)
+            setPoint(portrait,'BOTTOMRIGHT',portrait.backdrop,'BOTTOMRIGHT',-B,B)
+        end
+        frame.squancherPortraitPlace=place;place()
         local general=UF.db.general
         local c=frame.squancherKey=='party' and general.backdropcolor or general.backdropfadecolor
         portrait.backdrop:SetBackdropColor(color(c,.054,.054,.054,frame.squancherKey=='party' and 1 or .75))
@@ -827,6 +834,7 @@ local function style(frame,unit,key)
         if portrait then portrait:SetModelAlpha(alpha*(frame.USE_PORTRAIT_OVERLAY and (frame.db.portrait.overlayAlpha or .5) or 1)) end
     end)
     frame.PortraitModel:Hide();frame.PortraitModel.backdrop:Hide();frame.PortraitTexture:Hide()
+    frame:HookScript('OnShow',function(self) if self.squancherPortraitPlace and self.USE_PORTRAIT and not self.USE_PORTRAIT_OVERLAY then self.squancherPortraitPlace() end end)
     frame.Portrait=frame.squancherConfig.portrait.style=='3D' and frame.PortraitModel or frame.PortraitTexture
     frame.Castbar=createCast(frame)
     frame.Buffs=newAura(frame,'Buffs');frame.Debuffs=newAura(frame,'Debuffs')
@@ -1246,6 +1254,17 @@ local function initialize()
     if InCombatLockdown() then UF.pending=true;return end
     local config,state=Import:Initialize()
     if not config then UF.status.error=state;return end
+    -- Optional owner-local text placements, merged once per revision.
+    local localMedia=ns.LocalMedia
+    if localMedia and localMedia.unitText and state.localTextRev~=localMedia.unitTextRev then
+        for unit,texts in pairs(localMedia.unitText) do
+            local custom=config.units[unit] and config.units[unit].customTexts
+            for key,fields in pairs(texts) do
+                if custom and custom[key] then for field,value in pairs(fields) do custom[key][field]=value end end
+            end
+        end
+        state.localTextRev=localMedia.unitTextRev
+    end
     UF.db=config;UF.state=state;UF:PrepareProfile();installTags()
     -- A local adapter for Squancher's existing decoration code, never _G.ElvUI.
     local engine={db={unitframe=config,movers=config.movers},oUF=oUF,Initialized=true,mult=1,

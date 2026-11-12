@@ -307,6 +307,7 @@ for _,event in ipairs({'UPDATE_MOUSEOVER_UNIT','PLAYER_TARGET_CHANGED','PLAYER_F
 state:SetScript('OnEvent',function(_,event,unit)
     for _,frame in ipairs(UF.objects) do
         if frame.squancherState and (not unit or unit=='player' or unit==frame.__unit or event:match('^PLAYER_')) then
+            if frame.squancherPortraitPlace and event=='PLAYER_TARGET_CHANGED' and frame:IsShown() then frame.squancherPortraitPlace() end
             UF:RefreshFade(frame);UF:RefreshGlows(frame)
         end
     end

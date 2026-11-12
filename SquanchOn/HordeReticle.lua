@@ -330,7 +330,8 @@ function module:Initialize()
   group = CreateFrame("Frame", "SquancherHordeReticleGroup", UIParent)
   group:SetSize(2, 2)
   -- Preserve the established two-unit group origin used by the aim-point API.
-  group:SetPoint("BOTTOMLEFT", UIParent, "CENTER", 0, 0)
+  -- Centered exactly on the screen centre, where the locked cursor rests.
+  group:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   group:SetScale(1)
   group:EnableMouse(false)
   mouseAnchor = CreateFrame("Frame", nil, UIParent)
