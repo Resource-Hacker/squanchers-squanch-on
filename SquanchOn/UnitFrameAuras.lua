@@ -266,6 +266,7 @@ function UF:AuraTest(count)
     if count==nil then count=not self.auraTest and 6 or 0 end
     self.auraTest=count>0 and math.min(40,math.floor(count)) or nil
     for _,frame in ipairs(self.objects) do if frame.db then self:RefreshAuraIcons(frame) end end
+    if self.RefreshPlayerBars then self:RefreshPlayerBars() end
     return self.auraTest
 end
 SLASH_SQUANCHONAURAS1='/sqauras'
@@ -327,3 +328,94 @@ events:SetScript('OnEvent',function(_,event,unit)
     end
 end)
 if UF.Initialized then for _,frame in ipairs(UF.objects) do UF:RefreshAuraIcons(frame);UF:RefreshAuraBars(frame) end end
+
+-- The player's own buff and debuff bars, replacing the game's top-right rows
+-- with the same touching action-bar cells. /sqedit moves and scales each bar.
+local playerBars={}
+local function playerBar(key,filter,y)
+    local bar=CreateFrame('Frame','SquanchOnPlayer'..key,UIParent)
+    bar.__unit='player';bar.key=key;bar.filter=filter;bar.defaultY=y
+    bar.size=30;bar.spacing=0;bar.visibleLimit=36;bar.initialAnchor='TOPRIGHT'
+    bar['growth-x']='LEFT';bar['growth-y']='DOWN'
+    bar.config={perrow=12,sortMethod='TIME_REMAINING',sortDirection='DESCENDING',countPosition='BOTTOMRIGHT',countYOffset=2,
+        countFontSize=10,tooltipAnchorType='ANCHOR_BOTTOMLEFT'}
+    bar:SetSize(12*30,30);bar:SetFrameStrata('LOW')
+    playerBars[#playerBars+1]=bar
+    return bar
+end
+playerBar('Buffs','HELPFUL',-12);playerBar('Debuffs','HARMFUL',-112)
+local function cancel(button)
+    -- Out of combat only: the client refuses addon cancels during combat.
+    if InCombatLockdown() or not button.auraInstanceID then return end
+    for index=1,255 do
+        local aura=C_UnitAuras.GetAuraDataByIndex('player',index,'HELPFUL')
+        if not aura then return end
+        if public(aura.auraInstanceID) and aura.auraInstanceID==button.auraInstanceID then
+            pcall(CancelUnitBuff,'player',index,'HELPFUL');return
+        end
+    end
+end
+function UF:RefreshPlayerBars()
+    if not self.db then return end
+    for _,bar in ipairs(playerBars) do
+        local used=0
+        local function take()
+            local button=bar[used+1]
+            if not button then
+                button=newIcon(bar,bar);bar[used+1]=button
+                button.Cooldown:SetHideCountdownNumbers(false)
+                if button.Cooldown.SetCountdownFont then
+                    if not UF.auraCountdownFont then
+                        UF.auraCountdownFont=CreateFont('SquanchOnAuraCountdown')
+                        UF.auraCountdownFont:SetFont(UF:Font(UF.db.font),11,'OUTLINE')
+                    end
+                    button.Cooldown:SetCountdownFont('SquanchOnAuraCountdown')
+                end
+                if bar.key=='Buffs' then
+                    button:RegisterForClicks('RightButtonUp');button:SetScript('OnClick',cancel)
+                end
+            end
+            return button
+        end
+        if self.auraTest then
+            for index=1,self.auraTest do
+                local button=take()
+                local aura={test=true,icon=testIcons[bar.key][(index-1)%#testIcons[bar.key]+1],duration=30+index*15,
+                    expirationTime=GetTime()+index*20,applications=index%3==0 and index or 1,name=bar.key..index}
+                button.sqAura=aura;button.sqRank=0;used=index
+                paintIcon(button,bar,bar,'player',aura,bar.key)
+            end
+        else
+            for index=1,255 do
+                local aura=C_UnitAuras.GetAuraDataByIndex('player',index,bar.filter)
+                if not aura then break end
+                local button=take()
+                button.sqAura=aura;button.sqRank=0;used=used+1
+                paintIcon(button,bar,bar,'player',aura,bar.key)
+            end
+        end
+        for index=used+1,#bar do bar[index]:Hide();bar[index].sqAura=nil end
+        bar.createdButtons=#bar
+        self:SortAuraButtons(bar)
+    end
+end
+function UF:PlacePlayerBars()
+    if InCombatLockdown() then return end
+    for _,bar in ipairs(playerBars) do
+        bar:SetScale(1);bar:ClearAllPoints();bar:SetPoint('TOPRIGHT',UIParent,'TOPRIGHT',-263,bar.defaultY)
+        if ns.LayoutTargets then ns.LayoutTargets:ApplyScale('player_'..bar.key:lower(),bar) end
+    end
+end
+local function retire(native)
+    if not native or native.squanchOnRetired then return end
+    native.squanchOnRetired=true
+    hooksecurefunc(native,'Show',function(self) self:Hide() end)
+    native:Hide()
+end
+local playerEvents=CreateFrame('Frame')
+playerEvents:RegisterEvent('PLAYER_LOGIN');playerEvents:RegisterEvent('PLAYER_ENTERING_WORLD');playerEvents:RegisterEvent('UNIT_AURA')
+playerEvents:SetScript('OnEvent',function(_,event,unit)
+    if event=='UNIT_AURA' then if unit=='player' then UF:RefreshPlayerBars() end;return end
+    retire(BuffFrame);retire(DebuffFrame)
+    UF:PlacePlayerBars();UF:RefreshPlayerBars()
+end)

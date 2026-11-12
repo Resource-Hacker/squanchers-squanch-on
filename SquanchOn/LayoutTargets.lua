@@ -211,6 +211,12 @@ function Targets:Register()
         local id, label, name = unpack(item)
         register(id, label, function() return _G[name] end, 'scale', applyAux, 25)
     end
+    for _, item in ipairs({ { 'player_buffs', 'Buff bar', 'SquanchOnPlayerBuffs' },
+        { 'player_debuffs', 'Debuff bar', 'SquanchOnPlayerDebuffs' } }) do
+        local id, label, name = unpack(item)
+        register(id, label, function() return _G[name] end, 'scale',
+            function() if ns.UnitFrames and ns.UnitFrames.PlacePlayerBars then ns.UnitFrames:PlacePlayerBars() end end, 60)
+    end
     centerOwnerBars()
     if ObjectiveTrackerFrame and ObjectiveTrackerFrame.ApplySystemAnchor and not self.trackerHooked then
         self.trackerHooked = true
