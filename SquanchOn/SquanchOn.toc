@@ -73,9 +73,11 @@ LayoutWindows.lua
 SocialDrawer.lua
 QuestDrawer.lua
 MeterDrawer.lua
+Bags.lua
 OptionsWindow.lua
 options/General.lua
 options/Meter.lua
+options/Bags.lua
 options/Mouselook.lua
 options/Reticle.lua
 options/TargetRing.lua
