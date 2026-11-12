@@ -71,7 +71,7 @@ local function fitPieces(state)
         if included then
             -- Missing/unresolved visible geometry fails closed for this pass.
             local cut=rectangle(bar.backdrop or bar)
-            if not cut then return end
+            if not cut then return false end
             local nextRects={}
             for _,rect in ipairs(rects) do subtract(rect,cut,nextRects) end
             rects=nextRects
@@ -275,7 +275,13 @@ function Lighting:Attach(frame,panel)
     state.panel=panel
     state.host:SetFrameLevel(math.max(0,frame:GetFrameLevel()-1))
     ns.DarkSkin:FitPanelBackground(state.classFill,panel)
-    fitPieces(state)
+    -- A unit button that has just been shown can report child geometry one
+    -- frame late. Retry once instead of leaving the frame without its light.
+    if fitPieces(state)==false and not state.retry and (state.retries or 0)<5 then
+        state.retry=true;state.retries=(state.retries or 0)+1
+        C_Timer.After(0,function() state.retry=nil;if frame:IsShown() then Lighting:Refit(state) end end)
+    end
+    if state.activePieces>0 then state.retries=0 end
     fitEdgeShade(state)
     fitHealthOcclusion(state)
     smoothOffsetShadows(state)

@@ -78,34 +78,121 @@ local function edge(parent,region,level,spacing)
     return glow
 end
 function UF:SoftShadow(parent,region) return edge(parent,region,1,3) end
-local function semantic(frame)
+-- Same construction as the frame-glow element this replaces: a 4px soft edge
+-- in BACKGROUND strata, 4px outside the portrait/health block, so it reads as
+-- light around the frame and never as a line on the health face.
+local function semantic(frame,level)
     local root=CreateFrame('Frame',nil,frame);root:SetAllPoints(frame);root:EnableMouse(false)
-    root.healthGlow=edge(root,frame.Health,9,3)
-    root.powerGlow=edge(root,frame.Power,14,3)
+    local texture=UF:Resolve('texture','Interface\\AddOns\\ElvUI\\Game\\Shared\\Media\\Textures\\GlowTex.tga',white)
+    for _,key in ipairs({'healthGlow','powerGlow'}) do
+        local glow=CreateFrame('Frame',nil,root,'BackdropTemplate');glow:EnableMouse(false)
+        glow:SetFrameStrata('BACKGROUND');glow:SetFrameLevel(level)
+        glow:SetBackdrop({edgeFile=texture,edgeSize=4})
+        glow:SetBackdropBorderColor(0,0,0,.9)
+        root[key]=glow
+    end
     root.HealthGlow=root.healthGlow;root.MainGlow=root.healthGlow;root.PowerGlow=root.powerGlow
     root.SetVertexColor=function() end
     return root
 end
-local function glowColor(frame,config)
-    if config and config.class then
-        local _,class=UnitClass(frame.__unit or 'player')
-        local c=public(class) and frame.colors.class[class]
-        if c then return c.r,c.g,c.b,config.color and config.color.a or 1 end
+local function positionGlow(frame,root)
+    local health=frame.Health and frame.Health.backdrop
+    if not health then return end
+    local portrait=frame.USE_PORTRAIT and not frame.USE_PORTRAIT_OVERLAY and frame.Portrait and frame.Portrait.backdrop
+    local o=4;local main=root.healthGlow
+    main:ClearAllPoints()
+    -- An attached, populated class bar sits inside the lit outline.
+    local class=frame.ClassBarHolder
+    local classbar=frame.db and frame.db.classbar
+    local top=class and class:IsShown() and frame.ClassPower and frame.ClassPower[1] and frame.ClassPower[1]:IsShown()
+        and not (classbar and classbar.detachFromFrame) and class
+    main:SetPoint('TOPLEFT',top or frame.ORIENTATION=='LEFT' and portrait or health,'TOPLEFT',-o,o)
+    main:SetPoint('TOPRIGHT',top or frame.ORIENTATION=='RIGHT' and portrait or health,'TOPRIGHT',o,o)
+    local separate=frame.USE_POWERBAR_OFFSET or frame.USE_MINI_POWERBAR
+    local bottom=separate and health or frame
+    main:SetPoint('BOTTOMLEFT',bottom,'BOTTOMLEFT',-o,-o)
+    main:SetPoint('BOTTOMRIGHT',bottom,'BOTTOMRIGHT',o,-o)
+    local power=frame.Power and frame.Power.backdrop
+    root.powerGlow:ClearAllPoints()
+    if power then
+        root.powerGlow:SetPoint('TOPLEFT',power,'TOPLEFT',-o,o)
+        root.powerGlow:SetPoint('BOTTOMRIGHT',power,'BOTTOMRIGHT',o,-o)
     end
-    return rgba(config and config.color,1,1,1,1)
+    root.powerGlow:SetShown(power and separate and frame.Power:IsShown() or false)
+end
+local function glowColor(frame,config)
+    local r,g,b,a=rgba(config and config.color,1,1,1,1)
+    if config and config.class then
+        local unit=frame.__unit or 'player'
+        local player=UnitIsPlayer(unit)
+        local c
+        if public(player) and player then
+            local _,class=UnitClass(unit)
+            c=public(class) and class and frame.colors.class[class]
+        else
+            local reaction=UnitReaction(unit,'player')
+            c=public(reaction) and reaction and frame.colors.reaction[reaction]
+        end
+        if c then r,g,b=c.r,c.g,c.b end
+    end
+    return r,g,b,a
 end
 local function paintGlow(glow,...)
     glow.healthGlow:SetBackdropBorderColor(...)
     glow.powerGlow:SetBackdropBorderColor(...)
 end
+-- Glows ease in rather than pop; hiding stays immediate so a stale highlight
+-- never lingers on the wrong unit.
+local function reveal(root,shown)
+    if shown and not root:IsShown() then
+        if not root.easeIn then
+            root.easeIn=root:CreateAnimationGroup()
+            local alpha=root.easeIn:CreateAnimation('Alpha')
+            alpha:SetFromAlpha(0);alpha:SetToAlpha(1);alpha:SetDuration(.12);alpha:SetSmoothing('OUT')
+        end
+        root:Show();root.easeIn:Play()
+    elseif not shown and root:IsShown() then
+        if root.easeIn then root.easeIn:Stop() end
+        root:Hide()
+    end
+end
+local function hovered(frame,unit)
+    return frame:IsVisible() and (frame:IsMouseOver() or flag(UnitIsUnit,'mouseover',unit))
+end
 function UF:RefreshGlows(frame)
     local c=self.db.colors.frameGlow or {};local unit=frame.__unit
     if not unit then return end
-    local target=c.targetGlow or {};local hover=c.mouseoverGlow or {};local focus=c.focusGlow or {}
-    frame.TargetGlow:SetShown(target.enable==true and not frame.db.disableTargetGlow and flag(UnitIsUnit,unit,'target'))
-    frame.MouseGlow:SetShown(hover.enable==true and not frame.db.disableMouseoverGlow and frame:IsMouseOver())
-    frame.FocusGlow:SetShown(focus.enable==true and not frame.db.disableFocusGlow and flag(UnitIsUnit,unit,'focus'))
-    paintGlow(frame.TargetGlow,glowColor(frame,target));paintGlow(frame.MouseGlow,glowColor(frame,hover));paintGlow(frame.FocusGlow,glowColor(frame,focus))
+    -- The hover edge follows mainGlow; mouseoverGlow owns the wash over the health fill.
+    local target=c.targetGlow or {};local main=c.mainGlow or {};local wash=c.mouseoverGlow or {};local focus=c.focusGlow or {}
+    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow','ThreatIndicator'}) do positionGlow(frame,frame[key]) end
+    local hover=not frame.db.disableMouseoverGlow and hovered(frame,unit)
+    reveal(frame.TargetGlow,target.enable==true and not frame.db.disableTargetGlow and flag(UnitIsUnit,unit,'target'))
+    reveal(frame.MouseGlow,main.enable==true and hover)
+    reveal(frame.FocusGlow,focus.enable==true and not frame.db.disableFocusGlow and flag(UnitIsUnit,unit,'focus'))
+    paintGlow(frame.TargetGlow,glowColor(frame,target));paintGlow(frame.MouseGlow,glowColor(frame,main));paintGlow(frame.FocusGlow,glowColor(frame,focus))
+    local texture=frame.HoverWash
+    if not texture then
+        texture=frame.Health:CreateTexture(nil,'ARTWORK',nil,1);frame.HoverWash=texture
+        texture:SetPoint('TOPLEFT',frame.Health,'TOPLEFT')
+        texture:SetPoint('BOTTOMRIGHT',frame.Health:GetStatusBarTexture(),'BOTTOMRIGHT')
+    end
+    texture:SetTexture(self:Texture(wash.texture or self.db.statusbar))
+    texture:SetVertexColor(glowColor(frame,wash))
+    texture:SetShown(wash.enable==true and hover)
+    -- Leaving a unit in the world raises no event; watch only while something is lit.
+    if hover and not self.hoverClock then
+        self.hoverClock=C_Timer.NewTicker(.1,function()
+            local any=false
+            for _,object in ipairs(UF.objects) do
+                if object.squancherState and object.__unit then
+                    local lit=object.MouseGlow:IsShown() or object.HoverWash and object.HoverWash:IsShown()
+                    if lit or hovered(object,object.__unit) then UF:RefreshGlows(object) end
+                    any=any or object.MouseGlow:IsShown() or (object.HoverWash and object.HoverWash:IsShown()) or false
+                end
+            end
+            if not any then UF.hoverClock:Cancel();UF.hoverClock=nil end
+        end)
+    end
 end
 local function indicator(frame,key,config,element)
     local texture=frame[key]
@@ -148,10 +235,10 @@ function UF:ConfigureState(frame)
     if not frame.squancherState then
         frame.squancherState=true
         frame.Shadow=edge(frame,frame,1,3)
-        frame.TargetGlow=semantic(frame);frame.MouseGlow=semantic(frame);frame.FocusGlow=semantic(frame)
+        frame.TargetGlow=semantic(frame,4);frame.MouseGlow=semantic(frame,5);frame.FocusGlow=semantic(frame,3)
         -- oUF threat state paints a real edge. Other owners may clip its child
         -- glows through this explicitly exposed object contract.
-        frame.ThreatIndicator=semantic(frame)
+        frame.ThreatIndicator=semantic(frame,2);positionGlow(frame,frame.ThreatIndicator)
         frame.ThreatIndicator.PostUpdate=function(self,unit,status,color)
             if color then paintGlow(self,color:GetRGBA()) end
         end
@@ -214,7 +301,7 @@ function UF:StartRangeClock()
 end
 
 local state=CreateFrame('Frame')
-for _,event in ipairs({'PLAYER_TARGET_CHANGED','PLAYER_FOCUS_CHANGED','PLAYER_REGEN_ENABLED','PLAYER_REGEN_DISABLED',
+for _,event in ipairs({'UPDATE_MOUSEOVER_UNIT','PLAYER_TARGET_CHANGED','PLAYER_FOCUS_CHANGED','PLAYER_REGEN_ENABLED','PLAYER_REGEN_DISABLED',
     'UNIT_TARGET','UNIT_HEALTH','UNIT_MAXHEALTH','UNIT_POWER_UPDATE','UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP',
     'UNIT_SPELLCAST_CHANNEL_START','UNIT_SPELLCAST_CHANNEL_STOP','UNIT_ENTERED_VEHICLE','UNIT_EXITED_VEHICLE'}) do state:RegisterEvent(event) end
 state:SetScript('OnEvent',function(_,event,unit)

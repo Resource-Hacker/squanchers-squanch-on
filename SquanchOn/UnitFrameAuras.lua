@@ -107,8 +107,9 @@ function UF:SortAuraButtons(container)
         if left==right then return a.sqIndex<b.sqIndex end
         if descending then return left>right else return left<right end
     end)
-    local per=math.max(1,config.perrow or 8);local stride=container.size+(config.spacing or 1)
-    local sx=config.growthX=='LEFT' and -1 or 1;local sy=config.growthY=='DOWN' and -1 or 1
+    local per=math.max(1,config.perrow or 8);local stride=container.size+(container.spacing or config.spacing or 1)
+    local sx=(container['growth-x'] or config.growthX)=='LEFT' and -1 or 1
+    local sy=(container['growth-y'] or config.growthY)=='DOWN' and -1 or 1
     for index,button in ipairs(shown) do
         if index>(container.visibleLimit or #shown) then button:Hide()
         else
@@ -202,12 +203,99 @@ function UF:RefreshAuraBars(frame)
     end
 end
 
+-- Icon rows. The embedded oUF registers no aura element on Forever-era
+-- clients, so Squanch-On reads and lays out the rows itself.
+local function newIcon(container,frame)
+    local button=CreateFrame('Button',nil,container)
+    button.Icon=button:CreateTexture(nil,'ARTWORK');button.Icon:SetPoint('CENTER')
+    button.Icon:SetTexCoord(.07,.93,.07,.93)
+    button.Cooldown=CreateFrame('Cooldown',nil,button,'CooldownFrameTemplate')
+    button.Cooldown:SetAllPoints(button.Icon);button.Cooldown:SetReverse(true);button.Cooldown:SetDrawEdge(false)
+    if button.Cooldown.SetHideCountdownNumbers then button.Cooldown:SetHideCountdownNumbers(true) end
+    local overlay=CreateFrame('Frame',nil,button);overlay:SetAllPoints()
+    overlay:SetFrameLevel(button.Cooldown:GetFrameLevel()+1)
+    button.Count=overlay:CreateFontString(nil,'OVERLAY');button.Text=overlay:CreateFontString(nil,'OVERLAY')
+    button.Text:SetPoint('CENTER')
+    button:SetScript('OnEnter',function(self)
+        if not self.auraInstanceID or GameTooltip:IsForbidden() then return end
+        local config=container.config or {}
+        GameTooltip:SetOwner(self,config.tooltipAnchorType or 'ANCHOR_BOTTOMRIGHT',config.tooltipAnchorX or 0,config.tooltipAnchorY or 0)
+        if GameTooltip.SetUnitAuraByAuraInstanceID then GameTooltip:SetUnitAuraByAuraInstanceID(frame.__unit,self.auraInstanceID) end
+    end)
+    button:SetScript('OnLeave',function() if not GameTooltip:IsForbidden() then GameTooltip:Hide() end end)
+    UF:ApplyFont(button.Text,UF.db.font,8,UF.db.fontOutline)
+    UF:ApplyFont(button.Count,UF.db.font,8,UF.db.fontOutline)
+    return button
+end
+local function paintIcon(button,container,frame,unit,aura,key)
+    local config=container.config or {}
+    local size=UF:Scale(container.size)
+    button:SetSize(size,size)
+    -- Same cell material as the action bars: cells touch and share one rim line,
+    -- the icon sits inside the painted inner edge.
+    button.Icon:SetSize(size*37/43,size*37/43)
+    if ns.DarkSkin and ns.DarkSkin.RawSlotBorder then ns.DarkSkin:RawSlotBorder(button,frame,1) end
+    button:EnableMouse(not container.disableMouse)
+    button.auraInstanceID=aura.auraInstanceID
+    button.Icon:SetTexture(aura.icon)
+    button.Icon:SetDesaturated(key=='Debuffs' and config.desaturate==true and personal(aura)==false)
+    local timed=false
+    local duration=C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
+    if duration and button.Cooldown.SetCooldownFromDurationObject then
+        timed=pcall(button.Cooldown.SetCooldownFromDurationObject,button.Cooldown,duration)
+    end
+    if not timed then
+        if number(aura.duration) and number(aura.expirationTime) and aura.duration>0 then
+            button.Cooldown:SetCooldown(aura.expirationTime-aura.duration,aura.duration)
+        else button.Cooldown:Clear() end
+    end
+    if number(aura.applications) then button.Count:SetText(aura.applications>1 and aura.applications or '')
+    elseif C_UnitAuras.GetAuraApplicationDisplayCount then
+        button.Count:SetText(C_UnitAuras.GetAuraApplicationDisplayCount(unit,aura.auraInstanceID,2,999))
+    else button.Count:SetText('') end
+    button:Show()
+end
+function UF:RefreshAuraIcons(frame)
+    local unit=frame.__unit
+    for _,key in ipairs({'Buffs','Debuffs'}) do
+        local container=frame[key];local config=container and container.config
+        if container then
+            local used=0
+            if config and config.enable~=false and unit and frame:IsShown() and C_UnitAuras.GetAuraDataByIndex then
+                for index=1,255 do
+                    local aura=C_UnitAuras.GetAuraDataByIndex(unit,index,container.filter or (key=='Buffs' and 'HELPFUL' or 'HARMFUL'))
+                    if not aura then break end
+                    local button=container[used+1]
+                    if not button then button=newIcon(container,frame);container[used+1]=button end
+                    if self:FilterAura(config,unit,aura,button) then
+                        used=used+1;paintIcon(button,container,frame,unit,aura,key)
+                    end
+                end
+            end
+            for index=used+1,#container do container[index]:Hide();container[index].sqAura=nil end
+            container.createdButtons=#container;container.visibleButtons=used
+            container:SetShown(config and config.enable~=false or false)
+            self:SortAuraButtons(container)
+        end
+    end
+end
+
 local configure=UF.ConfigureState
-function UF:ConfigureState(frame) configure(self,frame);self:RefreshAuraBars(frame) end
-local events=CreateFrame('Frame');events:RegisterEvent('UNIT_AURA');events:RegisterEvent('PLAYER_TARGET_CHANGED')
+function UF:ConfigureState(frame)
+    configure(self,frame)
+    if not frame.squancherAuraShow then
+        frame.squancherAuraShow=true
+        frame:HookScript('OnShow',function() UF:RefreshAuraIcons(frame) end)
+    end
+    self:RefreshAuraIcons(frame);self:RefreshAuraBars(frame)
+end
+local events=CreateFrame('Frame');events:RegisterEvent('UNIT_AURA');events:RegisterEvent('PLAYER_TARGET_CHANGED');events:RegisterEvent('UNIT_TARGET');events:RegisterEvent('PLAYER_FOCUS_CHANGED');events:RegisterEvent('UNIT_PET')
 events:SetScript('OnEvent',function(_,event,unit)
     for _,frame in ipairs(UF.objects) do
+        local own=frame.__unit
+        if own and (unit==own or event=='PLAYER_TARGET_CHANGED' or event=='PLAYER_FOCUS_CHANGED' or event=='UNIT_PET'
+            or event=='UNIT_TARGET' and type(unit)=='string' and own==unit..'target') then UF:RefreshAuraIcons(frame) end
         if frame.db.aurabar and frame.db.aurabar.enable and (unit==frame.__unit or event=='PLAYER_TARGET_CHANGED') then UF:RefreshAuraBars(frame) end
     end
 end)
-if UF.Initialized then for _,frame in ipairs(UF.objects) do UF:RefreshAuraBars(frame) end end
+if UF.Initialized then for _,frame in ipairs(UF.objects) do UF:RefreshAuraIcons(frame);UF:RefreshAuraBars(frame) end end

@@ -147,7 +147,7 @@ local tagMap={['name:medium']='sqon:name',['name:short']='sqon:shortname',
     ['healthcolor']='sqon:healthcolor',['health:current']='sqon:health',
     ['health:max']='maxhp',['health:percent']='sqon:healthpercent',
     ['power:current']='curpp',['power:max']='maxpp',['power:percent']='perpp',
-    ['difficultycolor']='difficulty',['classification:icon']='sqon:classification',
+    ['difficultycolor']='sqon:difficultycolor',['classification:icon']='sqon:classification',
     ['class:icon']='sqon:classicon',['faction:icon']='sqon:factionicon',
     ['happiness:icon']='sqon:happiness',['smartlevel']='sqon:smartlevel'}
 local function installTags()
@@ -229,6 +229,11 @@ local function installTags()
         if class=='rare' or class=='rareelite' then return '|A:nameplates-icon-elite-silver:16:16|a' end
         return ''
     end
+    methods['sqon:difficultycolor']=function(unit)
+        local level=UnitEffectiveLevel and UnitEffectiveLevel(unit) or UnitLevel(unit)
+        if not public(level) then return '' end
+        return hex(GetCreatureDifficultyColor(level))
+    end
     methods['sqon:smartlevel']=function(unit)
         local level=UnitLevel(unit)
         if public(level) and level==-1 then return '??' end
@@ -281,13 +286,13 @@ local function textRegion(frame,config)
         or config.attachTextTo=='Portrait' and frame.Portrait or frame
 end
 local function configureText(frame,fs,config,defaultPoint)
+    local value=UF:TagFormat(config.text_format)
+    if value=='' or config.enable==false then frame:Untag(fs);fs:SetText('');fs:Hide();return end
     local region=textRegion(frame,config) or frame
     anchor(fs,region,config,defaultPoint)
     fs:SetJustifyH(config.justifyH or (config.position=='LEFT' and 'LEFT' or config.position=='RIGHT' and 'RIGHT' or 'CENTER'))
     UF:ApplyFont(fs,config.font or UF.db.font,config.size or UF.db.fontSize,config.fontOutline or UF.db.fontOutline)
-    local value=UF:TagFormat(config.text_format)
-    if value=='' or config.enable==false then frame:Untag(fs);fs:SetText('');fs:Hide()
-    else frame:Tag(fs,value);fs:Show() end
+    frame:Tag(fs,value);fs:Show()
 end
 
 local function tooltipEnter(frame)
@@ -313,17 +318,36 @@ local function configureAura(frame,key,config)
     local c=frame[key]
     local perRow=numeric(config.perrow,8,1,40)
     local size=numeric(config.sizeOverride,0,0,100)
-    if size==0 then size=math.max(8,(frame:GetWidth()-(perRow-1)*(config.spacing or 1))/perRow) end
+    -- Cells abut like the action bars; the saved spacing only applies to a fixed size.
+    local gap=size==0 and 0 or config.spacing or 1
+    if size==0 then size=math.max(8,frame:GetWidth()/perRow) end
     local rows=numeric(config.numrows,1,1,8)
-    c.size=size;c.spacing=config.spacing or 1;c.num=enabled(config) and 255 or 0
+    c.size=size;c.spacing=gap;c.num=enabled(config) and 255 or 0
     c.visibleLimit=math.floor(perRow*rows);c.config=config
-    c['growth-x']=config.growthX or 'RIGHT';c['growth-y']=config.growthY or 'UP'
-    c.initialAnchor=config.anchorPoint or 'TOPLEFT'
+    -- Placement rule of the layout being reproduced: the row hangs off the
+    -- chosen frame corner and grows away from it, it does not sit inside it.
+    local anchorPoint=config.anchorPoint or (key=='Buffs' and 'TOPLEFT' or 'BOTTOMLEFT')
+    local growthX=(anchorPoint=='LEFT' or anchorPoint=='RIGHT') and anchorPoint or config.growthX or 'RIGHT'
+    local growthY=(anchorPoint=='TOP' or anchorPoint=='BOTTOM') and anchorPoint=='TOP' and 'UP'
+        or anchorPoint=='BOTTOM' and 'DOWN' or config.growthY or 'UP'
+    c['growth-x']=growthX;c['growth-y']=growthY
+    local inverse={TOP='BOTTOM',BOTTOM='TOP',LEFT='RIGHT',RIGHT='LEFT'}
+    c.initialAnchor=inverse[anchorPoint]
+        or (growthY=='DOWN' and 'TOP' or 'BOTTOM')..(growthX=='LEFT' and 'RIGHT' or 'LEFT')
     setSize(c,perRow*(size+c.spacing)-c.spacing,rows*(size+c.spacing)-c.spacing)
     c:ClearAllPoints()
-    local relative=config.attachTo=='BUFFS' and frame.Buffs or frame
-    local point=config.anchorPoint or (key=='Buffs' and 'TOPLEFT' or 'BOTTOMLEFT')
-    setPoint(c,point,relative,point,config.xOffset or 0,config.yOffset or (key=='Buffs' and 5 or -5))
+    local attach=config.attachTo
+    local relative=attach=='BUFFS' and key~='Buffs' and frame.Buffs or attach=='DEBUFFS' and key~='Debuffs' and frame.Debuffs
+        or attach=='HEALTH' and frame.Health or attach=='POWER' and frame.Power or frame
+    local fx,fy=0,UF.SPACING
+    if attach=='HEALTH' or attach=='POWER' then fx,fy=-UF.BORDER,UF.BORDER
+    elseif relative==frame then fx,fy=UF.SPACING,0 end
+    local signs={TOP={0,1},TOPLEFT={1,1},TOPRIGHT={-1,1},BOTTOM={0,-1},BOTTOMLEFT={1,-1},
+        BOTTOMRIGHT={-1,-1},LEFT={-1,0},RIGHT={1,0},CENTER={0,0}}
+    local sign=signs[anchorPoint] or signs.CENTER;local sx,sy=sign[1],sign[2]
+    local x=sx*fx+(config.xOffset or 0)+(relative==frame and frame.ORIENTATION~='LEFT' and frame.POWERBAR_OFFSET or 0)
+    local y=sy*fy+(config.yOffset or 0)
+    setPoint(c,c.initialAnchor,relative,anchorPoint,x,y)
     c.disableMouse=config.clickThrough or false
     c.showType=key=='Debuffs';c.showStealableBuffs=key=='Buffs'
     c.onlyShowPlayer=config.onlyShowPlayer or false
@@ -502,6 +526,7 @@ local function configurePortrait(frame,config)
     end
     if portrait:IsObjectType('PlayerModel') then
         portrait:SetFrameLevel(frame.Health:GetFrameLevel())
+        portrait.backdrop:SetFrameLevel(portrait:GetFrameLevel()-1)
         portrait.PostUpdate=function(self,unit,changed)
             if self.state then
                 self:SetCamDistanceScale(config.camDistanceScale or 1.2)
@@ -618,9 +643,13 @@ function UF:Configure_CustomTexts(frame)
     configureText(frame,frame.Power.Text,c.power,'RIGHT')
     for key,config in pairs(c.customTexts or {}) do
         if type(config)=='table' then
-            local fs=frame.customTexts[key] or makeText(frame,key,config)
-            configureText(frame,fs,config)
-            fs:SetDrawLayer('OVERLAY',key=='[faction:icon]' and 0 or 1)
+            local active=config.enable~=false and self:TagFormat(config.text_format)~=''
+            local fs=frame.customTexts[key]
+            if active then
+                fs=fs or makeText(frame,key,config)
+                configureText(frame,fs,config)
+                fs:SetDrawLayer('OVERLAY',key=='[faction:icon]' and 0 or 1)
+            elseif fs then frame:Untag(fs);fs:SetText('');fs:Hide() end
         end
     end
     for key,fs in pairs(frame.customTexts) do
@@ -710,8 +739,30 @@ function UF:PrepareProfile()
             end
         end
     end
+    -- oUF may select power by either token or numeric ID. Its stock table
+    -- aliases both keys to the same Color object; preserve that relationship
+    -- inside our independent configured palette instead of inheriting the
+    -- numeric default after replacing only the named color.
+    if self.palette.power then
+        local aliases={}
+        for token,configured in pairs(self.palette.power) do
+            if type(token)=='string' then
+                local original=oUF.colors.power[token]
+                if original then
+                    for id,source in pairs(oUF.colors.power) do
+                        if type(id)=='number' and source==original then aliases[id]=configured end
+                    end
+                end
+            end
+        end
+        for id,configured in pairs(aliases) do self.palette.power[id]=configured end
+        if self.palette.power.ALT_POWER then
+            self.palette.power[Enum.PowerType.Alternate or 10]=self.palette.power.ALT_POWER
+        end
+    end
     if self.palette.health and self.palette.health.SetCurve then
-        self.palette.health:SetCurve({[0]=CreateColor(1,0,0),[.5]=CreateColor(1,1,0),[1]=CreateColor(0,1,0)})
+        local health=self.palette.health
+        health:SetCurve({[0]=CreateColor(1,0,0),[.5]=CreateColor(1,1,0),[1]=CreateColor(health.r,health.g,health.b)})
     end
     for _,frame in ipairs(self.objects) do frame.colors=self.palette end
 end
@@ -744,7 +795,10 @@ local function style(frame,unit,key)
     frame.customTexts={}
     frame.PortraitModel=CreateFrame('PlayerModel',nil,frame)
     frame.PortraitTexture=frame:CreateTexture(nil,'ARTWORK')
-    background(frame.PortraitModel)
+    -- The model is anchored to its backdrop, so the backdrop must not be the
+    -- model's child: after the unit button hides and shows again the client
+    -- leaves that parent-anchored-to-child pair unresolved and draws neither.
+    background(frame.PortraitModel):SetParent(frame)
     frame.PortraitTexture.backdrop=CreateFrame('Frame',nil,frame,'BackdropTemplate')
     frame.PortraitTexture.backdrop:SetBackdrop({bgFile=white,edgeFile=white,edgeSize=1})
     frame.PortraitTexture.backdrop:SetBackdropBorderColor(0,0,0,1)
@@ -753,7 +807,7 @@ local function style(frame,unit,key)
         local portrait=frame.Portrait3D
         if portrait then portrait:SetModelAlpha(alpha*(frame.USE_PORTRAIT_OVERLAY and (frame.db.portrait.overlayAlpha or .5) or 1)) end
     end)
-    frame.PortraitModel:Hide();frame.PortraitTexture:Hide()
+    frame.PortraitModel:Hide();frame.PortraitModel.backdrop:Hide();frame.PortraitTexture:Hide()
     frame.Portrait=frame.squancherConfig.portrait.style=='3D' and frame.PortraitModel or frame.PortraitTexture
     frame.Castbar=createCast(frame)
     frame.Buffs=newAura(frame,'Buffs');frame.Debuffs=newAura(frame,'Debuffs')
@@ -1164,7 +1218,9 @@ local function initialize()
     UF.db=config;UF.state=state;UF:PrepareProfile();installTags()
     -- A local adapter for Squancher's existing decoration code, never _G.ElvUI.
     local engine={db={unitframe=config,movers=config.movers},oUF=oUF,Initialized=true,mult=1,
-        media={bordercolor={r=.70,g=.532,b=.294},unitframeBorderColor={r=.70,g=.532,b=.294}},
+        -- Bars are created with the profile's neutral black edge; the border
+        -- adapter recognises exactly that colour and replaces it with the gold line.
+        media={bordercolor={r=0,g=0,b=0},unitframeBorderColor={r=0,g=0,b=0}},
         data={GetCurrentProfile=function() return UF.state.profile end}}
     function engine:GetModule(name) if name=='UnitFrames' then return UF end end
     function engine:ClassColor(class) return RAID_CLASS_COLORS[class] end

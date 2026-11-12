@@ -91,7 +91,7 @@ end
 local auraHooks = setmetatable({}, {__mode='k'})
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
 local neutralTints=setmetatable({}, {__mode='k'})
-local function tintNeutralEdge(texture,backdrop,ownerFrame)
+local function tintNeutralEdge(texture,backdrop,ownerFrame,texturedOnly)
     if not texture or texture.IsForbidden and texture:IsForbidden() then return end
     if neutralTints[texture] then
         if ownerFrame then neutralTints[texture].ownerFrame=ownerFrame end
@@ -103,10 +103,12 @@ local function tintNeutralEdge(texture,backdrop,ownerFrame)
     local setter=backdrop and 'SetBackdropBorderColor' or 'SetVertexColor'
     local getter=backdrop and 'GetBackdropBorderColor' or 'GetVertexColor'
     if not baseline or not texture[setter] or not texture[getter] or texture.forcedBorderColors then return end
-    local record={ownerFrame=ownerFrame,edgeAlpha={}}
+    local record={ownerFrame=ownerFrame,texturedOnly=texturedOnly,edgeAlpha={}}
     neutralTints[texture]=record
     local function nativeEdges()
-        if not record.ownerFrame then return end
+        -- Portraits carry the same single textured line as the bars; a flat
+        -- edge left beneath it reads as a bright ring.
+        if not (record.ownerFrame or record.texturedOnly) then return end
         for _,host in ipairs({texture,texture.iborder or false,texture.oborder or false}) do
             if host then
                 for _,key in ipairs({'TopLeftCorner','TopRightCorner','BottomLeftCorner','BottomRightCorner','TopEdge','BottomEdge','LeftEdge','RightEdge'}) do
@@ -230,9 +232,9 @@ function Borders:RefreshIcons(frame)
     tintNeutralEdge(frame.Power and frame.Power.backdrop,true)
     tintNeutralEdge(frame.Castbar and frame.Castbar.backdrop,true)
     local portrait = frame.Portrait
-    tintNeutralEdge(portrait and portrait.backdrop,true)
+    tintNeutralEdge(portrait and portrait.backdrop,true,nil,true)
     local portrait3D = frame.Portrait3D
-    tintNeutralEdge(portrait3D and portrait3D.backdrop,true)
+    tintNeutralEdge(portrait3D and portrait3D.backdrop,true,nil,true)
     local cast = frame.Castbar
     tintNeutralEdge(cast and cast.ButtonIcon and cast.ButtonIcon.bg,true)
     local spec = frame.PVPSpecIcon
