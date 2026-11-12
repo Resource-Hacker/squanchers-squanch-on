@@ -72,8 +72,10 @@ DrawerMotion.lua
 LayoutWindows.lua
 SocialDrawer.lua
 QuestDrawer.lua
+MeterDrawer.lua
 OptionsWindow.lua
 options/General.lua
+options/Meter.lua
 options/Mouselook.lua
 options/Reticle.lua
 options/TargetRing.lua
