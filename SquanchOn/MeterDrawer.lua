@@ -266,16 +266,17 @@ local function createRow(list)
     local line = row:CreateTexture(nil, 'ARTWORK')
     line:SetPoint('TOPLEFT', row, 'BOTTOMLEFT'); line:SetPoint('TOPRIGHT', row, 'BOTTOMRIGHT'); line:SetHeight(1)
     row.line = line
-    local inner = skin.innerBorderColor
+    local inner = skin.lineColor
     line:SetColorTexture(inner[1], inner[2], inner[3], 1)
     row.bar, row.cells = bar, cells
     return row
 end
 
 -- Columns ------------------------------------------------------------------
--- Internal lines share the unit frames' inner outline colour.
+-- Internal lines share the unit frames' inner outline as it appears on screen
+-- (Skin.lineColor: the flat equivalent of that tinted outline art).
 local function paintRule(line)
-    local color = ns.DarkSkin.innerBorderColor
+    local color = ns.DarkSkin.lineColor
     line:SetColorTexture(color[1], color[2], color[3], 1)
 end
 local function ruleWidth(frame)
