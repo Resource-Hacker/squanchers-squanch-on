@@ -73,15 +73,32 @@ local function modelShown(frame, value)
     local bar = tie(frame)
     if bar then bar:SetValue(value) end
 end
+-- Other code fades this frame too (range and smooth fades write its alpha
+-- after ours). While the frame is idle, any such write is answered with ours.
+local writing, guarded = false, {}
+local function guard(frame)
+    if guarded[frame] then return end
+    guarded[frame] = true
+    hooksecurefunc(frame, 'SetAlpha', function()
+        if writing or Fade.shown ~= false or not quiet() then return end
+        local alpha = healthAlpha()
+        if alpha == nil then return end
+        writing = true
+        frame:SetAlpha(alpha)
+        writing = false
+    end)
+end
+
 function Fade:Refresh()
     local frame = _G.SquanchOnUF_Player
     if not frame then return end
     self.frame = frame
+    guard(frame)
     if quiet() then
         local alpha = healthAlpha()
         if alpha ~= nil then
             self.shown = false
-            frame:SetAlpha(alpha)
+            writing = true; frame:SetAlpha(alpha); writing = false
             modelShown(frame, alpha)
             -- Aura rows own their cells' rims; they follow the same alpha.
             for _, key in ipairs({ 'Buffs', 'Debuffs' }) do if frame[key] then frame[key]:SetAlpha(alpha) end end
