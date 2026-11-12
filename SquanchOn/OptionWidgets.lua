@@ -88,7 +88,7 @@ function W:Window(name, width, height, title)
     local fill = frame:CreateTexture(nil, 'BACKGROUND'); fill:SetTexture(WHITE)
     ns.DarkSkin:StylePanelBackground(fill, border)
     -- Settings need a readable backing; the shared translucent fill gets a darker underlay.
-    local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, .82)
+    local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, 0) -- owner: same body as the chat panel
     frame.title = self:Header(frame, title); frame.title:SetPoint('TOPLEFT', 18, -16)
     local rule = frame:CreateTexture(nil, 'ARTWORK'); rule:SetColorTexture(GOLD[1] * .78, GOLD[2] * .78, GOLD[3] * .78, .9)
     rule:SetHeight(1); rule:SetPoint('TOPLEFT', 14, -38); rule:SetPoint('TOPRIGHT', -14, -38)

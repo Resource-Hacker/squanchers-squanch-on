@@ -3,10 +3,33 @@
 local _, ns = ...
 local Text = { records = setmetatable({}, {__mode = 'k'}), headers = setmetatable({}, {__mode = 'k'}), hooked = setmetatable({}, {__mode = 'k'}) }
 ns.NativeText = Text
+-- Shipped sizes. Edited values live in ns.db.text (only keys that were changed).
+-- An empty font name keeps each region's own game font face.
+Text.defaults = { body = 8, header = 12, compactHeader = 10, questBody = 7, questHeader = 8,
+    questBrightness = .94, bodyFont = '', headerFont = '' }
+function Text:Setting(key)
+    local db = ns.db or SquanchOnDB
+    local values = type(db) == 'table' and db.text
+    local value
+    if type(values) == 'table' then value = values[key] end
+    if value == nil then return self.defaults[key] end
+    return value
+end
+local function face(header)
+    local name = Text:Setting(header and 'headerFont' or 'bodyFont')
+    if type(name) == 'string' and name ~= '' and ns.Media then return ns.Media:Resolve('font', name) end
+end
+local function samePath(a, b)
+    return a == b or a:lower():gsub('/', '\\') == b:lower():gsub('/', '\\')
+end
 local titleNames = { 'QuestInfoTitleHeader', 'QuestInfoDescriptionHeader', 'QuestInfoObjectivesHeader',
     'QuestProgressTitleText', 'QuestProgressRequiredItemsText', 'CurrentQuestsText', 'AvailableQuestsText' }
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
 local questColorHooks = setmetatable({}, {__mode = 'k'})
+local appliedBrightness = .94
+local function grey(value, r, g, b)
+    return math.abs(r-value) < .001 and math.abs(g-value) < .001 and math.abs(b-value) < .001
+end
 local function brightenQuestBody(region, r, g, b, a)
     local row = region:GetParent()
     local block = row and row.parentBlock
@@ -14,8 +37,9 @@ local function brightenQuestBody(region, r, g, b, a)
     -- Lift only ordinary gray text; native hover, completion and failure colors stay meaningful.
     if public(r) and public(g) and public(b) and type(r) == 'number'
         and type(g) == 'number' and type(b) == 'number'
-        and math.abs(r-.8) < .001 and math.abs(g-.8) < .001 and math.abs(b-.8) < .001 then
-        region:SetTextColor(.94, .94, .94, a or 1)
+        and (grey(.8, r, g, b) or grey(appliedBrightness, r, g, b)) then
+        local bright = Text:Setting('questBrightness')
+        if not grey(bright, r, g, b) then region:SetTextColor(bright, bright, bright, a or 1) end
     end
 end
 local function safe(region)
@@ -61,7 +85,17 @@ local function refresh(region)
     if not record or record.busy or not safe(region) then return end
     local path, size, flags = font(region)
     if not path then return end
-    local wanted = record.size or (Text.headers[region] and 12 or 8)
+    local header = Text.headers[region]
+    local body = Text:Setting('body')
+    -- An owner size is a number, or the name of a setting ('questBody').
+    local explicit = record.size
+    if type(explicit) == 'string' then explicit = Text:Setting(explicit) end
+    local wanted = explicit or (header and Text:Setting('header') or body)
+    -- A chosen family replaces the face; without one the native face returns.
+    local override = face(header)
+    local file = override or record.faced and record.nativePath or path
+    local sameFace = samePath(path, file)
+    record.faced = override and true or nil
     record.character = characterRegion(region)
     local scaleOwner = region.GetEffectiveScale and region or region.GetParent and region:GetParent()
     if record.character and scaleOwner and scaleOwner.GetEffectiveScale and UIParent then
@@ -70,7 +104,7 @@ local function refresh(region)
         if public(scale) and public(uiScale) and type(scale) == 'number'
             and type(uiScale) == 'number' and scale > 0 and uiScale > 0 then
             -- Keep body/headings readable after proportional window scaling.
-            wanted = (Text.headers[region] and 10 or math.max(record.size or 8, 8)) * uiScale / scale
+            wanted = (header and Text:Setting('compactHeader') or math.max(explicit or body, body)) * uiScale / scale
         end
     end
     -- An explicit owner size (quest text, settings) is never overridden.
@@ -82,12 +116,13 @@ local function refresh(region)
         if not (public(scale) and public(uiScale) and type(scale) == 'number'
             and type(uiScale) == 'number' and scale > 0 and uiScale > 0) then return end
         -- Quarter units keep the set of sizes (and Button font copies) small.
-        wanted = math.floor((Text.headers[region] and 10 or 8) * uiScale / scale * 4 + .5) / 4
-        if record.kept == wanted then return end
+        wanted = math.floor((header and Text:Setting('compactHeader') or body) * uiScale / scale * 4 + .5) / 4
+        if record.kept == wanted and sameFace then return end
         record.kept = nil
         -- `got` is what the client reported after the last write of `set`.
-        if size == wanted or record.set == wanted and size == record.got then return end
+        if sameFace and (size == wanted or record.set == wanted and size == record.got) then return end
         record.busy = true
+        local path = file
         pcall(region.SetFont, region, path, wanted, flags)
         record.set, record.got = wanted, select(2, font(region))
         -- A fixed-width label the larger text no longer fits keeps its native
@@ -101,9 +136,9 @@ local function refresh(region)
         record.busy = nil
         return
     end
-    if size == wanted then return end
+    if size == wanted and sameFace then return end
     record.busy = true
-    pcall(region.SetFont, region, path, wanted, flags)
+    pcall(region.SetFont, region, file, wanted, flags)
     record.busy = nil
 end
 -- A Button re-applies its state font objects in the client, outside every
@@ -115,7 +150,9 @@ function Text:Button(button, header)
     if header then self.headers[label] = true end
     local scale, uiScale = button:GetEffectiveScale(), UIParent:GetEffectiveScale()
     if not (scale > 0 and uiScale > 0) then return end
-    local size = math.floor((self.headers[label] and 10 or 8) * uiScale / scale * 4 + .5) / 4
+    local size = math.floor((self.headers[label] and self:Setting('compactHeader') or self:Setting('body')) * uiScale / scale * 4 + .5) / 4
+    local family = face(self.headers[label])
+    local key = family and size .. family or size
     for _, state in ipairs({'Normal', 'Highlight', 'Disabled'}) do
         local get, set = button['Get' .. state .. 'FontObject'], button['Set' .. state .. 'FontObject']
         local object = get and set and get(button)
@@ -123,14 +160,14 @@ function Text:Button(button, header)
         if object then
             local bySize = buttonFonts[object]
             if not bySize then bySize = {}; buttonFonts[object] = bySize end
-            local clone = bySize[size]
+            local clone = bySize[key]
             if not clone then
                 buttonFontCount = buttonFontCount + 1
                 clone = CreateFont('SquanchOnDrawerText' .. buttonFontCount)
                 clone:CopyFontObject(object)
                 local file, _, flags = clone:GetFont()
-                clone:SetFont(file, size, flags)
-                bySize[size] = clone
+                clone:SetFont(family or file, size, flags)
+                bySize[key] = clone
                 buttonSources[clone] = object
             end
             if get(button) ~= clone then set(button, clone) end
@@ -173,20 +210,21 @@ function Text:Region(region, header, size)
     if not record then
         local path, size = font(region)
         if not path then return end
-        record = { nativeSize = size }
+        record = { nativeSize = size, nativePath = path }
         self.records[region] = record
-        hooksecurefunc(region, 'SetFont', function(self, _, requested)
+        hooksecurefunc(region, 'SetFont', function(self, file, requested)
             local saved = Text.records[self]
             if saved.busy then return end
             if public(requested) and type(requested) == 'number' then saved.nativeSize = requested end
+            if public(file) and type(file) == 'string' then saved.nativePath = file end
             refresh(self)
         end)
         if region.SetFontObject then
             hooksecurefunc(region, 'SetFontObject', function(self)
                 local saved = Text.records[self]
                 if saved.busy then return end
-                local _, size = font(self)
-                if size then saved.nativeSize = size end
+                local path, size = font(self)
+                if size then saved.nativeSize, saved.nativePath = size, path end
                 refresh(self)
             end)
         end
@@ -244,7 +282,7 @@ end
 function Text:Block(block)
     if not block then return end
     local quest = block.parentModule == QuestObjectiveTracker
-    self:Header(block.HeaderText,quest and 8 or 9)
+    self:Header(block.HeaderText,quest and 'questHeader' or 9)
     if quest and block.HeaderText then
         block.HeaderText:SetWordWrap(true)
         block.HeaderText:SetNonSpaceWrap(true)
@@ -255,7 +293,7 @@ function Text:Block(block)
         local row = owner.usedLines and owner.usedLines[key]
         if row then
             local quest = owner.parentModule == QuestObjectiveTracker
-            Text:Region(row.Text,false,quest and 7 or 8); Text:Region(row.Dash,false,quest and 7 or 8)
+            Text:Region(row.Text,false,quest and 'questBody' or 8); Text:Region(row.Dash,false,quest and 'questBody' or 8)
             if quest then
                 for _, region in ipairs({row.Text, row.Dash}) do
                     if not questColorHooks[region] then
@@ -290,7 +328,7 @@ function Text:Tracker(tracker)
     self:Header(tracker.Header and tracker.Header.Text)
     for index, module in ipairs(tracker.modules or {}) do
         if index > 32 then break end
-        self:Header(module.Header and module.Header.Text,module == QuestObjectiveTracker and 8 or 12)
+        self:Header(module.Header and module.Header.Text,module == QuestObjectiveTracker and 'questHeader' or 12)
         if module.GetBlock and module.GetExistingBlock and not self.hooked[module] then
             self.hooked[module] = true
             hooksecurefunc(module, 'GetBlock', function(owner, id, template)
@@ -318,21 +356,35 @@ function Text:Menu(menu)
         if region and region.GetFontObject then
             local original = region:GetFontObject()
             original = menuSources[original] or original
-            local size = row:GetObjectType() == "Frame" and 12 or 8
+            local title = row:GetObjectType() == "Frame"
+            local size = title and self:Setting('header') or self:Setting('body')
+            local family = face(title)
+            local key = family and size .. family or size
             local bySize = menuFonts[original]
             if original then
                 if not bySize then bySize={};menuFonts[original]=bySize end
-                if not bySize[size] then
+                if not bySize[key] then
                     menuFontCount=menuFontCount+1
                     local clone=CreateFont("SquancherMenuText"..menuFontCount)
                     clone:CopyFontObject(original)
                     local file,_,flags=clone:GetFont()
-                    clone:SetFont(file,size,flags)
-                    bySize[size]=clone
+                    clone:SetFont(family or file,size,flags)
+                    bySize[key]=clone
                     menuSources[clone]=original
                 end
-                region:SetFontObject(bySize[size])
+                region:SetFontObject(bySize[key])
             end
         end
     end
+end
+
+-- Re-sizes every recorded region after a text setting changed. Button and menu
+-- font copies follow when their window or menu is next shown.
+function Text:Apply()
+    for region, record in pairs(self.records) do
+        record.kept, record.set, record.got = nil, nil, nil
+        refresh(region)
+    end
+    for region in pairs(questColorHooks) do brightenQuestBody(region, region:GetTextColor()) end
+    appliedBrightness = self:Setting('questBrightness')
 end

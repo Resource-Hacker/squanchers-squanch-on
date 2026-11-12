@@ -11,6 +11,10 @@ local function point(object,...)
     object:SetPoint(unpack(args))
 end
 local empty,auraKeys={},{'Buffs','Debuffs'}
+-- Cell look from SquanchOnDB.auras, read once per change by UF:ApplyAuraSettings
+-- (below); painting compares one revision number and reads only these locals.
+local styleRev,cellRim,cellSwipe,cellNumbers,desatAll,desatSaved=0,true,true,false,false,true
+local countFont,countSize,countPosition,showEnchants
 -- One read of a unit's auras per filter serves every row drawn for the same
 -- event (unit frame rows, aura bars, the player's bars). Outside the aura
 -- event handler nothing is kept.
@@ -148,12 +152,16 @@ function UF:SortAuraButtons(container)
                 button:ClearAllPoints()
                 button:SetPoint(anchor,container,anchor,((index-1)%per)*dx,math.floor((index-1)/per)*dy)
             end
-            if button.sqCountConfig~=config then
+            if button.sqCountConfig~=config or button.sqCountRev~=styleRev then
                 -- Count style depends only on the row's settings; set it once per button.
-                button.sqCountConfig=config
-                self:ApplyFont(button.Count,config.countFont or self.db.font,config.countFontSize or 8,config.countFontOutline or 'OUTLINE')
+                -- The player's bars keep their own size and corner (container.ownCount).
+                button.sqCountConfig=config;button.sqCountRev=styleRev
+                local own=container.ownCount
+                local corner=not own and countPosition or config.countPosition or 'BOTTOMRIGHT'
+                self:ApplyFont(button.Count,countFont or config.countFont or self.db.font,
+                    not own and countSize or config.countFontSize or 8,config.countFontOutline or 'OUTLINE')
                 button.Count:ClearAllPoints()
-                point(button.Count,config.countPosition or 'BOTTOMRIGHT',button,config.countPosition or 'BOTTOMRIGHT',config.countXOffset or 0,config.countYOffset or 0)
+                point(button.Count,corner,button,corner,config.countXOffset or 0,config.countYOffset or 0)
             end
         end
     end
@@ -217,13 +225,13 @@ function UF:RefreshAuraBars(frame)
         local rows=0
         for _,key in ipairs(auraKeys) do
             local row=frame[key]
-            if row and row:IsShown() then
+            if row and row:IsShown() and row['growth-y']~='DOWN' then
                 local per=math.max(1,row.config and row.config.perrow or 8)
                 rows=math.max(rows,math.ceil(math.min(row.visibleButtons or 0,row.visibleLimit or 0)/per))
             end
         end
         holder:SetPoint('BOTTOMLEFT',frame,'TOPLEFT',self:Scale(h+spacing+3),
-            self:Scale((config.yOffset or 0)+5+(split.classLift or 0))+rows*self:Scale(split.size))
+            self:Scale((config.yOffset or 0)+(split.splitLift or 0)+(split.classLift or 0))+rows*self:Scale(split.size))
     else
         local region=config.attachTo=='DEBUFFS' and frame.Debuffs or config.attachTo=='BUFFS' and frame.Buffs or frame
         point(holder,'BOTTOMLEFT',region,'TOPLEFT',h+spacing+3,config.yOffset or 0)
@@ -287,23 +295,32 @@ end
 local function paintIcon(button,container,frame,unit,aura,key)
     local config=container.config or {}
     local size=UF:Scale(container.size)
-    if button.sqSize~=size then
-        -- Geometry and the 58-piece rim follow the cell size only, not each repaint.
-        button.sqSize=size
+    if button.sqSize~=size or button.sqStyle~=styleRev then
+        -- Geometry and the 58-piece rim follow the cell size and the look
+        -- settings only, not each repaint.
+        button.sqSize=size;button.sqStyle=styleRev
         button:SetSize(size,size)
         -- Same cell material as the action bars: cells touch and share one rim line,
-        -- the icon sits inside the painted inner edge.
-        button.Icon:SetSize(size*37/43,size*37/43)
-        if ns.DarkSkin and ns.DarkSkin.RawSlotBorder then ns.DarkSkin:RawSlotBorder(button,frame,1) end
+        -- the icon sits inside the painted inner edge. Without the rim it fills the cell.
+        local inner=cellRim and size*37/43 or size
+        button.Icon:SetSize(inner,inner)
+        if cellRim and ns.DarkSkin and ns.DarkSkin.RawSlotBorder then button.sqRim=ns.DarkSkin:RawSlotBorder(button,frame,1) end
+        if button.sqRim then button.sqRim:SetShown(cellRim) end
+        if button.Cooldown.SetDrawSwipe then button.Cooldown:SetDrawSwipe(cellSwipe) end
+        if button.Cooldown.SetHideCountdownNumbers then
+            local numbers=container.countdown;if numbers==nil then numbers=cellNumbers end
+            button.Cooldown:SetHideCountdownNumbers(not numbers)
+        end
     end
     local mouse=not container.disableMouse
     if button.sqMouse~=mouse then button.sqMouse=mouse;button:EnableMouse(mouse) end
     if not aura.test and public(aura.auraInstanceID) then button.auraInstanceID=aura.auraInstanceID
     else button.auraInstanceID=nil end
     button.Icon:SetTexture(aura.icon)
-    button.Icon:SetDesaturated(key=='Debuffs' and config.desaturate==true and personal(aura)==false)
-    local timed=aura.test==true
-    if timed then button.Cooldown:SetCooldown(GetTime()-aura.duration*.4,aura.duration) end
+    button.Icon:SetDesaturated(key=='Debuffs' and (desatAll or desatSaved and config.desaturate==true) and personal(aura)==false)
+    -- Preview icons and weapon enchants carry their own start time.
+    local timed=aura.start~=nil
+    if timed then button.Cooldown:SetCooldown(aura.start,aura.duration) end
     local duration=not timed and C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
     if duration and button.Cooldown.SetCooldownFromDurationObject then
         timed=pcall(button.Cooldown.SetCooldownFromDurationObject,button.Cooldown,duration)
@@ -348,7 +365,7 @@ function UF:RefreshAuraIcons(frame)
                 for index=1,self.auraTest do
                     local button=container[index]
                     if not button then button=newIcon(container,frame);container[index]=button end
-                    local aura={test=true,icon=testIcons[key][(index-1)%#testIcons[key]+1],duration=30+index*15,
+                    local aura={test=true,icon=testIcons[key][(index-1)%#testIcons[key]+1],duration=30+index*15,start=GetTime()-(30+index*15)*.4,
                         expirationTime=GetTime()+index*20,applications=index%3==0 and index or 1,name=key..index}
                     button.sqAura=aura;button.sqRank=0;used=index
                     paintIcon(button,container,frame,unit or 'player',aura,key)
@@ -430,17 +447,55 @@ local playerBars={}
 local function playerBar(key,filter,y)
     local bar=CreateFrame('Frame','SquanchOnPlayer'..key,UIParent)
     bar.__unit='player';bar.key=key;bar.filter=filter;bar.defaultY=y
-    bar.size=30;bar.spacing=0;bar.visibleLimit=36;bar.initialAnchor='TOPRIGHT'
-    bar['growth-x']='LEFT';bar['growth-y']='DOWN'
-    bar.config={perrow=12,sortMethod='TIME_REMAINING',sortDirection='DESCENDING',countPosition='BOTTOMRIGHT',countYOffset=2,
-        countFontSize=10,tooltipAnchorType='ANCHOR_BOTTOMLEFT'}
-    bar:SetSize(12*30,30);bar:SetFrameStrata('LOW')
+    bar.spacing=0;bar.ownCount=true;bar.enabled=true;bar:SetFrameStrata('LOW')
     playerBars[#playerBars+1]=bar
     return bar
 end
 playerBar('Buffs','HELPFUL',-12);playerBar('Debuffs','HARMFUL',-112)
+local function countdownFont(bar)
+    if not UF.db then return end
+    local name='SquanchOnAuraCountdown'..bar.key
+    if not bar.countdownFont then bar.countdownFont=CreateFont(name) end
+    bar.countdownFont:SetFont(UF:Font(UF.db.font),bar.countdownSize or 11,'OUTLINE')
+    return name
+end
+local function clamp(value,fallback,low,high)
+    if not number(value) then return fallback end
+    return math.max(low,math.min(high,math.floor(value+.5)))
+end
+-- One bar's settings become the fields the shared row code already reads.
+-- `live` (a setting was just edited, out of combat) keeps a geometry saved by
+-- /sqedit at the same on-screen icon scale when the bar's natural width changes.
+local function applyBar(bar,s,live)
+    local size,per=clamp(s.size,30,16,64),clamp(s.perRow,12,1,24)
+    local oldWidth,oldSize,oldLeft=bar.size and bar.size*bar.config.perrow,bar.size,bar['growth-x']=='LEFT'
+    bar.size=size;bar.visibleLimit=clamp(s.max,36,1,80)
+    bar['growth-x']=s.growthX=='RIGHT' and 'RIGHT' or 'LEFT';bar['growth-y']=s.growthY=='UP' and 'UP' or 'DOWN'
+    bar.initialAnchor=(bar['growth-y']=='DOWN' and 'TOP' or 'BOTTOM')..(bar['growth-x']=='LEFT' and 'RIGHT' or 'LEFT')
+    bar.config={perrow=per,sortMethod=s.sortMethod=='NAME' and 'NAME' or 'TIME_REMAINING',
+        sortDirection=s.sortDirection=='ASCENDING' and 'ASCENDING' or 'DESCENDING',countPosition='BOTTOMRIGHT',countYOffset=2,
+        countFontSize=clamp(s.countSize,10,6,24),tooltipAnchorType='ANCHOR_BOTTOMLEFT'}
+    bar.countdown=s.countdown~=false;bar.countdownSize=clamp(s.countdownSize,11,6,24)
+    bar.enabled=s.enable~=false
+    bar:SetSize(per*size,size);bar:SetShown(bar.enabled)
+    countdownFont(bar)
+    local width=per*size
+    if not live or not oldWidth or oldWidth==width and oldLeft==(bar['growth-x']=='LEFT') then return false end
+    local editor=ns.LayoutEditor
+    local rect=editor and editor.Read and editor:Read('player_'..bar.key:lower())
+    if rect and number(rect.w) and number(rect.x) then
+        local wide=rect.w*width/oldWidth
+        if oldLeft then rect.x=rect.x+rect.w-wide end -- the anchored right end stays put
+        rect.w=wide
+        if number(rect.h) then rect.h=rect.h*size/oldSize end
+    end
+    return true
+end
+for _,bar in ipairs(playerBars) do applyBar(bar,UF.auraDefaults.bars[bar.key]) end
 local function cancel(button)
     -- Out of combat only: the client refuses addon cancels during combat.
+    -- Weapon enchants are not cancelled here: CancelItemTempEnchantment is
+    -- reserved for secure code.
     if InCombatLockdown() or not button.auraInstanceID then return end
     for index=1,255 do
         local aura=C_UnitAuras.GetAuraDataByIndex('player',index,'HELPFUL')
@@ -454,30 +509,71 @@ local function playerIcon(bar,index)
     local button=bar[index]
     if not button then
         button=newIcon(bar,bar);bar[index]=button
-        if button.Cooldown.SetHideCountdownNumbers then button.Cooldown:SetHideCountdownNumbers(false) end
-        if button.Cooldown.SetCountdownFont then
-            if not UF.auraCountdownFont then
-                UF.auraCountdownFont=CreateFont('SquanchOnAuraCountdown')
-                UF.auraCountdownFont:SetFont(UF:Font(UF.db.font),11,'OUTLINE')
-            end
-            button.Cooldown:SetCountdownFont('SquanchOnAuraCountdown')
-        end
+        local font=button.Cooldown.SetCountdownFont and (bar.countdownFont and bar.countdownFont:GetName() or countdownFont(bar))
+        if font then button.Cooldown:SetCountdownFont(font) end
         if bar.key=='Buffs' then
             button:RegisterForClicks('RightButtonUp');button:SetScript('OnClick',cancel)
+            button:HookScript('OnEnter',function(self)
+                if not self.sqEnchant or GameTooltip:IsForbidden() then return end
+                GameTooltip:SetOwner(self,'ANCHOR_BOTTOMLEFT')
+                if GameTooltip.SetInventoryItem then GameTooltip:SetInventoryItem('player',15+self.sqEnchant) end
+            end)
         end
     end
     return button
+end
+-- Temporary weapon enchants (main hand 1, off hand 2) join the buff bar. The
+-- client reports only the time left, so the first value seen is the swipe's span.
+local enchantState,enchantList={},{}
+local enchantTicker,enchantSeen,lastMain,lastOff
+local function enchantAura(hand,has,left,charges,id)
+    local state=enchantState[hand]
+    if not public(has) or not has or not number(left) then enchantState[hand]=nil;return end
+    if not public(id) then id=nil end
+    local expires=GetTime()+left/1000
+    if not state or state.id~=id or expires>state.expires+2 then
+        state={id=id,total=math.max(1,left/1000),aura={enchant=hand,name='WeaponEnchant'..hand}};enchantState[hand]=state
+    end
+    state.expires=expires
+    local aura=state.aura
+    aura.icon=GetInventoryItemTexture and GetInventoryItemTexture('player',15+hand) or 134400
+    aura.duration=state.total;aura.start=expires-state.total;aura.expirationTime=expires
+    aura.applications=number(charges) and charges or 0
+    return aura
+end
+local function text(value) return public(value) and tostring(value) or '?' end
+local function enchantTick()
+    local main,mainLeft,mainCharges,mainID,off,offLeft,offCharges,offID=GetWeaponEnchantInfo()
+    local seen=text(main)..text(mainCharges)..text(mainID)..text(off)..text(offCharges)..text(offID)
+    local renewed=number(mainLeft) and lastMain and mainLeft>lastMain+2000 or number(offLeft) and lastOff and offLeft>lastOff+2000
+    lastMain,lastOff=number(mainLeft) and mainLeft or nil,number(offLeft) and offLeft or nil
+    if seen~=enchantSeen or renewed then enchantSeen=seen;UF:RefreshPlayerBars() end
+end
+local function weaponEnchants()
+    local count=0
+    if showEnchants and GetWeaponEnchantInfo then
+        local main,mainLeft,mainCharges,mainID,off,offLeft,offCharges,offID=GetWeaponEnchantInfo()
+        local aura=enchantAura(1,main,mainLeft,mainCharges,mainID)
+        if aura then count=count+1;enchantList[count]=aura end
+        aura=enchantAura(2,off,offLeft,offCharges,offID)
+        if aura then count=count+1;enchantList[count]=aura end
+    end
+    -- The 1 s check runs only while an enchant is up (expiry raises no reliable event).
+    if count>0 and not enchantTicker and C_Timer and C_Timer.NewTicker then enchantTicker=C_Timer.NewTicker(1,enchantTick)
+    elseif count==0 and enchantTicker then enchantTicker:Cancel();enchantTicker=nil;enchantSeen=nil end
+    return count
 end
 function UF:RefreshPlayerBars()
     if not self.db then return end
     for _,bar in ipairs(playerBars) do
         local used=0
-        if self.auraTest then
+        if not bar.enabled then -- hidden bar: nothing is read or drawn
+        elseif self.auraTest then
             for index=1,self.auraTest do
                 local button=playerIcon(bar,index)
-                local aura={test=true,icon=testIcons[bar.key][(index-1)%#testIcons[bar.key]+1],duration=30+index*15,
+                local aura={test=true,icon=testIcons[bar.key][(index-1)%#testIcons[bar.key]+1],duration=30+index*15,start=GetTime()-(30+index*15)*.4,
                     expirationTime=GetTime()+index*20,applications=index%3==0 and index or 1,name=bar.key..index}
-                button.sqAura=aura;button.sqRank=0;used=index
+                button.sqAura=aura;button.sqRank=0;button.sqEnchant=nil;used=index
                 paintIcon(button,bar,bar,'player',aura,bar.key)
             end
         else
@@ -485,8 +581,17 @@ function UF:RefreshPlayerBars()
                 local aura=auraAt('player',bar.filter,index)
                 if not aura then break end
                 local button=playerIcon(bar,index)
-                button.sqAura=aura;button.sqRank=0;used=index
+                button.sqAura=aura;button.sqRank=0;button.sqEnchant=nil;used=index
                 paintIcon(button,bar,bar,'player',aura,bar.key)
+            end
+            if bar.key=='Buffs' then
+                for index=1,weaponEnchants() do
+                    local aura=enchantList[index]
+                    used=used+1
+                    local button=playerIcon(bar,used)
+                    button.sqAura=aura;button.sqRank=0;button.sqEnchant=aura.enchant
+                    paintIcon(button,bar,bar,'player',aura,bar.key)
+                end
             end
         end
         for index=used+1,#bar do bar[index]:Hide();bar[index].sqAura=nil end
@@ -513,25 +618,77 @@ end
 -- whether or not this client protects those frames, and SetShown or a
 -- parent-driven show cannot bring them back.
 local attic=CreateFrame('Frame');attic:Hide()
+-- Frames cannot list their events; these are the ones the game's aura rows use.
+local nativeEvents={'UNIT_AURA','PLAYER_ENTERING_WORLD','GROUP_ROSTER_UPDATE','PLAYER_SPECIALIZATION_CHANGED',
+    'WEAPON_ENCHANT_CHANGED','UNIT_INVENTORY_CHANGED','PLAYER_REGEN_ENABLED','PLAYER_REGEN_DISABLED',
+    'UNIT_ENTERED_VEHICLE','UNIT_EXITED_VEHICLE','CVAR_UPDATE','EDIT_MODE_LAYOUTS_UPDATED'}
+local retired={}
 local function retire(native)
     if not native or native:GetParent()==attic then return true end
     if InCombatLockdown() then return false end
+    local saved={parent=native:GetParent(),events={}}
+    for _,event in ipairs(nativeEvents) do
+        local ok,registered,unit,second=pcall(native.IsEventRegistered,native,event)
+        if ok and registered then saved.events[event]={unit,second} end
+    end
+    retired[native]=saved
     native:UnregisterAllEvents();native:SetParent(attic)
+    return true
+end
+-- Back under its own parent with the events it had. No native method is called
+-- from here (that would taint its state): it redraws on its next own event.
+local function restore(native)
+    local saved=native and retired[native]
+    if not saved or native:GetParent()~=attic then return true end
+    if InCombatLockdown() then return false end
+    native:SetParent(saved.parent)
+    for event,units in pairs(saved.events) do
+        if type(units[1])=='string' then pcall(native.RegisterUnitEvent,native,event,units[1],units[2])
+        else pcall(native.RegisterEvent,native,event) end
+    end
+    retired[native]=nil
     return true
 end
 local playerPending
 local function settle()
-    local retired=retire(BuffFrame)
-    retired=retire(DebuffFrame) and retired
+    local change=UF:AuraSettings().hideBlizzard~=false and retire or restore
+    local done=change(BuffFrame)
+    done=change(DebuffFrame) and done
     local placed=UF:PlacePlayerBars()
     -- UF.db is missing until the unit frames initialise, which also waits for combat.
-    playerPending=not (retired and placed and UF.db) or nil
-    UF:RefreshPlayerBars()
+    playerPending=not (done and placed and UF.db) or nil
+    UF:ApplyAuraSettings()
+end
+-- Reads SquanchOnDB.auras into the locals and row fields the painters use, then
+-- repaints. `live` marks an edit made in the options window.
+function UF:ApplyAuraSettings(live)
+    local settings=self:AuraSettings();local cell=settings.cell
+    styleRev=styleRev+1
+    cellRim,cellSwipe,cellNumbers=cell.rim~=false,cell.swipe~=false,cell.numbers==true
+    desatAll,desatSaved=cell.desaturate=='ALWAYS',cell.desaturate~='ALWAYS' and cell.desaturate~='NEVER'
+    countFont=type(cell.countFont)=='string' and cell.countFont~='' and cell.countFont or nil
+    countSize=number(cell.countSize) and cell.countSize or nil
+    countPosition=type(cell.countPosition)=='string' and cell.countPosition or nil
+    showEnchants=settings.weaponEnchants~=false
+    local moved=false
+    for _,bar in ipairs(playerBars) do moved=applyBar(bar,settings.bars[bar.key],live) or moved end
+    if moved then self:PlacePlayerBars() end
+    if not self.db then return end
+    for _,frame in ipairs(self.objects) do if frame.db then self:RefreshAuraIcons(frame) end end
+    self:RefreshPlayerBars()
+end
+-- The "hide the game's rows" switch; false while combat postpones it.
+function UF:ApplyNativeAuraRows()
+    settle()
+    return not playerPending
 end
 local playerEvents=CreateFrame('Frame')
 playerEvents:RegisterEvent('PLAYER_LOGIN');playerEvents:RegisterEvent('PLAYER_ENTERING_WORLD');playerEvents:RegisterEvent('PLAYER_REGEN_ENABLED')
-playerEvents:SetScript('OnEvent',function(_,event)
-    if event~='PLAYER_REGEN_ENABLED' then settle()
+playerEvents:RegisterEvent('UNIT_INVENTORY_CHANGED');pcall(playerEvents.RegisterEvent,playerEvents,'WEAPON_ENCHANT_CHANGED')
+playerEvents:SetScript('OnEvent',function(_,event,unit)
+    if event=='UNIT_INVENTORY_CHANGED' or event=='WEAPON_ENCHANT_CHANGED' then
+        if showEnchants and (event~='UNIT_INVENTORY_CHANGED' or unit=='player') then UF:RefreshPlayerBars() end
+    elseif event~='PLAYER_REGEN_ENABLED' then settle()
     -- Next frame: the unit frames finish their own post-combat start first.
     elseif playerPending then C_Timer.After(0,settle) end
 end)

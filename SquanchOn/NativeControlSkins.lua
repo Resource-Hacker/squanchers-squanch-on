@@ -822,6 +822,20 @@ local function compactSettings(frame)
     local strata = frame:GetFrameStrata()
     if strata == "BACKGROUND" or strata == "LOW" or strata == "MEDIUM" then frame:SetFrameStrata("HIGH") end
     local db = ns.db
+    -- One-time default place: top centre, clear of the HUD along the bottom of
+    -- the screen (the body is as translucent as the chat). A placement the
+    -- owner made by dragging or in /sqedit is never replaced.
+    if db and not db.settingsTopPlacement and ns.LayoutEditor and ns.LayoutWindows then
+        local id, editor = "window_SettingsPanel", ns.LayoutEditor
+        local record = editor:Copy(editor:Read(id)) or { scale = SETTINGS_SCALE }
+        if not record.placed then
+            record.x, record.y = nil, nil
+            record.nativeAnchor = { "TOP", "TOP", 0, -12 / (record.scale or SETTINGS_SCALE) }
+            editor:Store(id, record)
+            ns.LayoutWindows:Apply(id, frame)
+        end
+        db.settingsTopPlacement = true
+    end
     if not db or db.settingsCompactScale then return end
     -- One-time, through the window's geometry owner (LayoutWindows reapplies the
     -- stored scale after native resets); later editor resizing wins.

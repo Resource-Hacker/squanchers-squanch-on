@@ -314,30 +314,64 @@ local function newAura(frame,key)
     end
     return container
 end
--- Player and target carry both rows on one line above the frame: one kind from
--- each end, growing toward the middle and leaving a clear gap, with overflow
--- stacking upward on its own side. Player: debuffs left, buffs right. Target:
--- buffs left, debuffs right.
-local splitSides={player={Debuffs='LEFT',Buffs='RIGHT'},target={Buffs='LEFT',Debuffs='RIGHT'}}
--- Small secondary frames carry no aura rows (owner, 2026-11-11).
-local noAuras={targettarget=true,targettargettarget=true,pettarget=true,focustarget=true}
+-- Aura settings (SquanchOnDB.auras). The defaults are the layout that was fixed
+-- in code before these settings existed.
+-- split: player and target carry both rows on one line beside the frame: one
+-- kind from each end, growing toward the middle and leaving a clear gap, with
+-- overflow stacking on its own side. `left` names the kind on the left end;
+-- `cells` (optional) replaces the frame's saved icons-per-row.
+-- small: false keeps the frame without aura rows (owner, 2026-11-11); true
+-- lets its saved rows apply.
+-- cell: optional countFont, countSize and countPosition replace each row's saved value.
+UF.auraDefaults={
+    split={
+        player={enable=true,left='Debuffs',gap=1,rows=4,yOffset=5,grow='UP',allBuffs=true},
+        target={enable=true,left='Buffs',gap=1,rows=4,yOffset=5,grow='UP',allBuffs=false}},
+    small={targettarget=false,targettargettarget=false,pettarget=false,focustarget=false},
+    cell={rim=true,desaturate='SAVED',swipe=true,numbers=false},
+    bars={
+        Buffs={enable=true,size=30,perRow=12,max=36,growthX='LEFT',growthY='DOWN',sortMethod='TIME_REMAINING',
+            sortDirection='DESCENDING',countdown=true,countdownSize=11,countSize=10},
+        Debuffs={enable=true,size=30,perRow=12,max=36,growthX='LEFT',growthY='DOWN',sortMethod='TIME_REMAINING',
+            sortDirection='DESCENDING',countdown=true,countdownSize=11,countSize=10}},
+    hideBlizzard=true,weaponEnchants=true,previewCount=6}
+local function fillAuraDefaults(target,defaults)
+    for key,value in pairs(defaults) do
+        if type(value)=='table' then
+            if type(target[key])~='table' then target[key]={} end
+            fillAuraDefaults(target[key],value)
+        elseif target[key]==nil then target[key]=value end
+    end
+end
+local auraFilled
+function UF:AuraSettings()
+    local db=ns.db;if not db then return self.auraDefaults end
+    local settings=db.auras
+    if type(settings)~='table' then settings={};db.auras=settings end
+    if auraFilled~=settings then fillAuraDefaults(settings,self.auraDefaults);auraFilled=settings end
+    return settings
+end
 local function configureAura(frame,key,config)
     local c=frame[key]
-    if noAuras[frame.squancherKey] then config=Import:Copy(config);config.enable=false end
-    local side=splitSides[frame.squancherKey] and splitSides[frame.squancherKey][key]
+    local settings=UF:AuraSettings()
+    if settings.small[frame.squancherKey]==false then config=Import:Copy(config);config.enable=false end
+    local split=settings.split[frame.squancherKey]
+    local side=split and split.enable and (split.left==key and 'LEFT' or 'RIGHT')
     if side then
-        local cells=numeric(config.perrow,10,4,40)
+        local cells=numeric(split.cells or config.perrow,10,4,40)
+        local down=split.grow=='DOWN'
+        local lift=numeric(split.yOffset,5,-100,100)
         config=Import:Copy(config)
         config.enable=true;config.attachTo='FRAME';config.sizeOverride=0
-        config.anchorPoint=side=='LEFT' and 'TOPLEFT' or 'TOPRIGHT'
-        config.growthX=side=='LEFT' and 'RIGHT' or 'LEFT';config.growthY='UP'
-        config.xOffset=0;config.yOffset=5
-        config.perrow=math.max(1,math.floor((cells-1)/2));config.numrows=4
+        config.anchorPoint=(down and 'BOTTOM' or 'TOP')..side
+        config.growthX=side=='LEFT' and 'RIGHT' or 'LEFT';config.growthY=down and 'DOWN' or 'UP'
+        config.xOffset=0;config.yOffset=down and -lift or lift
+        config.perrow=math.max(1,math.floor((cells-numeric(split.gap,1,0,38))/2));config.numrows=numeric(split.rows,4,1,8)
         -- The player's saved buff filter keeps only defensives (it was written
         -- for a hidden row); on the shared line every buff is shown.
-        if frame.squancherKey=='player' and key=='Buffs' then config.filterLists=nil;config.priority='' end
-        c.cellsAcross=cells
-    else c.cellsAcross=nil end
+        if split.allBuffs and key=='Buffs' then config.filterLists=nil;config.priority='' end
+        c.cellsAcross=cells;c.splitLift=down and 0 or lift
+    else c.cellsAcross=nil;c.splitLift=nil end
     local perRow=numeric(config.perrow,8,1,40)
     local size=numeric(config.sizeOverride,0,0,100)
     -- Cells abut like the action bars; the saved spacing only applies to a fixed size.
@@ -372,7 +406,7 @@ local function configureAura(frame,key,config)
     -- Split rows clear an attached class bar while it shows segments.
     c.squancherPlace=function()
         local bar,first=frame.db.classbar,frame.ClassPower and frame.ClassPower[1]
-        local lifted=side and first and first:IsShown() and frame.ClassBarHolder:IsShown() and not (bar and bar.detachFromFrame)
+        local lifted=side and growthY=='UP' and first and first:IsShown() and frame.ClassBarHolder:IsShown() and not (bar and bar.detachFromFrame)
         c.classLift=lifted and (bar and bar.height or 10)+3 or 0
         c:ClearAllPoints();setPoint(c,c.initialAnchor,relative,anchorPoint,x,y+c.classLift)
     end
@@ -427,6 +461,18 @@ local function configureAura(frame,key,config)
         return not public(button.isPlayer) or not public(duration)
     end
     if enabled(config) then c:Show() else c:Hide() end
+end
+-- Live re-layout after an aura setting changes. Rows are unprotected children,
+-- but the caller still keeps this out of combat.
+function UF:ConfigureAuras(key)
+    for _,frame in ipairs(self.objects) do
+        local c=frame.db
+        if c and frame.Buffs and frame.Debuffs and (not key or frame.squancherKey==key) then
+            configureAura(frame,'Buffs',c.buffs);configureAura(frame,'Debuffs',c.debuffs)
+            if self.LayoutGlows and frame.squancherState then self:LayoutGlows(frame) end
+            if self.RefreshAuraIcons then self:RefreshAuraIcons(frame);self:RefreshAuraBars(frame) end
+        end
+    end
 end
 
 local function castColor(cast,failed)

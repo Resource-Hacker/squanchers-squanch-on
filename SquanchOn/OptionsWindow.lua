@@ -777,7 +777,7 @@ function Window:Build()
     local border = skin and skin:Panel(frame, 'dialog', 0)
     local fill = frame:CreateTexture(nil, 'BACKGROUND'); fill:SetTexture([[Interface\Buttons\WHITE8X8]])
     if border then skin:StylePanelBackground(fill, border) else fill:SetAllPoints(); fill:SetVertexColor(.05, .05, .05, .7) end
-    local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, .82)
+    local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, 0) -- owner: same body as the chat panel
     local point = saved().point
     if type(point) == 'table' and point[1] then frame:SetPoint(point[1], UIParent, point[2] or point[1], point[3] or 0, point[4] or 0)
     else frame:SetPoint('CENTER') end

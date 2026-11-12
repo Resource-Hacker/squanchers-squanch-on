@@ -71,4 +71,16 @@ SocialDrawer.lua
 QuestDrawer.lua
 OptionsWindow.lua
 options/General.lua
+options/Mouselook.lua
+options/Reticle.lua
+options/TargetRing.lua
+options/Nameplates.lua
+options/Tooltip.lua
+options/UnitFrames.lua
+options/Layout.lua
+options/Camera.lua
+options/Auras.lua
+options/Appearance.lua
+options/Chat.lua
+options/Windows.lua
 options/About.lua

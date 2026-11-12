@@ -9,7 +9,71 @@ local BORDER_ALPHA = 0.95
 Skin.borderAlpha = BORDER_ALPHA
 -- Action-slot reference for every neutral inner outline.
 Skin.innerBorderColor = {0.70, 0.532, 0.294, 1}
-local PANEL_GREY, PANEL_ALPHA = 0.054901964962482, 0.66216158866882
+local PANEL_R, PANEL_G, PANEL_B, PANEL_ALPHA = 0.054901964962482, 0.054901964962482, 0.054901964962482, 0.66216158866882
+local FACE_BRIGHTNESS = 1
+-- The values above are the shipped theme. Edited values live in ns.db.theme and
+-- ns.db.chat (only keys that were changed); Skin:ApplyTheme reloads the locals
+-- and retints everything recorded below. Consumers in other files may read the
+-- live tables Skin.innerBorderColor, Skin.headerTextColor, Skin.bodyTextColor
+-- and Skin.borderAlpha, and subscribe with Skin:OnTheme(fn).
+Skin.themeDefaults = {
+    rim = { r = 0.90, g = 0.684, b = 0.378 }, rimAlpha = 0.95,
+    inner = { r = 0.70, g = 0.532, b = 0.294 },
+    fill = { r = 0.054901964962482, g = 0.054901964962482, b = 0.054901964962482 }, fillAlpha = 0.66216158866882,
+    buttonBrightness = 1,
+    headerText = { r = 0.90, g = 0.684, b = 0.378 }, bodyText = { r = 0.9, g = 0.9, b = 0.86 },
+}
+Skin.chatDefaults = {
+    tabFont = "Bui Homizio", tabSize = 10, tabHeight = 22,
+    iconStrip = true, friends = true, voice = true,
+    toastScale = 0.7, toastTheme = true, compactChannels = true,
+    -- fillAlpha: nil follows the theme's panel opacity.
+}
+Skin.chatTimestampFormat = "|cffb2b2b2[%H:%M]|r "
+Skin.headerTextColor = { 0.90, 0.684, 0.378 }
+Skin.bodyTextColor = { 0.9, 0.9, 0.86 }
+Skin.themeListeners = {}
+local function stored(area, defaults, key)
+    local db = ns.db or SquanchOnDB
+    local values = type(db) == "table" and db[area]
+    local value
+    if type(values) == "table" then value = values[key] end
+    if value == nil then return defaults[key] end
+    return value
+end
+function Skin:Theme(key) return stored("theme", self.themeDefaults, key) end
+function Skin:ChatSetting(key) return stored("chat", self.chatDefaults, key) end
+function Skin:OnTheme(fn) self.themeListeners[#self.themeListeners + 1] = fn end
+local function themeColor(key)
+    local color, default = Skin:Theme(key), Skin.themeDefaults[key]
+    if type(color) ~= "table" then color = default end
+    return tonumber(color.r) or default.r, tonumber(color.g) or default.g, tonumber(color.b) or default.b
+end
+local function loadTheme()
+    BORDER_R, BORDER_G, BORDER_B = themeColor("rim")
+    BORDER_ALPHA = tonumber(Skin:Theme("rimAlpha")) or Skin.themeDefaults.rimAlpha
+    Skin.borderAlpha = BORDER_ALPHA
+    local inner = Skin.innerBorderColor
+    inner[1], inner[2], inner[3] = themeColor("inner")
+    PANEL_R, PANEL_G, PANEL_B = themeColor("fill")
+    PANEL_ALPHA = tonumber(Skin:Theme("fillAlpha")) or Skin.themeDefaults.fillAlpha
+    FACE_BRIGHTNESS = tonumber(Skin:Theme("buttonBrightness")) or 1
+    local header, body = Skin.headerTextColor, Skin.bodyTextColor
+    header[1], header[2], header[3] = themeColor("headerText")
+    body[1], body[2], body[3] = themeColor("bodyText")
+end
+-- What ApplyTheme revisits. Weak keys: released pool textures drop out.
+local weak = { __mode = "k" }
+local tinted = setmetatable({}, weak)         -- texture -> enabled, via TintChrome
+local innerTinted = setmetatable({}, weak)    -- unit inner outline pieces
+local fills = setmetatable({}, weak)          -- texture -> true | "chat"
+local rimAlphaRegions = setmetatable({}, weak) -- dividers and seams at rim opacity
+local appliedRimAlpha = BORDER_ALPHA          -- rim opacity last written to frames
+local function paintFill(texture, chat)
+    fills[texture] = chat and "chat" or true
+    local alpha = chat and tonumber(Skin:ChatSetting("fillAlpha")) or PANEL_ALPHA
+    texture:SetColorTexture(PANEL_R, PANEL_G, PANEL_B, alpha)
+end
 local BORDER_ATLAS = "UI-Character-Info-GearSlot"
 local WHITE = [[Interface\Buttons\WHITE8X8]]
 -- Exact client atlas:55x55 logical units (110x110 raw). The painted rim runs
@@ -30,6 +94,7 @@ function Skin:TintChrome(texture, enabled)
     if not texture then return end
     local _, _, _, alpha = texture:GetVertexColor()
     local shade = enabled == false and 0.50 or 1
+    tinted[texture] = enabled ~= false
     texture:SetDesaturated(true)
     texture:SetVertexColor(BORDER_R * shade, BORDER_G * shade, BORDER_B * shade, alpha)
 end
@@ -211,6 +276,7 @@ function Skin:TexturedUnitOutline(frame, width, exclusion)
         texture:SetSnapToPixelGrid(false);texture:SetTexelSnappingBias(0)
         atlasSlice(texture,unpack(sample))
         texture:SetVertexColor(unpack(Skin.innerBorderColor))
+        innerTinted[texture] = true
         texture:Show()
     end
     for name,r in pairs(rects) do
@@ -243,7 +309,7 @@ end
 
 function Skin:StylePanelBackground(texture, border)
     texture:SetVertexColor(1, 1, 1, 1)
-    texture:SetColorTexture(PANEL_GREY, PANEL_GREY, PANEL_GREY, PANEL_ALPHA)
+    paintFill(texture)
     self:FitPanelBackground(texture, border)
 end
 
@@ -299,7 +365,7 @@ function Skin:BagSlotFill(border, frame)
         fill:SetIgnoreParentAlpha(true)
         fill.texture=fill:CreateTexture(nil,"BACKGROUND")
         fill.texture:SetAllPoints(fill)
-        fill.texture:SetColorTexture(PANEL_GREY,PANEL_GREY,PANEL_GREY,PANEL_ALPHA)
+        paintFill(fill.texture)
         border.slotFill=fill
     end
     self:FitPanelBackground(fill, border)
@@ -346,7 +412,7 @@ function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
         fill:SetIgnoreParentAlpha(true)
         fill.texture=fill:CreateTexture(nil,"BACKGROUND")
         fill.texture:SetAllPoints(fill)
-        fill.texture:SetColorTexture(PANEL_GREY,PANEL_GREY,PANEL_GREY,PANEL_ALPHA)
+        paintFill(fill.texture)
         border.slotFill=fill
         border.baseAlpha=BORDER_ALPHA
         border.control=frame
@@ -424,6 +490,7 @@ function Skin:Divider(parent, width)
     local line = parent:CreateTexture(nil, "BORDER")
     atlasSlice(line, 13, 4.5, 42, 9)
     line:SetAlpha(BORDER_ALPHA)
+    rimAlphaRegions[line] = true
     line:SetHeight(4.5)
     line.paintCenter = 2.25
     self:SizeDivider(line, width)
@@ -454,7 +521,7 @@ end
 
 local function tintHeader(header)
     if not header then return end
-    if ns.NativeText then ns.NativeText:Header(header.Text,10) end
+    if ns.NativeText then ns.NativeText:Header(header.Text,"compactHeader") end
     -- Native headers keep their text, collapse/filter controls and layout.
     -- A thin Quests rule separates the expanded list without boxing each entry.
     -- Native AddAnim restores alpha to1; hide the art so it cannot repaint the slab.
@@ -508,7 +575,7 @@ local function tintTrackerBlocks(module)
     tintHeader(module.Header)
     for _,blocks in pairs(module.usedBlocks or {}) do
         for _,block in pairs(blocks) do
-            if ns.NativeText then ns.NativeText:Header(block.HeaderText,module == QuestObjectiveTracker and 8 or 9) end
+            if ns.NativeText then ns.NativeText:Header(block.HeaderText,module == QuestObjectiveTracker and "questHeader" or 9) end
             -- Native title links remain; omit the oversized map-navigation orb.
             local poi=block.poiButton
             if poi then poi:SetAlpha(0) end
@@ -538,7 +605,7 @@ function Skin:FitTracker()
         -- Use the exact same color/opacity as the chat panel, including in combat.
         local background = tracker:CreateTexture(nil, "BACKGROUND", nil, -8)
         background:SetAllPoints(shell)
-        background:SetColorTexture(PANEL_GREY, PANEL_GREY, PANEL_GREY, PANEL_ALPHA)
+        paintFill(background)
         self.questBackground = background
         self.questFrame = shell
     end
@@ -635,9 +702,10 @@ function Skin:RaisedPlate(frame, style)
         if not enabled then top, bottom = 0.09, 0.045
         elseif pressed then top, bottom = 0.045, 0.12
         elseif hovered then top, bottom = 0.23, 0.085 end
+        top, bottom = math.min(1, top * FACE_BRIGHTNESS), math.min(1, bottom * FACE_BRIGHTNESS)
         face:SetGradient("VERTICAL", CreateColor(bottom, bottom, bottom, 1),
             CreateColor(top, top, top, 1))
-        local gold = enabled and (hovered and 1 or 0.70 / BORDER_R) or 0.30 / BORDER_R
+        local gold = enabled and (hovered and 1 or 0.70 / 0.90) or 0.30 / 0.90
         for side, edge in pairs(edges) do
             if side == "TOP" or side == "BOTTOM" then edge:SetHeight(2 * pixel)
             else edge:SetWidth(2 * pixel) end
@@ -648,6 +716,7 @@ function Skin:RaisedPlate(frame, style)
         end
     end
     border.raisedPaint, border.raisedFace, border.raisedEdges = paint, face, edges
+    border.raisedRepaint = function() paint(stateEnabled, statePressed, stateHovered) end
     frame:HookScript("OnSizeChanged", function() paint(stateEnabled, statePressed, stateHovered) end)
     paint(true, false, false)
     return paint, border
@@ -894,8 +963,8 @@ local function nativeTabStyle(tab, selected, joinedLeft)
             if region then region:SetAlpha(0) end
         end
     end
-    tab.Text:SetFont(ns.Media:Resolve("font","Bui Homizio"),10,"OUTLINE")
-    tab:SetHeight(22)
+    tab.Text:SetFont(ns.Media:Resolve("font",Skin:ChatSetting("tabFont")),Skin:ChatSetting("tabSize"),"OUTLINE")
+    tab:SetHeight(Skin:ChatSetting("tabHeight"))
     tab.Text:ClearAllPoints();tab.Text:SetPoint("CENTER",tab,"CENTER",0,-1)
     local state = chatTabPlates[tab]
     if not state then
@@ -933,7 +1002,7 @@ local function nativeTabStyle(tab, selected, joinedLeft)
     if not title or issecretvalue and issecretvalue(title) then return end
     -- The raised face carries selection; native docking, alerts and input stay intact.
     tab.Text:SetText(title)
-    if selected then tab.Text:SetTextColor(1,1,1) else tab.Text:SetTextColor(BORDER_R,BORDER_G,BORDER_B) end
+    if selected then tab.Text:SetTextColor(1,1,1) else tab.Text:SetTextColor(unpack(Skin.headerTextColor)) end
 end
 
 -- Native dynamic tabs use an extra -1 offset and resize after the color hook.
@@ -950,7 +1019,8 @@ function Skin:AlignChatTabs(dock)
             break
         end
     end
-    scroll:SetHeight(22);child:SetHeight(22)
+    local tabHeight = self:ChatSetting("tabHeight")
+    scroll:SetHeight(tabHeight);child:SetHeight(tabHeight)
     local lastStatic, lastDynamic
     local hasStatic = false
     for _, chat in ipairs(dock.DOCKED_CHAT_FRAMES or {}) do
@@ -1014,6 +1084,7 @@ function Skin:FitChatIconStrip(widths)
             seam = strip:CreateTexture(nil, "BORDER")
             atlasSlice(seam, 46, 13, 50, 42)
             seam:SetAlpha(BORDER_ALPHA)
+            rimAlphaRegions[seam] = true
             strip.seams[index] = seam
         end
         seam:ClearAllPoints()
@@ -1033,6 +1104,11 @@ function Skin:PinChatFriends(width, height, cellScale)
     local friends, strip = QuickJoinToastButton, self.chatIconStrip
     if not friends or not strip or friends.squancherPinning then return end
     if InCombatLockdown() then self.pending = true; return end
+    if not self:ChatSetting("friends") then
+        -- Hidden, NativeActionBars leaves the cell out of the strip.
+        if friends:IsShown() then self.chatFriendsHidden = true; friends:Hide() end
+        return
+    end
     if width then self.chatIconCell = { width, height, cellScale } end
     local cell = self.chatIconCell or { 32, 40, 0.5 }
     friends.squancherPinning = true
@@ -1051,15 +1127,15 @@ end
 -- and fade animations stay with the toast; only its anchor, scale and chrome
 -- change. DIALOG (BNToastFrame's native strata) keeps the transient toast
 -- above any drawer window opened on the same edge.
-local CHAT_TOAST_SCALE, CHAT_TOAST_GAP, CHAT_TOAST_TEXT = 0.7, 2, 8
+local CHAT_TOAST_GAP, CHAT_TOAST_TEXT = 2, 8
 function Skin:FitChatToast(toast)
     local panel = self.chatPanel
-    if not toast or not panel or toast.squancherToastFitting then return end
+    if not toast or not panel or toast.squancherToastFitting or not self:ChatSetting("toastTheme") then return end
     toast.squancherToastFitting = true
     local parent = toast:GetParent() or UIParent
     local panelScale, parentScale = panel:GetEffectiveScale(), parent:GetEffectiveScale()
     local width = toast:GetWidth()
-    local scale = CHAT_TOAST_SCALE
+    local scale = self:ChatSetting("toastScale")
     if width > 0 then scale = math.min(scale, panel:GetWidth() / width) end
     toast:SetScale(scale * panelScale / parentScale)
     local ratio = panelScale / toast:GetEffectiveScale()
@@ -1163,7 +1239,7 @@ function Skin:Chat()
     if settings and settings.chatTimestampRestored~=2 then
         -- Native formatter uses this string verbatim; source brackets and its
         -- custom RGB(.7,.7,.7) colour are literal parts of the format.
-        C_CVar.SetCVar("showTimestamps", "|cffb2b2b2[%H:%M]|r ")
+        C_CVar.SetCVar("showTimestamps", self.chatTimestampFormat)
         settings.chatTimestampRestored=2
     end
     if not self.chatCompactPrefixInstalled and ChatFrameUtil and ChatFrameUtil.ResolvePrefixedChannelName then
@@ -1172,7 +1248,7 @@ function Skin:Chat()
         -- This helper supplies display text only. Native MessageFormatter keeps
         -- the actual channel hyperlink ID, message/event owner and metadata.
         ChatFrameUtil.ResolvePrefixedChannelName=function(channel)
-            if type(channel)=="string" and (not issecretvalue or not issecretvalue(channel)) then
+            if Skin:ChatSetting("compactChannels") and type(channel)=="string" and (not issecretvalue or not issecretvalue(channel)) then
                 local number=channel:match("^([1-9]%d*)%. ")
                 if number then return number end
             end
@@ -1191,7 +1267,7 @@ function Skin:Chat()
         local fill=panel:CreateTexture(nil,"BACKGROUND",nil,-8)
         fill:SetAllPoints(panel)
         -- Actual old panelColor. The black ADD aura never darkened this fill.
-        fill:SetColorTexture(PANEL_GREY, PANEL_GREY, PANEL_GREY, PANEL_ALPHA)
+        paintFill(fill, true)
         local rim=self:Panel(panel,"compact",0);rim:SetFrameStrata("BACKGROUND")
         self.chatBackground=fill
         self:FitPanelBackground(fill,rim)
@@ -1269,9 +1345,12 @@ function Skin:Chat()
         local inset=chatInnerInset()
         dock:SetPoint("TOPLEFT",panel,"TOPLEFT",inset,-2)
         dock:SetPoint("TOPRIGHT",panel,"TOPRIGHT",-inset,-2)
-        dock:SetHeight(22)
-        if GeneralDockManagerScrollFrame then GeneralDockManagerScrollFrame:SetHeight(22) end
-        if GeneralDockManagerScrollFrameChild then GeneralDockManagerScrollFrameChild:SetHeight(22) end
+    end
+    if dock then
+        local tabHeight=self:ChatSetting("tabHeight")
+        dock:SetHeight(tabHeight)
+        if GeneralDockManagerScrollFrame then GeneralDockManagerScrollFrame:SetHeight(tabHeight) end
+        if GeneralDockManagerScrollFrameChild then GeneralDockManagerScrollFrameChild:SetHeight(tabHeight) end
     end
     if dock and not self.chatTabDivider then
         local line = panel:CreateTexture(nil, "BORDER")
@@ -1287,7 +1366,7 @@ function Skin:Chat()
         line:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -width * .5)
         self.chatTabDivider = line
     end
-    if dock and not self.chatIconStrip then
+    if dock and not self.chatIconStrip and self:ChatSetting("iconStrip") then
         -- Top rim boundary down to the tab divider, flush with the right rim.
         local strip=CreateFrame("Frame",nil,panel)
         mouseTransparent(strip)
@@ -1305,7 +1384,6 @@ function Skin:Chat()
     local voice=ChatFrameChannelButton
     if voice and dock and not voice.squancherPinned then
         voice.squancherPinned=true;voice:SetParent(panel);voice:ClearAllPoints()
-        voice:SetScale(22/math.max(1,voice:GetHeight()))
         voice:SetPoint("LEFT",dock,"LEFT")
         if voice.Icon then voice.Icon:SetDesaturated(true) end
         for _,method in ipairs({"GetNormalTexture","GetPushedTexture","GetHighlightTexture","GetDisabledTexture"}) do
@@ -1316,13 +1394,23 @@ function Skin:Chat()
     conceal(TextToSpeechButtonFrame)
     if TextToSpeechButton and voice and dock and not TextToSpeechButton.squancherPinned then
         TextToSpeechButton.squancherPinned=true;TextToSpeechButton:SetParent(panel)
-        TextToSpeechButton:SetScale(22/math.max(1,TextToSpeechButton:GetHeight()))
         TextToSpeechButton:ClearAllPoints()
         -- As before: beside the voice control when TTS is on, otherwise over it.
         if GetCVarBool and GetCVarBool("textToSpeech") then
             TextToSpeechButton:SetPoint("LEFT",voice,"RIGHT")
         else
             TextToSpeechButton:SetPoint("CENTER",voice,"CENTER")
+        end
+    end
+    -- Both controls fill the tab row; the volume setting hides them in place.
+    local showVoice=self:ChatSetting("voice")
+    for _,control in pairs({voice=voice,speech=TextToSpeechButton}) do
+        if control.squancherPinned then
+            control:SetScale(self:ChatSetting("tabHeight")/math.max(1,control:GetHeight()))
+            if not showVoice or control.squancherVoiceHidden then
+                control.squancherVoiceHidden=not showVoice or nil
+                control:SetAlpha(showVoice and 1 or 0);control:EnableMouse(showVoice)
+            end
         end
     end
     -- The dock/chat message frames live in BACKGROUND. Native controls must
@@ -1380,17 +1468,88 @@ function Skin:LayoutChat()
     self:FitPanelBackground(self.chatBackground,self.byFrame[panel].compact)
     if self.chatTabDivider then self.chatTabDivider:SetHeight(chatBorderWidth(panel)) end
     local width, height = panel:GetSize()
+    -- The message area gives up exactly what a taller tab row takes (0 at 22).
+    local extra = self:ChatSetting("tabHeight") - 22
     for i = 1, NUM_CHAT_WINDOWS or 10 do
         local chat = _G["ChatFrame" .. i]
         if chat and chat.squancherChatStyled and (i == 1 or chat.isDocked) then
             chat:ClearAllPoints()
             chat:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 5, 5)
             if rect then
-                chat:SetSize(math.max(50, width - 9.86669921875), math.max(40, height - (i == 2 and 55.933349609375 or 31.933349609375)))
+                chat:SetSize(math.max(50, width - 9.86669921875), math.max(40, height - (i == 2 and 55.933349609375 or 31.933349609375) - extra))
             else
-                chat:SetSize(340, i == 2 and 119 or 143)
+                chat:SetSize(340, (i == 2 and 119 or 143) - extra)
             end
         end
+    end
+end
+
+-- Chat presentation settings, replayed live. Returns false, reason in combat.
+function Skin:ApplyChat()
+    if InCombatLockdown() then return false, "Chat layout changes wait until combat ends." end
+    if not self.chatPanel then return end
+    paintFill(self.chatBackground, true)
+    local friends = QuickJoinToastButton
+    if friends and self.chatFriendsHidden and self:ChatSetting("friends") then
+        self.chatFriendsHidden = nil
+        friends:Show() -- its OnShow hook pins it back into the strip
+    end
+    self:Chat()
+    self:LayoutChat()
+    self:FitChatToasts()
+    if ns.NativeActionBars and ns.NativeActionBars.QueueMicroMenu then ns.NativeActionBars:QueueMicroMenu() end
+end
+
+local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.004 end
+-- Rim opacity lives on frames that may be children of secure unit buttons.
+local function applyRimAlpha()
+    local old = appliedRimAlpha
+    appliedRimAlpha = BORDER_ALPHA
+    local seen = {}
+    local function update(border)
+        if seen[border] then return end
+        seen[border] = true
+        if not near(border.baseAlpha, old) then return end
+        border.baseAlpha = BORDER_ALPHA
+        if controlBorders[border] then controlAlpha(border)
+        elseif near(border:GetAlpha(), old) then border:SetAlpha(BORDER_ALPHA) end
+    end
+    for _, border in ipairs(Skin.panels) do update(border) end
+    for border in pairs(controlBorders) do update(border) end
+end
+-- Reloads the theme from ns.db.theme and retints what is on screen: every rim
+-- piece and tinted native glyph still showing the previous rim colour, unit
+-- inner outlines, shared fills, raised faces and bevels, dividers and chat tabs.
+function Skin:ApplyTheme()
+    local oldR, oldG, oldB = BORDER_R, BORDER_G, BORDER_B
+    loadTheme()
+    for texture, enabled in pairs(tinted) do
+        local shade = enabled and 1 or 0.50
+        local r, g, b = texture:GetVertexColor()
+        -- A pooled texture another owner has recoloured since is left alone.
+        if near(r, oldR * shade) and near(g, oldG * shade) and near(b, oldB * shade) then
+            self:TintChrome(texture, enabled)
+        end
+    end
+    for texture in pairs(innerTinted) do texture:SetVertexColor(unpack(self.innerBorderColor)) end
+    for texture, kind in pairs(fills) do paintFill(texture, kind == "chat") end
+    for region in pairs(rimAlphaRegions) do region:SetAlpha(BORDER_ALPHA) end
+    for _, border in ipairs(self.panels) do
+        if border.raisedRepaint then border.raisedRepaint() end
+    end
+    local divider = self.chatTabDivider
+    if divider then
+        local alpha = divider:GetAlpha()
+        divider:SetColorTexture(BORDER_R * .5, BORDER_G * .5, BORDER_B * .5, 1)
+        self:TintChrome(divider)
+        divider:SetAlpha(alpha)
+    end
+    for tab, state in pairs(chatTabPlates) do nativeTabStyle(tab, state.selected) end
+    if InCombatLockdown() then self.themePending = true
+    else self.themePending = nil; applyRimAlpha() end
+    for _, fn in ipairs(self.themeListeners) do
+        local ok, err = pcall(fn)
+        if not ok and geterrorhandler then geterrorhandler()(err) end
     end
 end
 
@@ -1428,7 +1587,17 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+local themeLoaded
 events:SetScript("OnEvent", function(_, event)
+    if not themeLoaded and (ns.db or SquanchOnDB) then
+        themeLoaded = true
+        local db = ns.db or SquanchOnDB
+        -- Untouched settings: the locals above already hold the theme.
+        if type(db.theme) == "table" and next(db.theme) then Skin:ApplyTheme() end
+    elseif event == "PLAYER_REGEN_ENABLED" and Skin.themePending then
+        Skin.themePending = nil
+        applyRimAlpha()
+    end
     if event == "ADDON_LOADED" then
         if not Skin.started then return end
     elseif event == "PLAYER_LOGIN" then

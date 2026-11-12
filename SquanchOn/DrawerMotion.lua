@@ -23,6 +23,22 @@ local Motion = {
     minHeight = 16, -- the rim's two corner caps need this much room
 }
 ns.DrawerMotion = Motion
+-- Shipped values. Edited ones live in ns.db.windows (only keys that were
+-- changed) and are read each time a drawer opens.
+Motion.defaults = { style = 'unfold', grow = .35, fade = .15 }
+function Motion:Setting(key)
+    local values = ns.db and ns.db.windows
+    local value
+    if type(values) == 'table' then value = values[key] end
+    if value == nil then return self.defaults[key] end
+    return value
+end
+-- Zero-length steps are avoided: see the note on the earlier slide above.
+local function load()
+    Motion.enabled = Motion:Setting('style') ~= 'none'
+    Motion.grow = math.max(.05, tonumber(Motion:Setting('grow')) or Motion.defaults.grow)
+    Motion.fade = math.max(.05, tonumber(Motion:Setting('fade')) or Motion.defaults.fade)
+end
 
 local states = setmetatable({}, { __mode = 'k' }) -- frame -> state, or false
 local rimGroups = setmetatable({}, { __mode = 'k' })
@@ -36,7 +52,14 @@ local function alphaGroup(region)
     local fade = group:CreateAnimation('Alpha')
     fade:SetOrder(2); fade:SetDuration(Motion.fade); fade:SetFromAlpha(0); fade:SetToAlpha(1)
     group:SetLooping('NONE')
+    group.hold, group.fadeIn = hold, fade
     return group
+end
+-- Groups are kept per frame; the durations follow the current settings.
+local function play(group)
+    group:Stop()
+    group.hold:SetDuration(Motion.grow); group.fadeIn:SetDuration(Motion.fade)
+    group:Play()
 end
 
 local function within(region, frame)
@@ -164,7 +187,7 @@ local function open(frame, anchor, shell, style)
             for _, rim in ipairs(ignoringRims(frame)) do
                 local group = rimGroups[rim]
                 if not group then group = alphaGroup(rim); rimGroups[rim] = group end
-                group:Stop(); group:Play()
+                play(group)
                 state.rims[#state.rims + 1] = group
             end
         end
@@ -177,7 +200,7 @@ local function open(frame, anchor, shell, style)
         end
     end)
     proxy:Show()
-    state.group:Play()
+    play(state.group)
     -- The motion ends itself; this only covers one that did not.
     C_Timer.After(total + .1, function() finish(state) end)
 end
@@ -189,6 +212,7 @@ end
 -- `style` its DarkSkin rim style; they default to the drawer and 'dialog'.
 -- Any error means an instant open.
 function Motion:Open(frame, anchor, shell, style)
+    load()
     if not self.enabled or not frame or not frame.CreateAnimationGroup then return end
     local ok = pcall(open, frame, anchor, shell, style)
     if not ok and states[frame] then pcall(finish, states[frame]) end
