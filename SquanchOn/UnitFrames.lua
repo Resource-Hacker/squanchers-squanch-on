@@ -1205,9 +1205,21 @@ function UF:RangeState(unit)
         if dead==true then kind='RESURRECT' elseif dead==false then kind='FRIENDLY' end
     end
     if kind and C_Spell and C_Spell.IsSpellInRange then
+        -- In range when ANY ability reaches. A ranged spell with a minimum
+        -- distance (Auto Shot) answers false at melee and must not fade the frame.
+        local answered=false
         for _,id in ipairs(self:KnownRangeSpells(kind)) do
             local inRange=rangeBoolean(C_Spell.IsSpellInRange,id,unit)
-            if inRange~=nil then return inRange end
+            if inRange==true then return true elseif inRange==false then answered=true end
+        end
+        if answered then
+            if kind=='ENEMY' then
+                local library=LibStub and LibStub('LibRangeCheck-3.0',true)
+                local checker=library and library.GetHarmChecker and library:GetHarmChecker(5)
+                if rangeBoolean(checker,unit)==true then return true end
+                if not InCombatLockdown() and rangeBoolean(CheckInteractDistance,unit,3)==true then return true end
+            end
+            return false
         end
     end
     -- Native group range remains useful when no configured spell can answer.
