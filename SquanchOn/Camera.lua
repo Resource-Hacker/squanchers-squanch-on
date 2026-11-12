@@ -490,50 +490,89 @@ function Camera:Wake()
   if self.active then self.quiet = 0; driver:Show() end
 end
 
--- Zoom easing: each frame steer toward where the curve will be one frame on.
+-- Zoom easing, handled the way DynamicCam's LibCamera does (MIT, see
+-- LICENSES/DynamicCam-MIT.txt): drive at the easing curve's velocity, rebase
+-- the clock when the camera is off the curve, finish linearly, and if the
+-- target was missed correct it with one native zoom at a temporary speed.
 local ease
+local EASE_INTERVAL, MAX_POS_ERROR = 1 / 60, 0.5
 local function haltZoom() moveOut(0); moveIn(0); stopIn(); stopOut() end
+local function endFix()
+  local fix = ease and ease.fix
+  if fix and fix.oldSpeed then pcall(SetCVar, "cameraZoomSpeed", fix.oldSpeed); fix.oldSpeed = nil end
+end
 local function stopEase()
-  if ease then ease = nil; haltZoom() end
+  if ease then endFix(); ease = nil; haltZoom() end
 end
 local function startEase(target, duration, easing, wheel)
-  local zoom = GetCameraZoom()
-  local sign = target >= zoom and 1 or -1
-  -- Re-aiming an ease that already travels this way must not halt the camera:
-  -- stopping and restarting on every wheel notch is felt as a stutter.
-  if not (ease and ease.direction == sign) then stopEase() end
-  if duration < 0.03 then stopEase(); nudge(target - zoom); Camera:Wake(); return end
-  ease = {from = zoom, to = target, start = GetTime(), dur = duration, fn = EASE[easing] or EASE.Linear, wheel = wheel,
-    sign = sign, direction = ease and ease.direction or nil,
-    speed = max(0.01, tonumber(GetCVar("cameraZoomSpeed")) or 1)}
+  stopEase()                                   -- every zoom starts from a stop
+  ease = {to = target, dur = duration, fn = EASE[easing] or EASE.Linear, wheel = wheel, frames = 0}
   Camera:Wake()
 end
--- An ease only ever moves toward its target. Overshoot (the client clamps at
--- first person and at maximum distance, and frame times vary) is never
--- corrected by driving backward: that reversal is the visible "bump back".
-local function stepEase(zoom, elapsed)
+local function easeValue(e, t) return e.from + e.change * e.fn(max(0, min(1, t / e.dur))) end
+local function easeVelocity(e, t)
+  local half, d = EASE_INTERVAL / 2, e.dur
+  if t > half and t + half < d then return (easeValue(e, t + half) - easeValue(e, t - half)) / EASE_INTERVAL
+  elseif t < half and t + EASE_INTERVAL < d then return (easeValue(e, t + EASE_INTERVAL) - easeValue(e, t)) / EASE_INTERVAL
+  elseif t + half > d then return (easeValue(e, t) - easeValue(e, t - EASE_INTERVAL)) / EASE_INTERVAL end
+end
+-- Time at which the curve passes through `zoom` (the curves are monotonic).
+local function rebaseTime(e, zoom)
+  local lo, hi = 0, e.dur
+  for _ = 1, 24 do
+    local mid = (lo + hi) / 2
+    if (easeValue(e, mid) - zoom) * e.change < 0 then lo = mid else hi = mid end
+    if hi - lo < 0.005 then break end
+  end
+  return (lo + hi) / 2
+end
+local function stepFix(e, zoom)
+  local fix = e.fix
+  if not fix.triggered then                    -- one native zoom per frame, so next frame
+    fix.triggered = true
+    if fix.change > 0 then nativeZoomOut(fix.change) elseif fix.change < 0 then nativeZoomIn(-fix.change) end
+  end
+  local wrongWay = (fix.change > 0 and fix.last > zoom) or (fix.change < 0 and fix.last < zoom)
+  fix.last = zoom
+  if GetTime() <= fix.endTime and not wrongWay then return true end
+  stopEase()
+  return false
+end
+local function stepEase(zoom)
   local e = ease
   if not e then return false end
-  local t = GetTime() - e.start
-  local remaining = (e.to - zoom) * e.sign
-  if t >= e.dur or remaining <= 0.02 then
-    ease = nil
-    haltZoom()
-    -- Finish only forward, and only a meaningful shortfall; never pull back.
-    if remaining > 0.05 then nudge(e.to - zoom) end
-    return false
+  if e.fix then return stepFix(e, zoom) end
+  -- The first step runs one frame after the request: take the start here.
+  local now = GetTime()
+  e.start = e.start or now
+  e.from = e.from or zoom
+  e.change = e.change or (e.to - e.from)
+  e.frames = e.frames + 1
+  local beyond = (e.change > 0 and zoom >= e.to) or (e.change < 0 and zoom <= e.to) or e.change == 0
+  if not beyond and e.start + e.dur > now then
+    local t = now - e.start
+    if e.frames > 1 and abs(zoom - easeValue(e, t)) > MAX_POS_ERROR then
+      local tPrime = rebaseTime(e, zoom)
+      if tPrime > 0 and tPrime < e.dur then e.start = e.start - (tPrime - t); t = now - e.start end
+    end
+    local speed
+    if e.dur - t > 2 * EASE_INTERVAL then speed = easeVelocity(e, t)
+    else speed = (e.to - zoom) / EASE_INTERVAL end       -- linear over the last frames
+    if not speed then stopEase(); return false end
+    local zoomSpeed = max(0.01, tonumber(GetCVar("cameraZoomSpeed")) or 1)
+    if speed > 0 then moveOut(speed / zoomSpeed) elseif speed < 0 then moveIn(-speed / zoomSpeed) end
+    return true
   end
-  local ahead = max(elapsed, 0.005)
-  local goal = e.from + (e.to - e.from) * e.fn(min(1, (t + ahead) / e.dur))
-  local speed = max(0, (goal - zoom) * e.sign) / ahead / e.speed
-  if e.sign == 1 then
-    if e.direction == -1 then moveIn(0); stopIn() end
-    e.direction = 1; moveOut(speed)
-  else
-    if e.direction == 1 then moveOut(0); stopOut() end
-    e.direction = -1; moveIn(speed)
+  haltZoom()
+  -- Missed the target by more than the smallest native step: correct it.
+  if abs(zoom - e.to) > 0.05 then
+    local change = e.to - zoom
+    e.fix = {change = change, endTime = now + 0.1, last = zoom, oldSpeed = GetCVar("cameraZoomSpeed")}
+    pcall(SetCVar, "cameraZoomSpeed", abs(min(50, abs(change / 0.1))))
+    return true
   end
-  return true
+  ease = nil
+  return false
 end
 
 -- Setting transitions between situations.
@@ -700,7 +739,7 @@ end
 local lastZoom
 driver:SetScript("OnUpdate", function(self, elapsed)
   local zoom = GetCameraZoom()
-  local busy = stepEase(zoom, elapsed)
+  local busy = stepEase(zoom)
   if stepTransition(zoom) then busy = true end
   if stepTurns(elapsed) then busy = true end
   if stepFade() then busy = true end
@@ -736,26 +775,35 @@ local function wheel(zoomIn, increments)
     return native(increments + (zoomSetting("reactive") and 0 or zoomSetting("addAlways")))
   end
   local zoom = GetCameraZoom()
-  local target = ease and ease.wheel and ease.to or nil
+  local target = ease and ease.wheel and not ease.fix and ease.to or nil
   local step = 1 + zoomSetting("addAlways")
   if target and abs(target - zoom) > zoomSetting("incAddDifference") then step = step + zoomSetting("addIncrements") end
+  -- A change of direction starts again from where the camera is.
   if target and ((zoomIn and target > zoom) or (not zoomIn and target < zoom)) then target = nil end
   target = target or zoom
-  -- At a limit there is nothing to ease toward; drop any pending ease so the
-  -- camera does not keep pushing against first person or maximum distance.
-  if (zoomIn and zoom <= 0.01) or (not zoomIn and zoom >= maxDistance() - 0.01) then
-    if ease and ease.wheel then stopEase() end
-    if zoomIn or zoom > 0 then return end
-  end
-  if zoomIn then target = max(0, target - step)
+  local raw = step
+  if zoomIn then
+    if target - step < 0 then
+      -- Going to first person: the un-eased fallback below must cover the whole
+      -- remaining distance or it stops short of it.
+      if target > 0 then raw = zoom end
+      target = 0
+    else target = target - step end
   elseif zoom == 0 then                       -- first person -> nearest third person
     stopEase()
     Camera:Wake()
     return native(0.05)
   else target = min(maxDistance(), target + step) end
-  if abs(target - zoom) < 0.01 then return end
+  -- Already at the limit being asked for.
+  if (target == 0 and zoom == 0) or (target >= maxDistance() and zoom >= maxDistance()) then return end
   local speed = max(0.01, tonumber(GetCVar("cameraZoomSpeed")) or 1)
-  startEase(target, min(zoomSetting("maxZoomTime"), abs(target - zoom) / speed), zoomSetting("easing"), true)
+  local duration = min(zoomSetting("maxZoomTime"), abs(target - zoom) / speed)
+  if duration < EASE_INTERVAL then             -- too short to ease: plain native zoom
+    stopEase()
+    Camera:Wake()
+    return native(raw)
+  end
+  startEase(target, duration, zoomSetting("easing"), true)
 end
 local function zoomInHook(increments) wheel(true, increments) end
 local function zoomOutHook(increments) wheel(false, increments) end
