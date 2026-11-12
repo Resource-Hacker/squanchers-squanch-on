@@ -58,12 +58,3 @@ for name, shapes in [("circle", circle), ("arrows", arrows)]:
         '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">\n'
         '<!-- Original Squancher geometric artwork; SPDX-License-Identifier: MIT -->\n'
         + shapes + "\n</svg>\n")
-
-# Original dashed variant: 24 sectors, 58% duty, a radius-46 ring.
-SIZE = 256
-def dashed(x, y):
-    x, y = x / 2 - 64, y / 2 - 64
-    radius = math.hypot(x, y)
-    phase = (math.atan2(y, x) / (2 * math.pi) * 24) % 1
-    return 44 <= radius <= 48 and phase < .58
-save_tga("circle-dashed", dashed)

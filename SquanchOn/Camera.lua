@@ -1215,7 +1215,7 @@ function Camera:Command(command)
   command = (command or ""):lower():match("^%s*(.-)%s*$")
   if not cfg then print("Squanch-On camera: not initialized yet."); return end
   if command == "options" then
-    if addon.OpenCameraOptions then addon:OpenCameraOptions() end
+    addon:OpenOptions("camera")
     return
   elseif command == "on" then
     cfg.enabled = true

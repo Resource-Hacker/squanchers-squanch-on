@@ -114,9 +114,9 @@ player's ring shifts from the class colour as health drops and pulses in execute
 range. NPCs keep the plain ring coloured by health. Fit, width, line thickness
 and the health bar look per kind of target are settings.
 
-Range needs no other addon. **LibRangeCheck-3.0** (MIT) is bundled, and a shared
-range module (`SquanchOn/Range.lua`) answers distance questions from learned
-spells and item-range checks. A cue stays hidden when the range is unknown.
+Range needs no other addon or library. A shared range module
+(`SquanchOn/Range.lua`) answers distance questions from learned spells and
+item-range checks; its item list derives from LibRangeCheck-3.0 (MIT). A cue stays hidden when the range is unknown.
 Friendly ring rotation alone is proximity feedback; healing range uses the
 triangles. Range feedback does not guarantee mana, cooldown, form or line of
 sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-feedback).
@@ -170,7 +170,7 @@ sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-f
   stay off and small adapters fit the ring and shared look to Plater's plates.
 
 The package is one complete **SquanchOn** addon folder, including its oUF,
-LibDispel, LibRangeCheck-3.0, LibSerialize, LibDeflate and LibStub libraries
+LibDispel, LibSerialize, LibDeflate and LibStub libraries
 with their own notices. ElvUI and BenikUI implementations are not copied into
 the rewrite or loaded as dependencies.
 
@@ -238,8 +238,8 @@ See [contribution guidance](CONTRIBUTING.md) and [compatibility](docs/COMPATIBIL
 Original Squanch-On code and generated artwork use the [MIT license](LICENSE).
 The Horde reticle code, data and media are GPL-2.0-only. The bundled fonts are
 SIL OFL 1.1. Choonster's TargetNameplateIndicator contribution, the parts of
-`Camera.lua` ported from DynamicCam, oUF, LibDispel, LibRangeCheck-3.0 and
-LibSerialize (all MIT) and LibDeflate (zlib) retain their own notices; LibStub
+`Camera.lua` ported from DynamicCam, oUF, LibDispel, LibSerialize and the
+LibRangeCheck-3.0 item data in `Range.lua` (all MIT) and LibDeflate (zlib) retain their own notices; LibStub
 retains its public-domain declaration. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [reuse-manifest.json](reuse-manifest.json) for exact scopes and file hashes.

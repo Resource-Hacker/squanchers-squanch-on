@@ -59,14 +59,14 @@ visible and adds range feedback.
 | Marker | Meaning | Evidence needed |
 | --- | --- | --- |
 | Solid ring | The selected target's visible nameplate; validated world clicks briefly pulse the whole ring. On players it wears the health bar's texture and colour by default. | Current target and matching visible nameplate. |
-| Cardinal blocks | Conservative five-yard melee reach on living hostile targets. | An affirmative five-yard check from the bundled LibRangeCheck-3.0. |
+| Cardinal blocks | Conservative five-yard melee reach on living hostile targets. | An affirmative five-yard check from the shared range module. |
 | Rotating triangles, hostile | A learned ranged damage ability is in range. | Native spell range; Hunter Auto Shot retains its own check. |
 | Rotating triangles, friendly | A learned healing ability is in range. | A known spellbook rank with an affirmative native range result. |
 | Friendly ring rotation without triangles | Proximity feedback, also usable for compatible NPCs. | The shared range module places the unit within the friendly threshold (40 yards by default). |
 
 The legend image still shows the earlier dashed ring; the ring is now one solid
-line. LibRangeCheck-3.0 (MIT) is bundled, and the shared range module
-([`Range.lua`](../SquanchOn/Range.lua)) combines learned-spell checks,
+line. The shared range module
+([`Range.lua`](../SquanchOn/Range.lua), item list derived from LibRangeCheck-3.0, MIT) combines learned-spell checks,
 item-range checks, interact distance, nameplate visibility and, for group
 members outdoors, the exact group distance. No other addon is needed. In combat
 the client blocks item and interact checks on units the player cannot attack, so

@@ -1,7 +1,7 @@
 # Installation
 
 Squanch-On is one addon folder. It includes its libraries (oUF, LibDispel,
-LibRangeCheck-3.0, LibSerialize, LibDeflate, LibStub), the Horde reticle, fonts
+LibSerialize, LibDeflate, LibStub), the Horde reticle, fonts
 and textures. No other addon and no build or
 assembly step is required.
 
@@ -23,7 +23,7 @@ in the saved file. `/squanchon` opens the settings window.
 No other addon is required.
 
 - **Plater.** Not needed: Squanch-On draws its own nameplates, and the range
-  cues use the bundled LibRangeCheck-3.0. If you keep Plater, Squanch-On's
+  cues use Squanch-On's own range module. If you keep Plater, Squanch-On's
   nameplates stay off while it is loaded and the friendly target ring fits
   Plater's nameplate icon. `/sqplates test` previews Squanch-On's plates either
   way.

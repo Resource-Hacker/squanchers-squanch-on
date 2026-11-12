@@ -13,14 +13,14 @@ local function config(ctx)
     local unit = m and m.profile and ctx and m.profile[ctx.unit]
     return unit and unit[ctx.reaction]
 end
-local function synced() local m = module(); if m.RefreshPanel then m:RefreshPanel() end end
+local copySource -- session pick for "Copy indicators from"; not saved
 
 Options:Category({ id = 'nameplates', title = 'Nameplates & Target ring', order = 60,
     desc = 'Indicators drawn on nameplates and the ring around the selected target.' })
 
 Options:Add('nameplates', {
     { id = 'nameplates.profile', type = 'choice', label = 'Indicator profile', section = 'Profile', order = 10,
-        desc = 'The indicator profile this character uses. Same as /tni profile NAME; create or copy profiles with /tni.',
+        desc = 'The indicator profile this character uses; indicator profiles are the addon profiles, so this switches the whole addon. Same as /tni profile NAME.',
         keywords = 'profile nameplate indicator select', combatSafe = true,
         hidden = function() return not available() end,
         values = function()
@@ -30,12 +30,47 @@ Options:Add('nameplates', {
             return names
         end,
         get = function() return module().profileName end,
-        set = function(_, value) module():SelectProfile(value); synced() end },
+        set = function(_, value) module():SelectProfile(value) end },
     { id = 'nameplates.reset', type = 'action', label = 'Reset this profile', button = 'Reset indicators', section = 'Profile', order = 20,
         desc = 'Returns every indicator of the current profile to the shipped ring. Same as /tni reset.',
         keywords = 'reset default nameplate indicator', confirm = 'This resets every indicator of the current profile.', combatSafe = true,
         hidden = function() return not available() end,
         func = function() module():Slash('reset'); return 'Indicator profile reset.' end },
+    { id = 'nameplates.copySource', type = 'choice', label = 'Copy indicators from', section = 'Profile', order = 22,
+        desc = 'Another profile whose indicators the button below copies into the profile in use.',
+        keywords = 'copy profile nameplate indicator from', combatSafe = true, allowEmpty = true, emptyLabel = '(none)',
+        hidden = function() return not available() end,
+        values = function()
+            local names = {}
+            for name in pairs(module().db.profiles) do
+                if name ~= module().profileName then names[#names + 1] = name end
+            end
+            table.sort(names)
+            return names
+        end,
+        get = function()
+            local m = module()
+            if copySource and (not m.db.profiles[copySource] or copySource == m.profileName) then copySource = nil end
+            return copySource
+        end,
+        set = function(_, value) copySource = value end },
+    { id = 'nameplates.copy', type = 'action', label = 'Replace this profile\'s indicators', button = 'Copy from profile', section = 'Profile', order = 24,
+        desc = 'Replaces every indicator of the profile in use with those of the profile chosen above. Same as /tni copy NAME.',
+        keywords = 'copy profile nameplate indicator replace', combatSafe = true,
+        confirm = 'This replaces every indicator of the current profile.',
+        hidden = function() return not available() end,
+        disabled = function() return not (copySource and module().db.profiles[copySource]) end,
+        func = function()
+            local name = copySource
+            if not (name and module().db.profiles[name]) then return false, 'Choose a profile to copy from.' end
+            module():Slash('copy ' .. name)
+            return 'Indicators copied from "' .. name .. '".'
+        end },
+    { id = 'nameplates.status', type = 'action', label = 'Indicator status', button = 'Print to chat', section = 'Profile', order = 26,
+        desc = 'Prints where each indicator is attached right now. Same as /tni status.',
+        keywords = 'status debug nameplate indicator', combatSafe = true,
+        hidden = function() return not available() end,
+        func = function() module():PrintStatus() end },
     { id = 'nameplates.note', type = 'note', label = 'How indicators attach', section = 'Profile', order = 30,
         keywords = 'restriction combat priority visible',
         text = function()
@@ -57,7 +92,6 @@ local function styled(spec)
     spec.set = spec.set or function(ctx, value)
         local ok, message = module():SetOption(ctx.unit, ctx.reaction, key, value)
         if not ok then error(message, 0) end
-        synced()
     end
     return spec
 end
@@ -66,7 +100,7 @@ local function direct(ctx, key, value)
     local style = config(ctx)
     if not style then error('Unsupported reaction', 0) end
     style[key] = value
-    module():Refresh(true); synced()
+    module():Refresh(true)
 end
 
 local template = {
@@ -77,8 +111,7 @@ local template = {
         set = function(ctx, value)
             local ok, message = module():SetOption(ctx.unit, 'unit', 'enable', value)
             if not ok then error(message, 0) end
-            synced()
-        end },
+            end },
     { key = 'unsupported', type = 'note', label = 'Unused reaction', section = 'Unit', order = 20,
         text = 'This soft-target indicator does not use the selected reaction.',
         hidden = function(ctx) return config(ctx) ~= nil end },

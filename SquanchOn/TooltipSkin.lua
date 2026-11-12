@@ -316,47 +316,6 @@ function Tooltip:Discover()
     for _,name in ipairs(names) do adopt(_G[name]) end
     if QuestScrollFrame then adopt(QuestScrollFrame.StoryTooltip);adopt(QuestScrollFrame.CampaignTooltip) end
 end
-function ns:OpenTooltipOptions()
-    if InCombatLockdown() then print('Squanch-On: tooltip settings are available after combat.');return end
-    if not settings() then print('Squanch-On: import the complete tooltip profile before editing it.');return end
-    Tooltip:Refresh()
-    if not Tooltip.options then
-        local W=self.OptionWidgets
-        local frame=W:Window('SquanchOnTooltipOptions',380,340,'Squanch-On · Tooltip')
-        local caption=W:Label(frame,'Move the fixed anchor with /sqedit. Blizzard owns content and item comparison. Imported content preferences are preserved; custom ElvUI content extensions are unavailable.',10,.62,.62,.6)
-        caption:SetPoint('TOPLEFT',18,-50);caption:SetWidth(344)
-        local check=W:Check(frame);check:SetPoint('TOPLEFT',18,-108)
-        local checkLabel=W:Label(frame,'Anchor default tooltips to the cursor',10);checkLabel:SetPoint('LEFT',check,'RIGHT',8,0)
-        check:SetScript('OnClick',function(button)
-            settings().cursorAnchor=button:GetChecked()==true;Tooltip:Refresh()
-        end)
-        frame.check=check;frame.fields={}
-        for i,spec in ipairs({{'headerFontSize','Heading size',6,40},{'textFontSize','Body size',6,40},
-            {'smallTextFontSize','Comparison text size',6,40},{'colorAlpha','Background opacity',0,1},
-            {'xOffset','Fixed anchor horizontal offset',-1000,1000},{'yOffset','Fixed anchor vertical offset',-1000,1000},
-            {'healthHeight','Health bar height',1,40}}) do
-            local field=W:Edit(frame,70);field:SetHeight(20)
-            field:SetPoint('TOPLEFT',292,-142-(i-1)*26)
-            local label=W:Label(frame,spec[2],10);label:SetPoint('LEFT',frame,'TOPLEFT',18,-152-(i-1)*26)
-            local function read() local db=settings();return spec[1]=='healthHeight' and (db.healthBar or {}).height or setting(db,spec[1]) end
-            field:SetScript('OnEscapePressed',function(box) box:SetText(tostring(read() or ''));box:ClearFocus() end)
-            field:SetScript('OnEnterPressed',function(box)
-                local value=tonumber(box:GetText())
-                if value and public(value) and value==value and value>=spec[3] and value<=spec[4] then
-                    local db=settings()
-                    if spec[1]=='healthHeight' then db.healthBar=db.healthBar or {};db.healthBar.height=value
-                    else db[spec[1]]=value end
-                end
-                box:SetText(tostring(read() or ''));box:ClearFocus();Tooltip:Refresh()
-            end)
-            frame.fields[spec[1]]={control=field,read=read}
-        end
-        Tooltip.options=frame
-    end
-    local frame=Tooltip.options;frame.check:SetChecked(settings().cursorAnchor==true)
-    for _,field in pairs(frame.fields) do field.control:SetText(tostring(field.read() or '')) end
-    frame:Show()
-end
 -- Display and UI-scale changes arrive through LayoutEditor's shared relayout pass.
 local events=CreateFrame('Frame')
 for _,event in ipairs({'PLAYER_LOGIN','PLAYER_ENTERING_WORLD','PLAYER_REGEN_ENABLED','ADDON_LOADED'}) do events:RegisterEvent(event) end

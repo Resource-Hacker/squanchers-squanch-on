@@ -45,10 +45,10 @@ copying ElvUI or BenikUI frame, tooltip, options or lifecycle implementations.
 
 LibRangeCheck-3.0 (MINOR 39) is separately MIT-licensed, copyright 2023 The
 WoWUIDev Community (original author mitch0); see
-`SquanchOn/libs/LibRangeCheck-3.0/LICENSE`. It is the unmodified source file from
-[upstream commit 3f9e454](https://github.com/WeakAuras/LibRangeCheck-3.0/tree/3f9e454971a011d08fc1b5c73c0a0ad4168c2f44),
-not taken from the ElvUI distribution, and supplies the melee and proximity
-range checks.
+`SquanchOn/libs/LibRangeCheck-3.0/LICENSE`. The library itself is not shipped or loaded;
+item identifiers from the range tables of
+[upstream commit 3f9e454](https://github.com/WeakAuras/LibRangeCheck-3.0/tree/3f9e454971a011d08fc1b5c73c0a0ad4168c2f44)
+are used by `SquanchOn/Range.lua` (see "Range item identifiers" below).
 
 LibSerialize v1.2.3 (MINOR 7) is separately MIT-licensed, copyright 2020 Ross
 Nichols; see `SquanchOn/libs/LibSerialize/LICENSE`. LibDeflate 1.0.2-release is
@@ -161,5 +161,5 @@ textures with it and lists what it offers.
 ## Range item identifiers
 
 `SquanchOn/Range.lua` contains item identifiers taken from the range tables of
-LibRangeCheck-3.0 (MIT, The WoWUIDev Community), which is also bundled in
-`SquanchOn/libs/LibRangeCheck-3.0` with its license.
+LibRangeCheck-3.0 (MIT, The WoWUIDev Community), whose license text is kept in
+`SquanchOn/libs/LibRangeCheck-3.0/LICENSE`.

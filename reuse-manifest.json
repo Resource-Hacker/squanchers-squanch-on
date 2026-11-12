@@ -1,7 +1,7 @@
 {
   "format": 1,
   "original_license": "MIT",
-  "notes": "Public SquanchOn files only. Independently licensed oUF, LibDispel, LibRangeCheck-3.0 and LibStub retain their own notices. ElvUI/BenikUI engines, owner settings and private media are excluded.",
+  "notes": "Public SquanchOn files only. Independently licensed oUF, LibDispel and LibStub retain their own notices; Range.lua carries LibRangeCheck-3.0 item data. ElvUI/BenikUI engines, owner settings and private media are excluded.",
   "components": [
     {
       "name": "PT Sans Narrow Bold 2.003",
@@ -27,7 +27,7 @@
       "files": [
         {
           "path": "SquanchOn/NameplateIndicators.lua",
-          "sha256": "8ef4a389990a6e92156dd530eb05aca8c1ee7000f13d130ce979212352f448c9"
+          "sha256": "9d98962d8fecc9053a6b1af8ac7f8714ec953f1ec768bf997982fdcc944faf46"
         },
         {
           "path": "SquanchOn/LICENSES/TargetNameplateIndicator-LICENSE.txt",
@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "SquanchOn/Camera.lua",
-          "sha256": "fc514dff5b69f64c7cb2cd38253753597132a87470b9e2e216b41ef753bb99b9"
+          "sha256": "eb116051406dfbdf91db010b0412a1aeabf9977c59afdfc4bfd149b2b36b9823"
         },
         {
           "path": "SquanchOn/LICENSES/DynamicCam-MIT.txt",
@@ -71,15 +71,11 @@
         },
         {
           "path": "SquanchOn/asset-source/generate.py",
-          "sha256": "eb1428e48df42efae20f95428cb6efb95f29799112b93741feeeb2a7a1b5d124"
+          "sha256": "fad7e7a9270fc881f1570524955bc2a5dd983d10794920e414c0f3de08062351"
         },
         {
           "path": "SquanchOn/media/Crosshairs/arrows.tga",
           "sha256": "4df80552557b526848c63d5e275b85f788779a304b83062dc12e15c063bb65e7"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/circle-dashed.tga",
-          "sha256": "6d4dd0636f07c69f7104986ab4296e757ac2f8b76d67c8e87396cf038a232442"
         },
         {
           "path": "SquanchOn/media/Crosshairs/circle.tga",
@@ -330,18 +326,18 @@
       ]
     },
     {
-      "name": "LibRangeCheck-3.0 (MINOR 39)",
+      "name": "LibRangeCheck-3.0 (MINOR 39) item data",
       "license": "MIT",
       "source": "https://github.com/WeakAuras/LibRangeCheck-3.0/tree/3f9e454971a011d08fc1b5c73c0a0ad4168c2f44",
-      "modifications": "Unmodified upstream source file and license text at the pinned commit; copyright 2023 The WoWUIDev Community. Upstream TOC files and development tooling omitted.",
+      "modifications": "Library source not shipped or loaded. Range.lua contains item identifiers from its range tables; upstream license text kept; copyright 2023 The WoWUIDev Community.",
       "files": [
         {
           "path": "SquanchOn/libs/LibRangeCheck-3.0/LICENSE",
           "sha256": "e3fdaf76f03ccf2bf5ec951f5e14eaf1178a6f6af8f7c9d321e3256fa31e25f9"
         },
         {
-          "path": "SquanchOn/libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua",
-          "sha256": "61d412559b082bdcd8fc5d29c67b27b7dfdb782e8c55fcb483fdce5c0edddf8b"
+          "path": "SquanchOn/Range.lua",
+          "sha256": "0811882fd37a74df1c29a6b392e4d485e58061a343992e95191920750b0dbae4"
         }
       ]
     },

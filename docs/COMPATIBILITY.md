@@ -24,7 +24,7 @@ remains explicit and does not certify the rewrite.
 ## Runtime ownership
 
 The package is one complete `SquanchOn/` addon; no other addon is required. It
-embeds separately licensed oUF, LibDispel, LibRangeCheck-3.0, LibSerialize and
+embeds separately licensed oUF, LibDispel, LibSerialize and
 LibDeflate plus public-domain LibStub, the GPL-2.0 Horde reticle, and its fonts
 and textures. Squanch-On owns frame layout, nameplates, buff and debuff icons,
 the camera, the bag window, the meter drawer, chat and drawer presentation, its settings
@@ -39,8 +39,8 @@ anchoring; it does not recreate ElvUI's custom content extensions.
 
 ### Range
 
-Plater is no longer needed for range. LibRangeCheck-3.0 (MIT) is bundled, and
-the shared range module (`SquanchOn/Range.lua`) answers every distance question
+Plater is no longer needed for range. No range library is loaded:
+the shared range module (`SquanchOn/Range.lua`, item list derived from LibRangeCheck-3.0, MIT) answers every distance question
 from learned spells, item-range checks, interact distance, nameplate visibility
 and, for group members outdoors, the exact group distance. In combat the client
 blocks item and interact checks on units the player cannot attack; friendly

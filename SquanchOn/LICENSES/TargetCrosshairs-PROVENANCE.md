@@ -27,7 +27,4 @@ Semlar's Crosshairs remains separately owned. Its project currently lists
 All Rights Reserved: https://www.curseforge.com/wow/addons/crosshairs . This
 component does not relicense that project or claim permission to publish it.
 
-The dashed variant is also original geometry, regenerated from the accompanying
-source: a 256x256 canvas, a ring spanning radii 44 to 48 in 128-unit coordinates,
-24 sectors and 58 percent painted duty, with the same 4x4 coverage sampling.
 No historical reference package or third-party image is included in this project.

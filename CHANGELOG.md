@@ -2,6 +2,8 @@
 
 ## 1.0.0 — unreleased
 
+- Efficiency sweep: the target ring and nameplates are event-driven, aura updates are coalesced and refits gated.
+- Removed the old unit-frame, nameplate-indicator and tooltip option windows (their last functions moved to the `/squanchon` pages), the retired aura panels, the unloaded LibRangeCheck-3.0 source file and the unused dashed ring art.
 - The player frame fades out when idle: out of combat, full health, no target, no cast (setting under Unit Frames).
 - Damage meter: column names sit against the top rim; the mode title moved to the right end; the quest title is centred.
 
@@ -9,9 +11,9 @@
   separately supplied media is needed. Unit-frame layout and presentation are
   independently implemented on separately licensed oUF, LibDispel and LibStub;
   the ElvUI/BenikUI engines and the five-folder assembly are gone.
-- Range no longer needs Plater. LibRangeCheck-3.0 (MIT) is bundled and a shared
-  range module (`Range.lua`) answers distance questions from learned spells and
-  item-range checks.
+- Range no longer needs Plater or a range library. A shared range module
+  (`Range.lua`) answers distance questions from learned spells and item-range
+  checks; its item list derives from LibRangeCheck-3.0 (MIT).
 - Add Squanch-On's own camera (`Camera.lua`): every DynamicCam setting, zoom
   curves, eased wheel zoom and situations, with logic partly ported from
   DynamicCam under MIT. Wheel zoom follows DynamicCam's easing algorithm and no

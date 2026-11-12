@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: MIT
--- Preserve the two active third-party movers previously hosted by ElvUI.
+-- Default place of the minimap-button bar.
 local _, ns = ...
 local anchors = {
-  SquanchOnBuffs = { "BOTTOM", "BOTTOM", -300, 161 },
   SquanchOnMinimapButtons = { "BOTTOMRIGHT", "BOTTOMRIGHT", -367, 100 },
 }
 local module = {}
@@ -18,7 +17,7 @@ function module:Apply(force)
       target:ClearAllPoints()
       target:SetPoint(position[1], UIParent, position[2], position[3], position[4])
       if ns.LayoutTargets then
-        ns.LayoutTargets:ApplyScale(name == "SquanchOnBuffs" and "ifilger_buffs" or "minimap_buttons", target)
+        ns.LayoutTargets:ApplyScale("minimap_buttons", target)
       end
       done[name] = true
     end

@@ -18,7 +18,7 @@ Nothing else needs to be supplied. The components keep their own terms:
 | --- | --- |
 | oUF | Independently MIT-licensed framework by Trond A Ekseth, Val Voronov, Adrian L Lange and Rainrider. Its full notice is in `SquanchOn/libs/oUF/LICENSE.txt`. The Forever load graph is embedded directly; no ElvUI engine is loaded. |
 | LibDispel | Separately MIT-licensed library, copyright 2026 Tukui.org. Full notice: `SquanchOn/libs/LibDispel/LICENSE.txt`. |
-| LibRangeCheck-3.0 (MINOR 39) | Separately MIT-licensed, copyright 2023 The WoWUIDev Community. Unmodified upstream file; notice in `SquanchOn/libs/LibRangeCheck-3.0/LICENSE`. `SquanchOn/Range.lua` also uses item identifiers from its range tables. |
+| LibRangeCheck-3.0 (MINOR 39) | Separately MIT-licensed, copyright 2023 The WoWUIDev Community. The library itself is not shipped or loaded; `SquanchOn/Range.lua` uses item identifiers from its range tables, and its notice is kept in `SquanchOn/libs/LibRangeCheck-3.0/LICENSE`. |
 | LibSerialize v1.2.3 | Separately MIT-licensed, copyright 2020 Ross Nichols. Unmodified; notice in `SquanchOn/libs/LibSerialize/LICENSE`. Used for profile export strings. |
 | LibDeflate 1.0.2 | Separately zlib-licensed, copyright 2018-2020 Haoqian He. Unmodified; notice in `SquanchOn/libs/LibDeflate/LICENSE.txt`. Used for profile export strings. |
 | LibStub | The source expressly places this versioning stub in the public domain and retains contributor credits in `SquanchOn/libs/LibStub/LibStub.lua`. |

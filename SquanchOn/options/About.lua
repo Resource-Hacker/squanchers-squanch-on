@@ -24,7 +24,7 @@ Options:Add('about', {
         text = 'Original Squanch-On code and generated artwork: MIT.\n'
             .. 'Horde reticle data and media: GNU GPL version 2, distributed separately from the MIT parts.\n'
             .. 'Bundled fonts: SIL Open Font License 1.1, each beside its own license text.\n'
-            .. 'Bundled libraries (oUF, LibDispel, LibStub, LibRangeCheck-3.0 and others in the libs folder) keep their own authors and licenses.\n'
+            .. 'Bundled libraries (oUF, LibDispel, LibStub and others in the libs folder) keep their own authors and licenses; the range item list derives from LibRangeCheck-3.0 (MIT).\n'
             .. 'Ported parts credit their sources: TargetNameplateIndicator (Choonster, MIT) and the DynamicCam settings model (mpstark and LudiusMaximus, MIT).\n\n'
             .. 'Full notices, authors and provenance: THIRD_PARTY_NOTICES.md and the LICENSES folder inside the addon folder.' },
     { id = 'about.commands', type = 'note', label = 'Slash commands', section = 'Commands', keywords = 'slash commands help chat',

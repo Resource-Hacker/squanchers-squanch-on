@@ -13,7 +13,7 @@ surface. Describe what changes for a player and how it was observed.
   external input helpers out of the repository and release archives. The shipped
   default layout is regenerated with `tools/export_defaults.lua`, not edited by hand.
 - Retain upstream licenses and provenance, including separately MIT-licensed
-  oUF, LibDispel, LibRangeCheck-3.0 and LibSerialize, zlib-licensed LibDeflate,
+  oUF, LibDispel, LibSerialize and the LibRangeCheck-3.0 item data in `Range.lua`, zlib-licensed LibDeflate,
   LibStub's public-domain source declaration, the DynamicCam (MIT) parts of
   `Camera.lua`, the GPL-2.0-only Horde reticle and the SIL OFL fonts. Update both reuse manifests when an
   attributed file changes; document the source revision and any modifications.

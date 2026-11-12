@@ -66,9 +66,9 @@ range. Mend Pet and Health Funnel apply only to your own pet. On players the
 ring wears the health bar's texture and colour by default; NPCs keep the plain
 ring coloured by health.
 
-The bundled MIT-licensed **LibRangeCheck-3.0** and the shared range module
-(`Range.lua`) answer distance questions from learned spells and item-range
-checks; no other addon is needed. Unknown range stays hidden. Friendly ring
+The shared range module (`Range.lua`) answers distance questions from learned
+spells and item-range checks (item list derived from MIT-licensed
+LibRangeCheck-3.0); no other addon or library is needed. Unknown range stays hidden. Friendly ring
 rotation alone is proximity feedback, not healing readiness. Range does not
 guarantee resources, cooldown, form or line of sight. Cross-class and combat
 acceptance remains in progress.
@@ -95,7 +95,7 @@ inside this installation package. Packaging checks do not certify game behavior.
 
 Original Squanch-On code and generated artwork use [MIT](LICENSE). The Horde
 reticle module and its media are GPL-2.0; bundled fonts are SIL OFL 1.1; oUF,
-LibDispel, LibRangeCheck-3.0, LibSerialize, LibDeflate, LibStub, the DynamicCam
+LibDispel, LibSerialize, LibDeflate, LibStub, the LibRangeCheck-3.0 item data, the DynamicCam
 parts of `Camera.lua` and Choonster's contribution keep their own notices.
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [reuse-manifest.json](reuse-manifest.json)
 and `LICENSES/`. Game-provided art remains Blizzard's property. This project is

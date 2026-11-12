@@ -201,7 +201,7 @@ local menuWindowNames = {
   "EditModeLayoutDialog", "EditModeImportLayoutDialog", "EditModeUnsavedChangesDialog", "EditModeSystemSettingsDialog", "TutorialFrame",
   "GuideFrame", "BasicMessageDialog", "StackSplitFrame", "OpacityFrame", "QuickJoinRoleSelectionFrame",
   "GroupLootHistoryFrame", "ModelPreviewFrame", "SubscriptionInterstitialFrame", "GameMenuFrame", "InterfaceOptionsFrame",
-  "VideoOptionsFrame", "AudioOptionsFrame", "SquancherNameplateIndicatorOptions",
+  "VideoOptionsFrame", "AudioOptionsFrame",
 }
 function addon:RefreshMenuSuspension()
   local open = false
@@ -284,9 +284,6 @@ function addon:InstallMenuSuspension()
     end, self)
   end
   for i = 1, _G.UIDROPDOWNMENU_MAXLEVELS or 3 do self:TrackMenuFrame(_G["DropDownList" .. i]) end
-  for _, method in ipairs({"OpenUnitFrameOptions", "OpenTooltipOptions", "OpenNameplateIndicatorOptions", "OpenCameraOptions"}) do
-    if self[method] then hooksecurefunc(self, method, function() self:QueueMenuDiscovery() end) end
-  end
   self:QueueMenuDiscovery()
 end
 
@@ -1120,10 +1117,8 @@ function addon:SlashCommand(msg)
     return
   end
   if command == "edit" or command == "layout" or command == "unlock" then self.LayoutEditor:Toggle(); return end
-  if command == "tooltip" then self:OpenTooltipOptions(); return end
-  if command == "settings" and self.OptionsCommand then self:OptionsCommand(""); return end
-  if command == "unitframes" or command == "settings" then self:OpenUnitFrameOptions(); return end
-  if command == "nameplates" then self:OpenNameplateIndicatorOptions(); return end
+  if command == "settings" then self:OpenOptions(); return end
+  if command == "tooltip" or command == "unitframes" or command == "nameplates" then self:OpenOptions(command); return end
   if command:match("^nameplates%s+") then self.NameplateIndicators:Slash(command:match("^nameplates%s+(.+)$")); return end
   if command:match("^crosshairs%s*") then self.TargetCrosshairs:SlashCommand(command:match("^crosshairs%s*(.*)$")); return end
   if command:match("^mouseover%s*") then self:MouseoverCastingCommand(command:match("^mouseover%s*(.*)$")); return end
@@ -1304,19 +1299,8 @@ function addon:OnEvent(event, ...)
     _G.SLASH_SQMS1 = "/sqms"
     _G.SLASH_SQUANCHER1 = "/squancher"
     _G.SLASH_SQUANCHER2 = "/squanchon"
-    -- /squanchon [page | search words]: the unified settings window. Pages that
-    -- have not moved into it yet keep their own windows.
-    _G.SlashCmdList.SQUANCHER = function(msg)
-      local word = string.lower(msg or ""):match("^%s*(.-)%s*$")
-      local pages = addon.Options and addon.Options.categories or {}
-      if word == "edit" or word == "layout" then addon.LayoutEditor:Toggle()
-      elseif word == "tooltip" and not pages.tooltip then addon:OpenTooltipOptions()
-      elseif word == "camera" and not pages.camera then addon:OpenCameraOptions()
-      elseif word == "unitframes" and not pages.unitframes then addon:OpenUnitFrameOptions()
-      elseif word == "nameplates" and not pages.nameplates then addon:OpenNameplateIndicatorOptions()
-      elseif addon.OptionsCommand then addon:OptionsCommand(msg)
-      else addon:OpenUnitFrameOptions() end
-    end
+    -- /squanchon [edit | page | search words]: the unified settings window or the layout editor.
+    _G.SlashCmdList.SQUANCHER = function(msg) addon:OptionsCommand(msg) end
     _G.SlashCmdList.SQMS = function(msg) addon:SlashCommand(msg) end
   elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
     self:QueueMenuDiscovery()

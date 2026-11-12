@@ -2,7 +2,7 @@
 -- Unit-frame pages. "Unit Frames" holds the profile-level settings the
 -- renderer reads; each unit has a child page built from one field template.
 -- A change writes one key of UF.db (the active profile) and then calls
--- UF:Update_AllFrames(), as the Apply button of the old window does. Rows are
+-- UF:Update_AllFrames(). Rows are
 -- shown only where the renderer reports support (UF.optionCapabilities), a
 -- field that was never stored stays absent until its row is edited, and
 -- unknown imported fields are never touched.
@@ -17,6 +17,26 @@ local function update() return UF():Update_AllFrames() end
 local function openEditor()
     if ns.OptionsWindow and ns.OptionsWindow.frame then ns.OptionsWindow.frame:Hide() end
     if ns.LayoutEditor:Open() == false then return false, 'Layout editing is available out of combat.' end
+end
+
+-- Name typed on the page for "Select by name" and "Copy to new"; not saved.
+local profileName = ''
+local function switchProfile(create)
+    -- The name box keeps focus when a button is clicked; releasing it commits its text first.
+    local focus = GetCurrentKeyboardFocus and GetCurrentKeyboardFocus()
+    if focus and focus.ClearFocus then focus:ClearFocus() end
+    local uf = UF()
+    local name = profileName:match('^%s*(.-)%s*$')
+    if name == '' or #name > 80 then return false, 'Enter a profile name (1–80 characters).' end
+    if create then
+        if uf.state.profiles[name] then return false, 'That profile already exists.' end
+        uf.state.profiles[name] = Import:Copy(uf.db)
+    elseif not uf.state.profiles[name] then
+        return false, 'Profile not found.'
+    end
+    uf.state.profile = name
+    update()
+    return 'Selected profile: ' .. name
 end
 
 local points = { 'CENTER', 'LEFT', 'RIGHT', 'TOP', 'BOTTOM', 'TOPLEFT', 'TOPRIGHT', 'BOTTOMLEFT', 'BOTTOMRIGHT' }
@@ -43,7 +63,7 @@ end
 
 Options:Add('unitframes', {
     { id = 'uf.profile', type = 'choice', label = 'Unit-frame profile', section = 'Profile', order = 10,
-        desc = 'The stored unit-frame profile in use. Copy a profile to a new name in the old unit-frame window until the Profiles page exists.',
+        desc = 'The stored unit-frame profile in use. The rows below select a profile by its name or copy this one to a new name.',
         keywords = 'profile select switch', combatSafe = false,
         values = function()
             local names = {}
@@ -58,6 +78,15 @@ Options:Add('unitframes', {
             uf.state.profile = value
         end,
         apply = update },
+    { id = 'uf.profileName', type = 'text', label = 'Profile name', section = 'Profile', order = 12, combatSafe = true,
+        desc = 'The name used by Select by name and Copy to new.', keywords = 'profile name new copy select', maxLetters = 80,
+        get = function() return profileName end, set = function(_, value) profileName = value or '' end },
+    { id = 'uf.profileSelect', type = 'action', label = 'Select by name', button = 'Select', section = 'Profile', order = 14,
+        desc = 'Switches to the stored unit-frame profile with the name above.',
+        keywords = 'profile select switch name', combatSafe = false, func = function() return switchProfile(false) end },
+    { id = 'uf.profileCopy', type = 'action', label = 'Copy this profile', button = 'Copy to new', section = 'Profile', order = 16,
+        desc = 'Copies the unit-frame profile in use to the name above and switches to the copy.',
+        keywords = 'profile copy new duplicate create', combatSafe = false, func = function() return switchProfile(true) end },
     { id = 'uf.layout', type = 'action', label = 'Move and resize frames', button = 'Open layout editor', section = 'Profile', order = 20,
         desc = 'Drag unit frames and their cast bars on the layout grid. Same as /sqedit.',
         keywords = 'move resize position layout editor', combatSafe = false,
@@ -106,7 +135,7 @@ Options:Add('unitframes', {
 
 -- Per unit --------------------------------------------------------------------
 -- { section, label, key, type, min, max | choices, description }
--- 'slider' and 'number' share the range of the old window; both accept a typed value.
+-- 'slider' and 'number' both accept a typed value.
 local rows = {
     { 'Frame', 'Enabled', 'enable', 'toggle', nil, nil, 'Shows this frame.' },
     { 'Frame', 'Width', 'width', 'number', 5, 1500, 'Width of the frame.' },

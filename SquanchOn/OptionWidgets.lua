@@ -65,13 +65,10 @@ function W:Label(parent, text, size, r, g, b)
     font:SetJustifyH('LEFT'); font:SetText(text or '')
     return font
 end
-function W:Header(parent, text)
-    return self:Label(parent, text, 12, HEADING[1], HEADING[2], HEADING[3])
-end
 -- The Escape menu's raised button. 'compact' is the menu's own thick rim: its
 -- gold paints 0.5 outside to 4 inside the frame and its corner diamonds reach 3
 -- outside, so such controls are 20 high and sit 6 apart (26 pitch). 'inner' is
--- the thin rim the older windows were laid out for.
+-- a thin rim.
 local function unsnap(texture)
     if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(false); texture:SetTexelSnappingBias(0) end
 end
@@ -147,31 +144,9 @@ function W:Scroll(parent)
     scroll.Refresh = refresh
     return scroll, body
 end
-function W:Window(name, width, height, title)
-    local frame = CreateFrame('Frame', name, UIParent)
-    frame:SetSize(width, height); frame:SetPoint('CENTER'); frame:SetFrameStrata('DIALOG'); frame:SetToplevel(true)
-    frame:EnableMouse(true); frame:SetMovable(true); frame:SetClampedToScreen(true); frame:RegisterForDrag('LeftButton')
-    frame:SetScript('OnDragStart', frame.StartMoving); frame:SetScript('OnDragStop', frame.StopMovingOrSizing)
-    local border = ns.DarkSkin:Panel(frame, 'dialog', 0)
-    local fill = frame:CreateTexture(nil, 'BACKGROUND'); fill:SetTexture(WHITE)
-    ns.DarkSkin:StylePanelBackground(fill, border)
-    -- Settings need a readable backing; the shared translucent fill gets a darker underlay.
-    local under = frame:CreateTexture(nil, 'BACKGROUND', nil, -8); under:SetAllPoints(fill); under:SetColorTexture(.02, .02, .02, 0) -- owner: same body as the chat panel
-    frame.title = self:Header(frame, title); frame.title:SetPoint('TOPLEFT', 18, -16)
-    local rule = frame:CreateTexture(nil, 'ARTWORK'); flat(rule, LINE, 1)
-    rule:SetHeight(1); rule:SetPoint('TOPLEFT', 14, -38); rule:SetPoint('TOPRIGHT', -14, -38)
-    frame.close = self:Button(frame, 'x', 22, function() frame:Hide() end, 22)
-    frame.close:SetPoint('TOPRIGHT', -12, -10)
-    if UISpecialFrames then table.insert(UISpecialFrames, name) end
-    if ns.TrackMenuFrame then ns:TrackMenuFrame(frame) end
-    -- Start hidden so the first Show runs the tracked OnShow handlers.
-    frame:Hide()
-    return frame
-end
 
 -- ---------------------------------------------------------------------------
--- Controls for the unified settings window (OptionsWindow.lua). Everything
--- below is additive; the functions above keep their signatures and behaviour.
+-- Controls for the unified settings window (OptionsWindow.lua).
 -- Shared conventions: body text 8, headers 10, boxes 16 high, raised buttons
 -- and dropdowns 20 high with the Escape menu's rim; every control
 -- has SetDisabled(flag) and reports through plain fields (onCommit, onPreview)

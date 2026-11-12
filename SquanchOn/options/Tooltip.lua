@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- Tooltip page: the fields TooltipSkin.lua reads from the imported tooltip
--- profile. Each change writes the same key the old window wrote and then
--- calls Tooltip:Refresh(). Imported content switches the skin does not
+-- profile. Each change writes its key and then calls Tooltip:Refresh(). Imported content switches the skin does not
 -- implement stay in the saved table and get no control.
 local _, ns = ...
 local Options = ns.Options

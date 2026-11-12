@@ -9,7 +9,6 @@ addon.NameplateIndicators = module
 
 local textureRoot = "Interface\\AddOns\\" .. addonName .. "\\media\\native-indicators\\"
 local crosshairs = "Interface\\AddOns\\" .. addonName .. "\\media\\Crosshairs\\"
-module.textureRoot = textureRoot
 local units = { "target", "focus", "softfriend", "softenemy", "targettarget", "mouseover" }
 local priorities = { target = 100, focus = 90, softfriend = 80, softenemy = 70, targettarget = 50, mouseover = 10 }
 local reactions = { "self", "friendly", "hostile" }
@@ -369,26 +368,25 @@ end
 
 function module:Slash(message)
   message = (message or ""):match("^%s*(.-)%s*$")
-  if message == "" or message == "options" then self:OpenOptions(); return end
+  if message == "" or message == "options" then addon:OpenOptions("nameplates"); return end
   if message == "status" then self:PrintStatus(); return end
   if message == "profiles" then
     for name in pairs(self.db.profiles) do print("Squancher indicator profile: " .. name) end
     return
   end
   local action, text = message:match("^(%S+)%s+(.+)$")
-  if action == "profile" then self:SelectProfile(text); self:RefreshPanel(); return end
+  if action == "profile" then self:SelectProfile(text); return end
   if action == "copy" and self.db.profiles[text] then
-    self:ReplaceProfile(copy(self.db.profiles[text])); self:RefreshPanel(); return
+    self:ReplaceProfile(copy(self.db.profiles[text])); return
   end
   if action == "delete" then print("Profiles are deleted on the Profiles page: /squanchon profiles"); return end
   if message == "reset" then
-    self:ReplaceProfile(newProfile()); self:RefreshPanel(); return
+    self:ReplaceProfile(newProfile()); return
   end
   local unit, reaction, key, value = message:match("^(%S+)%s+(%S+)%s+(%S+)%s+(.+)$")
   if unit then
     local ok, errorMessage = self:SetOption(unit, reaction, key, value)
     if not ok then print("Squancher nameplate indicators: " .. errorMessage) end
-    self:RefreshPanel()
     return
   end
   print("/sqnameplates [options|status|profiles|profile NAME|copy NAME|delete NAME|reset]")
@@ -448,7 +446,3 @@ controller:SetScript("OnEvent", function(_, event, arg)
     module:QueueRefresh()
   end
 end)
-
-function addon:OpenNameplateIndicatorOptions()
-  module:OpenOptions()
-end
