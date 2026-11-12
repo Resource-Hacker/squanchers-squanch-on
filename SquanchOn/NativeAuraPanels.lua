@@ -16,6 +16,7 @@ local specs = {
     FocusBuffs = { "focus", "HELPFUL", "TOPRIGHT", -53, 53 },
     FocusDebuffs = { "focus", "HARMFUL", "TOPRIGHT", -53, 53 },
 }
+local unitFrameOwned = { Buffs = true, RaidDebuffs = true, TargetDebuffs = true, FocusBuffs = true, FocusDebuffs = true }
 local function public(v) return not (issecretvalue and issecretvalue(v)) end
 local function number(v) return public(v) and type(v) == "number" end
 local function option(t, key, default)
@@ -247,7 +248,9 @@ function M:Refresh()
             panel:SetPoint(spec[3], UIParent, "CENTER", spec[4], spec[5])
             self.panels[name] = panel
         end
-        panel.db = self.settings[name] or {}
+        -- Unit auras live on the unit frames (and the game's own buff bar);
+        -- only the proc, enhancement and cooldown trackers remain separate panels.
+        panel.db = unitFrameOwned[name] and { Enable = false } or self.settings[name] or {}
         layout(panel)
     end
     self.spells = {}

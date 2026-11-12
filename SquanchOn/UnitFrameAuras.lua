@@ -183,7 +183,7 @@ function UF:RefreshAuraBars(frame)
             self:ApplyFont(bar.Name,self.db.font,self.db.fontSize,self.db.fontOutline)
             self:ApplyFont(bar.Time,self.db.font,self.db.fontSize,self.db.fontOutline)
             bar.Name:SetText(aura.name);bar.auraInstanceID=aura.auraInstanceID
-            local duration=C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
+            local duration=not timed and C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
             if duration and bar.SetTimerDuration then
                 bar:SetTimerDuration(duration,Enum.StatusBarInterpolation.Immediate,Enum.StatusBarTimerDirection.RemainingTime)
             elseif number(aura.duration) and number(aura.expirationTime) then
@@ -236,11 +236,12 @@ local function paintIcon(button,container,frame,unit,aura,key)
     button.Icon:SetSize(size*37/43,size*37/43)
     if ns.DarkSkin and ns.DarkSkin.RawSlotBorder then ns.DarkSkin:RawSlotBorder(button,frame,1) end
     button:EnableMouse(not container.disableMouse)
-    button.auraInstanceID=aura.auraInstanceID
+    button.auraInstanceID=not aura.test and aura.auraInstanceID or nil
     button.Icon:SetTexture(aura.icon)
     button.Icon:SetDesaturated(key=='Debuffs' and config.desaturate==true and personal(aura)==false)
-    local timed=false
-    local duration=C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
+    local timed=aura.test==true
+    if timed then button.Cooldown:SetCooldown(GetTime()-aura.duration*.4,aura.duration) end
+    local duration=not timed and C_UnitAuras.GetAuraDuration and C_UnitAuras.GetAuraDuration(unit,aura.auraInstanceID)
     if duration and button.Cooldown.SetCooldownFromDurationObject then
         timed=pcall(button.Cooldown.SetCooldownFromDurationObject,button.Cooldown,duration)
     end
@@ -255,13 +256,40 @@ local function paintIcon(button,container,frame,unit,aura,key)
     else button.Count:SetText('') end
     button:Show()
 end
+local testIcons={
+    Buffs={136075,135932,136085,132333,135987,136048,135915,136096},
+    Debuffs={136139,136118,136207,132090,136197,135817,136066,136188}}
+-- /sqauras [count]: fill every enabled row with placeholder icons to judge
+-- spacing, wrapping and overlap. Run it again (or /sqauras 0) to return to live auras.
+function UF:AuraTest(count)
+    count=tonumber(count)
+    if count==nil then count=not self.auraTest and 6 or 0 end
+    self.auraTest=count>0 and math.min(40,math.floor(count)) or nil
+    for _,frame in ipairs(self.objects) do if frame.db then self:RefreshAuraIcons(frame) end end
+    return self.auraTest
+end
+SLASH_SQUANCHONAURAS1='/sqauras'
+SlashCmdList.SQUANCHONAURAS=function(message)
+    local shown=UF:AuraTest(message~='' and message or nil)
+    print(shown and ('Squanch-On: previewing '..shown..' buffs and debuffs per row. /sqauras to stop.') or 'Squanch-On: aura preview off.')
+end
 function UF:RefreshAuraIcons(frame)
     local unit=frame.__unit
     for _,key in ipairs({'Buffs','Debuffs'}) do
         local container=frame[key];local config=container and container.config
         if container then
             local used=0
-            if config and config.enable~=false and unit and frame:IsShown() and C_UnitAuras.GetAuraDataByIndex then
+            if self.auraTest and config and config.enable~=false and frame:IsShown() then
+                -- Layout preview: placeholder icons, no unit data, no filters.
+                for index=1,self.auraTest do
+                    local button=container[index]
+                    if not button then button=newIcon(container,frame);container[index]=button end
+                    local aura={test=true,icon=testIcons[key][(index-1)%#testIcons[key]+1],duration=30+index*15,
+                        expirationTime=GetTime()+index*20,applications=index%3==0 and index or 1,name=key..index}
+                    button.sqAura=aura;button.sqRank=0;used=index
+                    paintIcon(button,container,frame,unit or 'player',aura,key)
+                end
+            elseif config and config.enable~=false and unit and frame:IsShown() and C_UnitAuras.GetAuraDataByIndex then
                 for index=1,255 do
                     local aura=C_UnitAuras.GetAuraDataByIndex(unit,index,container.filter or (key=='Buffs' and 'HELPFUL' or 'HARMFUL'))
                     if not aura then break end

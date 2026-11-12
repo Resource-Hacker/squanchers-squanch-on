@@ -314,13 +314,32 @@ local function newAura(frame,key)
     end
     return container
 end
+-- Player and target carry both rows on one line above the frame: one kind from
+-- each end, growing toward the middle and leaving a clear gap, with overflow
+-- stacking upward on its own side. Player: debuffs left, buffs right. Target:
+-- buffs left, debuffs right.
+local splitSides={player={Debuffs='LEFT',Buffs='RIGHT'},target={Buffs='LEFT',Debuffs='RIGHT'}}
 local function configureAura(frame,key,config)
     local c=frame[key]
+    local side=splitSides[frame.squancherKey] and splitSides[frame.squancherKey][key]
+    if side then
+        local cells=numeric(config.perrow,10,4,40)
+        config=Import:Copy(config)
+        config.enable=true;config.attachTo='FRAME';config.sizeOverride=0
+        config.anchorPoint=side=='LEFT' and 'TOPLEFT' or 'TOPRIGHT'
+        config.growthX=side=='LEFT' and 'RIGHT' or 'LEFT';config.growthY='UP'
+        config.xOffset=0;config.yOffset=5
+        config.perrow=math.max(1,math.floor((cells-1)/2));config.numrows=4
+        -- The player's saved buff filter keeps only defensives (it was written
+        -- for a hidden row); on the shared line every buff is shown.
+        if frame.squancherKey=='player' and key=='Buffs' then config.filterLists=nil;config.priority='' end
+        c.cellsAcross=cells
+    else c.cellsAcross=nil end
     local perRow=numeric(config.perrow,8,1,40)
     local size=numeric(config.sizeOverride,0,0,100)
     -- Cells abut like the action bars; the saved spacing only applies to a fixed size.
     local gap=size==0 and 0 or config.spacing or 1
-    if size==0 then size=math.max(8,frame:GetWidth()/perRow) end
+    if size==0 then size=math.max(8,frame:GetWidth()/(c.cellsAcross or perRow)) end
     local rows=numeric(config.numrows,1,1,8)
     c.size=size;c.spacing=gap;c.num=enabled(config) and 255 or 0
     c.visibleLimit=math.floor(perRow*rows);c.config=config
