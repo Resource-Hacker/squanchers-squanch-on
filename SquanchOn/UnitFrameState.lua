@@ -48,6 +48,14 @@ local function fadeTarget(frame)
 end
 function UF:RefreshFade(frame)
     if not frame.db then return end
+    -- While the player frame is hidden as idle (PlayerIdleFade.lua) its alpha is
+    -- a secret value owned by that module: leave it alone and forget the last
+    -- target, so the normal fade resumes cleanly afterwards.
+    local idle=ns.PlayerIdleFade
+    if idle and idle.frame==frame and idle.shown==false then
+        frame.squancherFadeTarget=nil;frame.squancherFadeGeneration=(frame.squancherFadeGeneration or 0)+1
+        return
+    end
     local target=fadeTarget(frame);local c=frame.db.fader or {}
     if target==frame.squancherFadeTarget then return end
     frame.squancherFadeTarget=target;frame.squancherFadeGeneration=(frame.squancherFadeGeneration or 0)+1
@@ -64,7 +72,8 @@ function UF:RefreshFade(frame)
             if progress>=1 or generation~=frame.squancherFadeGeneration then host:SetScript('OnUpdate',nil) end
         end)
     end
-    if (c.delay or 0)>0 and target<frame:GetAlpha() then C_Timer.After(c.delay,begin) else begin() end
+    local shown=frame:GetAlpha()
+    if (c.delay or 0)>0 and scalar(shown) and target<shown then C_Timer.After(c.delay,begin) else begin() end
 end
 
 local function edge(parent,region,level,spacing)

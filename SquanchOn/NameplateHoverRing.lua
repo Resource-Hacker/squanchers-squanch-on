@@ -168,10 +168,16 @@ local function attach(ring, frame)
     width = marker.LineWidth(size * scale * grown / factor, true)
   end
   local face = marker.BarFace()
-  for _, segment in ipairs(ring.segments) do segment:SetTexture(ART .. 'segment-' .. face .. '-' .. width .. '.tga') end
+  -- 124 textures: only touched when the art actually changes.
+  local key = face .. '-' .. width
+  local fresh = ring.art ~= key
+  ring.art = key
+  if fresh then
+    for _, segment in ipairs(ring.segments) do segment:SetTexture(ART .. 'segment-' .. face .. '-' .. width .. '.tga') end
+  end
   -- The empty part: the plate bar's background colour on the plain ring line.
   local back = settings.health.background
-  ring.track:SetTexture(ART .. 'ring-flat-' .. width .. '.tga')
+  if fresh then ring.track:SetTexture(ART .. 'ring-flat-' .. width .. '.tga') end
   ring.track:SetVertexColor(back[1] or 0, back[2] or 0, back[3] or 0)
   ring.track:SetAlpha(math.min(1, math.max(0, tonumber(marker.db.hoverRingTrack) or 0.4)))
   local lit = marker.db.hoverGlow ~= false
@@ -179,7 +185,7 @@ local function attach(ring, frame)
   local pixel = (PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor() or 1) / scale
   local outer = size * (width / 2 + 1.25) / 92   -- the ring's outer edge, as on the selected ring
   for _, shine in ipairs(ring.gloss) do
-    shine:SetTexture(ART .. 'segment-gloss-' .. width .. '.tga')
+    if fresh then shine:SetTexture(ART .. 'segment-gloss-' .. width .. '.tga') end
     shine:SetShown(lit)
   end
   for _, glow in ipairs(ring.glows) do
@@ -225,8 +231,22 @@ local function show(ring, frame)
 end
 
 -- Called with every mouseover change of a plate, and when the target changes.
-function Hover:Set(frame, shown)
+-- Mouseover comes and goes several times a second (the nameplate tick drops it
+-- and the next mouseover event restores it). Tearing the ring down and building
+-- it up each time re-laid the plate and was felt as lag, so a hide waits a
+-- moment and is cancelled when the same plate is hovered again.
+local leaving = 0
+function Hover:Set(frame, shown, now)
   if not shown and frame ~= current then return end
+  if shown and frame == current and current and eligible(frame) then leaving = leaving + 1; return end
+  -- A plate that has left the screen, or was just selected, loses the ring at once.
+  if not shown and not now and current and NP.active[frame] and eligible(frame) and C_Timer and C_Timer.After then
+    leaving = leaving + 1
+    local token = leaving
+    C_Timer.After(0.4, function() if token == leaving and current == frame then Hover:Set(frame, false, true) end end)
+    return
+  end
+  leaving = leaving + 1
   local wanted = shown and frame and eligible(frame) and frame or nil
   if wanted == current then
     if current then paint(live, current) end
@@ -254,7 +274,7 @@ end
 function Hover:Refresh()
   local frame = current
   if not frame then return end
-  self:Set(frame, false)
+  self:Set(frame, false, true)
   self:Set(frame, true)
 end
 
