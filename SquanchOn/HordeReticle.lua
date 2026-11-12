@@ -295,14 +295,9 @@ local function render(now, elapsed)
   end
   local scale = UIParent:GetEffectiveScale()
   mouseAnchor:ClearAllPoints()
-  if module.test or (addon.IsNativeLockCentered and addon:IsNativeLockCentered()) then
-    -- Centre-locked: the dot and glow belong on the Horde art itself, so they
-    -- take its exact centre instead of a separately computed cursor position
-    -- (the two differed by a pixel or two).
-    mouseAnchor:SetPoint("CENTER", group, "CENTER", 0, 0)
-  else
-    mouseAnchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-  end
+  if module.test and _G.GetCursorCenterPosition then x, y = GetCursorCenterPosition() end
+  mouseAnchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+  module:PlaceArt()
   for id, frame in pairs(module.frames) do
     if frame:IsShown() then
       transition(frame, now)
@@ -358,6 +353,27 @@ local function render(now, elapsed)
   publishMouseoverDot(opacity)
 end
 
+-- Owner: everything is centred on the mouse. The point the engine rests the
+-- locked cursor on (and picks mouseover from) is where the art's central
+-- diamond goes; the dot and glow sit on that same point. The diamond is
+-- (64, 47) in the 128-texel art, so the art's own centre lies below it.
+local placedX, placedY, placedScale
+function module:PlaceArt()
+  if not group then return end
+  local shadow = self.frames["No Combat"]
+  if not shadow then return end
+  local cx, cy
+  if _G.GetCursorCenterPosition then cx, cy = GetCursorCenterPosition() end
+  local ui = UIParent:GetEffectiveScale()
+  if not (cx and cy) then cx, cy = UIParent:GetWidth() * ui / 2, UIParent:GetHeight() * ui / 2 end
+  local art = shadow:GetEffectiveScale()
+  if cx == placedX and cy == placedY and art == placedScale then return end
+  placedX, placedY, placedScale = cx, cy, art
+  local drop = shadow.data.height * (0.5 - 47 / 128) * art     -- screen pixels
+  group:ClearAllPoints()
+  group:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx / ui, (cy - drop) / ui)
+end
+
 function module:ApplyReticleScale()
   local scale = tonumber(self.db and self.db.hordeReticleScale) or (2 / 3)
   scale = math.max(0.1, math.min(2, scale))
@@ -389,12 +405,13 @@ function module:ApplyReticleScale()
         -- screen center. Preserve that exact origin when following the cursor.
         local groupScale = group:GetEffectiveScale() / effectiveScale
         frame:ClearAllPoints()
-        frame:SetPoint("CENTER", mouseAnchor, "CENTER", 0,
-          shadow.data.height * (0.5 - 47 / 128))
+        frame:SetPoint("CENTER", mouseAnchor, "CENTER", 0, 0)
         frame:SetSize(frame.fillWidth, frame.fillHeight)
       end
     end
   end
+  placedScale = nil
+  self:PlaceArt()
 end
 
 function module:Initialize()
