@@ -30,6 +30,7 @@ MouseoverInteractIcon.lua
 HordeReticleData.lua
 HordeReticle.lua
 Camera.lua
+GraphicsRange.lua
 TargetCrosshairs.lua
 NameplateIndicators.lua
 FriendlyTargetNameplate.lua
@@ -93,6 +94,7 @@ options/Tooltip.lua
 options/UnitFrames.lua
 options/Layout.lua
 options/Camera.lua
+options/Graphics.lua
 options/Auras.lua
 options/Appearance.lua
 options/Chat.lua

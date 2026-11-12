@@ -140,6 +140,7 @@ sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-range-f
   situations, with a settings page; wheel zoom follows DynamicCam's easing
   algorithm (ported under MIT). DynamicCam is not needed. If it is loaded,
   Squanch-On's camera stays inactive, and its profile is imported once.
+- **Graphics sliders on their full scale:** View Distance, Environment Detail and Ground Clutter continue past the game's level 10 up to what the engine accepts, in the game's own Graphics settings and on a Graphics page, with a reset to the game's values.
 - **Theme, text and media:** rim, fill and text colours, text sizes, chat and
   drawer settings; generated status-bar textures and borders and bundled SIL OFL
   fonts to choose from. Bags, the meter and the settings window have raised

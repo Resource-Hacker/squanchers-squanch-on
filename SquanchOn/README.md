@@ -78,6 +78,8 @@ curves and situations; wheel zoom follows DynamicCam's easing algorithm. It
 stays inactive while DynamicCam is loaded; `/sqms camera takeover` imports the
 DynamicCam profile once and disables DynamicCam.
 
+The Graphics page (`GraphicsRange.lua`) continues View Distance, Environment Detail and Ground Clutter past the game's level 10 up to what the engine accepts; in-game acceptance is pending.
+
 Squanch-On draws its own nameplates. Their defaults reproduce the author's
 previous nameplate layout; optional enhancements stay off while "Classic look"
 is on (the default). They stay off while Plater is loaded; then the friendly

@@ -22,6 +22,7 @@
   General, Mouselook & Reticle, Camera, Unit Frames, Auras & Buffs, Nameplates &
   Target ring, Chat, Damage meter, Bags, Windows & Drawers, Tooltip, Appearance,
   Layout, Profiles, About.
+- Add `GraphicsRange.lua` and a Graphics page: the game's detail sliders run past level 10 to the engine's range (ground clutter up to density 256), with no console variables needed.
 - Add profiles: one addon-wide profile selected per character; create, copy,
   rename, delete, reset; export and import as a text string (LibSerialize, MIT,
   and LibDeflate, zlib, bundled). Existing settings are migrated at first login
