@@ -61,9 +61,13 @@ Options:Add('targetring', {
         desc = 'On a friendly player the ring takes that player\'s class colour instead of the health colour. Applies while the health bar look is off or the plate bar has no colour to give.',
         keywords = 'friendly ring class colour color', path = 'friendlyClassColor', default = true, apply = refit }),
 
-    row({ id = 'targetring.friendlyBarLook', type = 'toggle', label = 'Health bar look', section = 'Friendly target', order = 60,
-        desc = 'On a friendly target the ring takes the texture of the nameplate health bar and the colour that bar shows.',
+    row({ id = 'targetring.friendlyBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Friendly target', order = 60,
+        desc = 'On a friendly player the ring takes the texture of the nameplate health bar and the colour that bar shows.',
         keywords = 'friendly ring bar look texture colour color nameplate health', path = 'friendlyBarLook', default = true, apply = refit }),
+
+    row({ id = 'targetring.friendlyNpcBarLook', type = 'toggle', label = 'Health bar look on NPCs', section = 'Friendly target', order = 65,
+        desc = 'Off keeps the plain ring on friendly NPCs, coloured white to orange to red by health.',
+        keywords = 'friendly npc ring bar look texture colour color nameplate health', path = 'friendlyNpcBarLook', default = false, apply = refit }),
 
     row({ id = 'targetring.hostilePlayerBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Hostile target', order = 10,
         desc = 'On a hostile player the ring takes the texture and colour of the nameplate health bar. The execute pulse and range marks stay as they are.',

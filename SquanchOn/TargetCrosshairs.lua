@@ -10,7 +10,7 @@ local baseline = {
   -- width, extra pixels of line thickness, and whether it hugs the icon at all.
   friendlyFit = true, friendlyTighten = 0.75, friendlyGrow = 9, friendlyThickness = 1, friendlyClassColor = true,
   -- Bar look: the ring wears the nameplate health bar's texture and colour.
-  friendlyBarLook = true, hostilePlayerBarLook = true, hostileNpcBarLook = false,
+  friendlyBarLook = true, friendlyNpcBarLook = false, hostilePlayerBarLook = true, hostileNpcBarLook = false,
   -- A hostile player's bar-look ring starts at the class colour and then takes
   -- the same health shift (orange, red) as the plain ring.
   hostilePlayerHealthShift = true,
@@ -297,7 +297,12 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- the colour the selected plate's health bar shows right now.
   local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
   local function barLookWanted()
-    if marker.friendly then return settings.friendlyBarLook ~= false end
+    -- NPCs of either side keep the plain ring and its white-to-red health colour
+    -- unless asked otherwise; players wear their plate bar's look.
+    if marker.friendly then
+      if publicQuery(UnitIsPlayer, "target") == true then return settings.friendlyBarLook ~= false end
+      return settings.friendlyNpcBarLook == true
+    end
     if publicQuery(UnitIsPlayer, "target") == true then return settings.hostilePlayerBarLook ~= false end
     return settings.hostileNpcBarLook == true
   end
