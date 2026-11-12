@@ -368,14 +368,16 @@ function module:Apply(id, frame)
             -- open sidebar extends past the chat at that same scale.
             local width = rect.w
             if frame == CharacterFrame then
-                -- This client keeps the sheet at its full width whether or not the
-                -- sidebar is open, so measure the left pane itself: up to the
-                -- sidebar's inset when it exists, otherwise the measured 399/631.
+                -- The left pane has one fixed width in the sheet's own units. Measure
+                -- it while the stats shelf is open (up to the shelf's inset) and keep
+                -- it; with the shelf closed the sheet may be only that wide, so the
+                -- scale must not change when the shelf opens or closes.
                 local full, left = frame:GetWidth(), frame:GetLeft()
                 local side = CharacterFrameInsetRight
-                local edge = side and side:GetLeft()
-                local pane = left and edge and edge - left
-                if not (pane and full and pane > 100 and pane < full) then pane = full and full * 399 / 631 end
+                local edge = side and side:IsShown() and side:GetLeft()
+                local measured = left and edge and edge - left
+                if measured and full and measured > 100 and measured < full then module.characterPane = measured end
+                local pane = full and math.min(full, module.characterPane or 399)
                 if pane and full and full > 0 then width = rect.w * pane / full end
             end
             local ratio = math.min(target.w / width, math.max(1, target.y - 12) / rect.h)
