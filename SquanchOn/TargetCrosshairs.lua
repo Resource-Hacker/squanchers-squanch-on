@@ -218,12 +218,31 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   self.TargetCrosshairs = marker
   local artwork = "Interface\\AddOns\\" .. addonName .. "\\media\\Crosshairs\\"
   local display = CreateFrame("Frame", "SQMSTargetCrosshairsFrame", WorldFrame)
-  -- Behind every nameplate: plates draw in BACKGROUND, so the marker lives in
-  -- the WORLD strata beneath it (measured: plate parent WORLD, plate art BACKGROUND).
-  if not pcall(display.SetFrameStrata, display, "WORLD") then display:SetFrameStrata("BACKGROUND") end
+  display:SetFrameStrata("BACKGROUND")
   display:SetFrameLevel(1)
   display:EnableMouse(false)
   display:Hide()
+
+  -- A nameplate's own art is drawn with its plate, beneath frames that merely
+  -- share its strata. To sit BEHIND the bar, name and icons the marker is
+  -- nested in the selected Squanch-On plate at the plate's base level; its
+  -- scale and alpha stay its own.
+  local nestedIn
+  local function nest(unitFrame)
+    local host = available(unitFrame) and unitFrame.isNameplate and unitFrame.Health and unitFrame or nil
+    if host == nestedIn then return end
+    nestedIn = host
+    local shown = display:IsShown()
+    display:SetParent(host or WorldFrame)
+    display:SetFrameStrata(host and host:GetFrameStrata() or "BACKGROUND")
+    local level = host and host:GetFrameLevel() or 1
+    display:SetFrameLevel(level)
+    for _, child in ipairs({ display:GetChildren() }) do child:SetFrameLevel(level) end
+    if display.SetIgnoreParentAlpha then display:SetIgnoreParentAlpha(host ~= nil) end
+    if display.SetIgnoreParentScale then display:SetIgnoreParentScale(host ~= nil) end
+    if host and display.SetIgnoreParentScale then display:SetScale(WorldFrame:GetEffectiveScale()) else display:SetScale(1) end
+    display:SetShown(shown)
+  end
 
   function marker:SyncTargetFade()
     local owner = _G.SquanchOnUF_Target
@@ -340,6 +359,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local pixel = scale and scale > 0 and PixelUtil.GetPixelToUIUnitFactor() / scale or 1
     for _, edge in ipairs(ringEdges) do
       local d = pixel * edge.direction * limit(settings.friendlyThickness, 1, 0, 12) / 2
+      -- Bar look: the two lines are the bar's dark border, on the ring's outer
+      -- and inner edge (half the ring's drawn width away, plus half a line).
+      if edge.border then d = edge.direction * (edge.border + pixel * 0.75) end
       edge:ClearAllPoints()
       edge:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
       edge:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
@@ -539,7 +561,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- Secret colours pass straight to the region and are never compared.
     if secret then shownRed = nil else shownRed, shownGreen, shownBlue = red, green, blue end
     ring:SetVertexColor(red, green, blue)
-    for _, edge in ipairs(ringEdges) do edge:SetVertexColor(red, green, blue) end
+    for _, edge in ipairs(ringEdges) do if not edge.border then edge:SetVertexColor(red, green, blue) end end
   end
   local watched = setmetatable({}, { __mode = "k" })
   local deferred = false
@@ -686,6 +708,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     applyRange(nil)
     warningState(false)
     display:Hide()
+    nest(nil)
   end
 
   local function watchVisibility(region)
@@ -720,6 +743,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       return
     end
     local unit = plate.unitFrame or plate.UnitFrame
+    nest(unit)
     local destination = unit and unit.healthBar
     if not available(destination) then destination = plate end
     hookIcons()
@@ -757,8 +781,26 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         ringGloss:Hide()
       end
     end
-    for _, edge in ipairs(ringEdges) do
-      edge:SetShown(icon ~= nil and not barLook and (tonumber(settings.friendlyThickness) or 1) > 0)
+    do
+      local plates = not Plater and suite.Nameplates
+      local border = barLook and plates and plates.Settings and plates:Settings().border
+      local color = type(border) == "table" and border.color
+      local width = tonumber(art:match("%-(%d+)$"))
+      for _, edge in ipairs(ringEdges) do
+        if barLook and width and type(color) == "table" and (tonumber(border.thickness) or 0) > 0 then
+          -- Half the ring's drawn width in the ring frame's units.
+          edge.border = (size or baseSize) * width / 128 / 2
+          edge:SetBlendMode("BLEND")
+          edge:SetDrawLayer("ARTWORK")
+          edge:SetVertexColor(color[1] or 0, color[2] or 0, color[3] or 0)
+          edge:SetAlpha(math.max(0.6, tonumber(color[4]) or 1))
+          edge:Show()
+        else
+          if edge.border then edge.border = nil; edge:SetBlendMode("ADD"); edge:SetDrawLayer("OVERLAY"); edge:SetAlpha(1) end
+          edge:SetShown(icon ~= nil and not barLook and (tonumber(settings.friendlyThickness) or 1) > 0)
+        end
+      end
+      fitRingEdges()
     end
     -- Friendly and hostile rings share the configured ring opacity in range;
     -- out of range both fade with the target unit frame through the parent alpha.
