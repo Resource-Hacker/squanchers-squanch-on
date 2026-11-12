@@ -618,7 +618,19 @@ function Bags:Build()
     self.frame = frame
     if skin then
         frame.fill = frame:CreateTexture(nil, 'BACKGROUND', nil, -8)
-        skin:StylePanelBackground(frame.fill, skin:Panel(frame, 'dialog', 0))
+        local rim = skin:Panel(frame, 'dialog', 0)
+        skin:StylePanelBackground(frame.fill, rim)
+        -- Title plate straddling the top rim, the quest drawer's numbers. A
+        -- child of the window (shows and fades with it); it takes no mouse.
+        local plate = CreateFrame('Frame', nil, frame)
+        plate:SetSize(76, 18)
+        plate:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 10, -4)
+        plate:SetFrameLevel(rim:GetFrameLevel() + 2)
+        skin:RaisedPlate(plate, 'compact')
+        local heading = skin.headerTextColor
+        local title = label(plate, 8, heading[1], heading[2], heading[3])
+        title:SetAllPoints(plate); title:SetJustifyH('CENTER')
+        title:SetText('Bags')
     end
     self.grid = CreateFrame('Frame', nil, frame)
     self.free = label(frame, 10)

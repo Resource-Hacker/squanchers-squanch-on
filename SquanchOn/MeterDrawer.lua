@@ -39,15 +39,19 @@ local NO_RATE = { Interrupts = true, Dispels = true, Deaths = true }
 -- Header labels for the names that do not fit the strip; the tooltip and the
 -- list show the full name.
 local SHORT = { DamageTaken = 'Dmg taken', AvoidableDamageTaken = 'Avoidable', EnemyDamageTaken = 'Enemy taken' }
-local HEADER, PAD, THROTTLE, MIN_WIDTH = 18, 6, .25, 40
--- The table under the title strip: a row of column names, then the rows.
+local HEADER, PAD, THROTTLE, MIN_WIDTH = 14, 6, .25, 40
+-- The mode plate on the top rim, the quest drawer's title plate: 18 high, at
+-- least 76 wide, 10 in from the drawer's left end, in the panel's units.
+local PLATE_W, PLATE_H, PLATE_X, PLATE_PAD = 76, 18, 10, 16
+-- The table under the fight strip: a row of column names, then the rows.
 -- Widths in interface units; the name column takes what is left and the
 -- optional columns go (share, second value, rank) before it gets under NAME_MIN.
-local COLUMNS, CELL, NAME_MIN = 13, 3, 34
+local COLUMNS, CELL, NAME_MIN = 16, 3, 34
+local GRID_TOP = 2 -- the dividers start inside the header plate's top rim
 local ORDER = { 'rank', 'name', 'value', 'rate', 'percent' }
 -- Sized for the drawer beside the minimap (about 157 units inside): all four
 -- fixed columns leave the name some 45 units, enough for a first name.
-local WIDTH = { rank = 14, value = 38, rate = 32, percent = 28 }
+local WIDTH = { rank = 14, value = 34, rate = 28, percent = 28 }
 local ALIGN = { rank = 'CENTER', name = 'CENTER', value = 'CENTER', rate = 'CENTER', percent = 'CENTER' }
 local VALUE_TITLE = {
     DamageDone = 'Damage', Dps = 'DPS', HealingDone = 'Healing', Hps = 'HPS', Absorbs = 'Absorbs',
@@ -333,7 +337,6 @@ function Meter:LayoutColumns()
         end
     end
     for index = dividers + 1, #self.dividers do self.dividers[index]:Hide() end
-    for _, rule in ipairs(self.rules) do rule:SetHeight(thick) end
     self.columns = columns
     self.columnStamp = (self.columnStamp or 0) + 1
     local titles = self.titles
@@ -341,11 +344,11 @@ function Meter:LayoutColumns()
     titles.value:SetText(VALUE_TITLE[mode] or self.modeLabels[mode] or '')
     local perSecond = mode:find('Heal') and 'HPS' or mode:find('Damage') and 'DPS' or '/sec'
     titles.rate:SetText(RATE_FIRST[mode] and 'Total' or perSecond)
-    placeCells(titles, self.head, columns)
+    placeCells(titles, self.headText, columns)
 end
 -- The dividers run from the column names to the last row shown.
 function Meter:SizeGrid(shown)
-    self.grid:SetHeight(COLUMNS + math.max(0, shown) * (self.step or 0))
+    self.grid:SetHeight(COLUMNS - GRID_TOP + math.max(0, shown) * (self.step or 0))
 end
 
 function Meter:LayoutRows(height)
@@ -485,7 +488,7 @@ end
 local function headerButton(parent, size, color, popupWidth)
     local widgets = ns.OptionWidgets
     local button = CreateFrame('Button', nil, parent)
-    button:SetHeight(HEADER - 4)
+    button:SetHeight(HEADER - 2)
     button:SetHighlightTexture(WHITE); button:GetHighlightTexture():SetVertexColor(1, .78, .42, .12)
     button.text = widgets:Label(button, '', size, color and color[1], color and color[2], color and color[3])
     button.text:SetPoint('LEFT', 2, 0); button.text:SetPoint('RIGHT', -2, 0); button.text:SetWordWrap(false)
@@ -502,8 +505,8 @@ local function headerButton(parent, size, color, popupWidth)
     button:SetScript('OnHide', function(self) if widgets:PopupOwner() == self then widgets:ClosePopup() end end)
     return button
 end
--- The fight label takes what its text needs, up to 45% of the strip; the mode
--- name gets the rest and falls back to its short form when it would be cut.
+-- The fight label takes what its text needs, up to the strip; the mode plate
+-- grows with its name up to the drawer's width and falls back to the short form.
 function Meter:UpdateHeader()
     local settings = self:Settings()
     local mode, segment = self.modeBox, self.segmentBox
@@ -511,13 +514,13 @@ function Meter:UpdateHeader()
     if self.sessionID then segment.value, segment.tip = self.sessionID, self.sessionName or 'Fight'
     else segment.value, segment.tip = settings.segment, settings.segment == 'overall' and 'Overall' or 'Current' end
     segment.text:SetText(segment.tip)
-    local segmentWidth = math.min(math.ceil(segment.text:GetStringWidth()) + 6, math.floor(free * .45))
-    segment:SetWidth(segmentWidth)
+    segment:SetWidth(math.min(math.ceil(segment.text:GetStringWidth()) + 6, free))
     local full = self.modeLabels[settings.mode] or settings.mode
     mode.value, mode.tip = settings.mode, full
-    mode:SetWidth(free - segmentWidth)
+    local room = math.max(MIN_WIDTH - PLATE_X, self.frame:GetWidth() - PLATE_X * 2)
     mode.text:SetText(full)
-    if SHORT[settings.mode] and mode.text:GetStringWidth() > free - segmentWidth - 4 then mode.text:SetText(SHORT[settings.mode]) end
+    if SHORT[settings.mode] and mode.text:GetStringWidth() + PLATE_PAD > room then mode.text:SetText(SHORT[settings.mode]) end
+    mode:SetWidth(math.min(room, math.max(PLATE_W, math.ceil(mode.text:GetStringWidth()) + PLATE_PAD)))
 end
 
 -- Mouse: ignored while mouselook is locked, unless a modifier is held.
@@ -677,8 +680,15 @@ function Meter:Initialize()
     local content = CreateFrame('Frame', nil, frame)
     content:SetAllPoints(frame); content:EnableMouse(false)
     self.content = content
-    local modeBox = headerButton(content, 10, skin.headerTextColor, 150)
-    modeBox:SetPoint('TOPLEFT', content, 'TOPLEFT', PAD - 2, -2)
+    -- The mode selector is a raised plate straddling the top rim, like the
+    -- quest drawer's title: its bottom on the rim's inner edge, above the rim.
+    -- A child of the drawer, so it shows, hides and fades in with it.
+    local modeBox = headerButton(frame, 8, skin.headerTextColor, 150)
+    modeBox:SetSize(PLATE_W, PLATE_H)
+    modeBox:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', PLATE_X, 0)
+    modeBox:SetFrameLevel(self.border:GetFrameLevel() + 2)
+    modeBox.text:ClearAllPoints(); modeBox.text:SetAllPoints(modeBox); modeBox.text:SetJustifyH('CENTER')
+    skin:RaisedButton(modeBox, 'compact')
     function modeBox:getItems()
         local items = {}
         for _, value in ipairs(Meter.modeValues) do items[#items + 1] = { value = value, label = Meter.modeLabels[value] } end
@@ -686,7 +696,7 @@ function Meter:Initialize()
     end
     modeBox.onCommit = function(_, value) choose('mode', value) end
     local segmentBox = headerButton(content, 8)
-    segmentBox:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 2 - PAD, -2)
+    segmentBox:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 2 - PAD, -1)
     segmentBox.text:SetJustifyH('RIGHT')
     segmentBox.getItems = segmentItems
     segmentBox.onCommit = function(_, value)
@@ -703,24 +713,43 @@ function Meter:Initialize()
     end
     self.modeBox, self.segmentBox = modeBox, segmentBox
 
-    -- Column names, between two rules; the dividers are on a frame above the
-    -- rows so the bars do not cover them.
+    -- Column names on one raised charcoal plate with a thin gold rim. The cell
+    -- seams are the column dividers themselves, which run on through the rows
+    -- from a frame above them; the plate's rim is drawn over the dividers and
+    -- the names over both.
     local head = CreateFrame('Frame', nil, content)
     head:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -HEADER)
     head:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 0, -HEADER)
     head:SetHeight(COLUMNS); head:EnableMouse(false)
-    self.head, self.titles, self.rules, self.dividers = head, {}, {}, {}
+    -- Flush from edge to edge: a raised charcoal face with a lit gold top edge
+    -- and a dark bottom edge (the raised-button recipe without corner art, so
+    -- nothing is inset from the drawer's sides).
+    local headFace = head:CreateTexture(nil, 'BACKGROUND', nil, -7)
+    headFace:SetTexture(WHITE); headFace:SetAllPoints(head)
+    headFace:SetGradient('VERTICAL', CreateColor(.055, .055, .055, 1), CreateColor(.17, .17, .17, 1))
+    local headRim = CreateFrame('Frame', nil, head)
+    headRim:SetAllPoints(head); headRim:EnableMouse(false)
+    local headTop, headBottom = headRim:CreateTexture(nil, 'ARTWORK'), headRim:CreateTexture(nil, 'ARTWORK')
+    headTop:SetPoint('TOPLEFT'); headTop:SetPoint('TOPRIGHT')
+    headBottom:SetPoint('BOTTOMLEFT'); headBottom:SetPoint('BOTTOMRIGHT')
+    local function paintHead()
+        local thick = 2 * PixelUtil.GetPixelToUIUnitFactor() / head:GetEffectiveScale()
+        headTop:SetHeight(thick); headBottom:SetHeight(thick)
+        local rim, lit = skin.rimColor, .70 / .90
+        headTop:SetColorTexture(rim[1] * lit, rim[2] * lit, rim[3] * lit, 1)
+        headBottom:SetColorTexture(rim[1] * lit, rim[2] * lit, rim[3] * lit, 1)
+    end
+    paintHead()
+    head:HookScript('OnSizeChanged', paintHead)
+    skin:OnTheme(paintHead)
+    local headText = CreateFrame('Frame', nil, head)
+    headText:SetAllPoints(head); headText:EnableMouse(false)
+    self.head, self.headText, self.titles, self.dividers = head, headText, {}, {}
     for _, key in ipairs(ORDER) do
-        local title = label(head, 8)
+        local title = label(headText, 8)
         title:SetFont(skin:HeadingFont(8))
         title:SetJustifyH(ALIGN[key]); title:SetWordWrap(false)
         self.titles[key] = title
-    end
-    for index, edge in ipairs({ 'TOP', 'BOTTOM' }) do
-        local rule = head:CreateTexture(nil, 'ARTWORK')
-        rule:SetPoint(edge .. 'LEFT', head, edge .. 'LEFT'); rule:SetPoint(edge .. 'RIGHT', head, edge .. 'RIGHT')
-        paintRule(rule)
-        self.rules[index] = rule
     end
     local list = CreateFrame('Frame', nil, content)
     list:SetPoint('TOPLEFT', head, 'BOTTOMLEFT')
@@ -732,15 +761,16 @@ function Meter:Initialize()
     end)
     self.list = list
     local grid = CreateFrame('Frame', nil, content)
-    grid:SetPoint('TOPLEFT', head, 'TOPLEFT'); grid:SetPoint('TOPRIGHT', head, 'TOPRIGHT')
-    grid:SetHeight(COLUMNS); grid:EnableMouse(false)
+    grid:SetPoint('TOPLEFT', head, 'TOPLEFT', 0, -GRID_TOP); grid:SetPoint('TOPRIGHT', head, 'TOPRIGHT', 0, -GRID_TOP)
+    grid:SetHeight(COLUMNS - GRID_TOP); grid:EnableMouse(false)
     grid:SetFrameLevel(list:GetFrameLevel() + 5)
+    headRim:SetFrameLevel(grid:GetFrameLevel() + 1)
+    headText:SetFrameLevel(grid:GetFrameLevel() + 2)
     self.grid = grid
     local function theme()
         local color = skin.headerTextColor
         for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3], color[4]) end
         modeBox.text:SetTextColor(color[1], color[2], color[3], color[4])
-        for _, rule in ipairs(self.rules) do paintRule(rule) end
         for _, line in ipairs(self.dividers) do paintRule(line) end
         for _, row in ipairs(self.rows or {}) do if row.line then paintRule(row.line) end end
     end

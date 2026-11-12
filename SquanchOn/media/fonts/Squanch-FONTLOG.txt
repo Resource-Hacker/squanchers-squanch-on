@@ -24,9 +24,20 @@ Squanch Highway   Red Hat Display 1.030, wght 900                 none
 Squanch Round     Red Hat Display 1.030, wght 700                 none
 Squanch Square    Orbitron 2.001, wght 900                        upstream's alternate I, J, V, W, Y, w
                                                                   selected; caret drawn by its circumflex
-Squanch Bolt      Amarante 1.001 Regular                          each letter leaned and lifted by a
-                                                                  fixed pseudo-random amount
+Squanch Bolt      Amarante 1.001 Regular                          lightning-bolt redraw, see below
 Squanch Comic     Comic Neue 2.003 Bold Italic                    lowercase drawn as capitals
+
+Squanch Bolt 2.000 is an original lightning-bolt treatment of Amarante, drawn
+entirely by the build script from the numbers in its REDRAW table:
+  - strokes thickened by moving every outline point outwards,
+  - each letter stretched to stand between its own two heights, which sets the
+    lowercase on an uneven, floating baseline, and leaned a little,
+  - the stems of F M N P R T Y p q 1 7 cut off and ended in a generated zigzag
+    bolt that tapers to a point below the baseline (4 carries one upwards),
+  - the tops of b d h k l t L and the feet of A H K V cut to a slanted spike,
+  - every arc drawn as two flats, for a chiselled outline.
+The bolt and spike shapes are computed (stem position found in the base glyph,
+then teeth, jump, rise and taper); no outline of another font is used.
 
 Upstream
   Red Hat Display  Copyright 2024 The Red Hat Project Authors
@@ -46,3 +57,4 @@ upstream). No Cyrillic in any of the five.
 
 Changelog
   2026-11-11  Squanch-On contributors  Version 1.000, first build.
+  2026-11-11  Squanch-On contributors  Squanch Bolt 2.000: lightning-bolt redraw.

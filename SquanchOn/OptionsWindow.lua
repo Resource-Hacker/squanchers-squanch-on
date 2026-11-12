@@ -783,17 +783,27 @@ function Window:Build()
     if type(point) == 'table' and point[1] then frame:SetPoint(point[1], UIParent, point[2] or point[1], point[3] or 0, point[4] or 0)
     else frame:SetPoint('CENTER') end
 
-    -- Title strip: drag handle, name, profile, close.
+    -- Top strip: drag handle, profile, close. The name is a raised plate
+    -- straddling the top rim, the quest drawer's title plate: 76 x 18, 10 in
+    -- from the left, its bottom on the rim's inner edge, above the rim.
     local drag = CreateFrame('Frame', nil, frame)
     drag:SetPoint('TOPLEFT', 0, 0); drag:SetPoint('TOPRIGHT', 0, 0); drag:SetHeight(TOP)
-    drag:EnableMouse(true); drag:RegisterForDrag('LeftButton')
-    drag:SetScript('OnDragStart', function() frame:StartMoving() end)
-    drag:SetScript('OnDragStop', function()
-        frame:StopMovingOrSizing()
-        local anchor, _, relative, x, y = frame:GetPoint(1)
-        saved().point = { anchor, relative, x, y }
-    end)
-    local name = W:Label(frame, 'Squanch-On', 10, heading[1], heading[2], heading[3]); name:SetPoint('LEFT', frame, 'TOPLEFT', PAD + 6, -PAD - 10)
+    local plate = CreateFrame('Frame', nil, frame)
+    plate:SetSize(76, 18); plate:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 10, -4)
+    if border then plate:SetFrameLevel(border:GetFrameLevel() + 2) end
+    if skin then skin:RaisedPlate(plate, 'compact') end
+    local name = W:Label(plate, 'Squanch-On', 8, heading[1], heading[2], heading[3])
+    name:SetAllPoints(plate); name:SetJustifyH('CENTER')
+    frame:SetClampRectInsets(0, 0, 14, 0) -- the plate stays on screen too
+    for _, handle in ipairs({ drag, plate }) do
+        handle:EnableMouse(true); handle:RegisterForDrag('LeftButton')
+        handle:SetScript('OnDragStart', function() frame:StartMoving() end)
+        handle:SetScript('OnDragStop', function()
+            frame:StopMovingOrSizing()
+            local anchor, _, relative, x, y = frame:GetPoint(1)
+            saved().point = { anchor, relative, x, y }
+        end)
+    end
     self.closeX = W:SmallButton(frame, 'x', 20, function() frame:Hide() end)
     self.closeX:SetPoint('RIGHT', frame, 'TOPRIGHT', -PAD - 2, -PAD - 10)
     self.profileNote = W:Label(frame, '', 8, GREY[1], GREY[2], GREY[3]); self.profileNote:SetPoint('RIGHT', self.closeX, 'LEFT', -10, 0)

@@ -519,14 +519,14 @@
       ]
     },
     {
-      "name": "Squanch Bolt 1.000",
+      "name": "Squanch Bolt 2.000",
       "license": "OFL-1.1",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/amarante/Amarante-Regular.ttf",
-      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Amarante 1.001 Regular (sha256 de5eb7cc2b13632fe3f9fedbe4dc34571a76758cfb52b71fdace8fc4a7638a2f), letters leaned and lifted by fixed amounts; outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2012 Sorkin Type Co. Reserved Font Name \"Amarante\" not used.",
+      "modifications": "Modified Version built by asset-source/build-fonts.py from the unmodified upstream file: Amarante 1.001 Regular (sha256 de5eb7cc2b13632fe3f9fedbe4dc34571a76758cfb52b71fdace8fc4a7638a2f), redrawn by that script as a lightning-bolt face (strokes thickened, stems ended in generated zigzag bolts and spikes, letters set on an uneven baseline and leaned, arcs faceted); outlines rescaled and respaced to fixed layout metrics, hinting removed, renamed. Copyright 2012 Sorkin Type Co. Reserved Font Name \"Amarante\" not used.",
       "files": [
         {
           "path": "SquanchOn/media/fonts/SquanchBolt.ttf",
-          "sha256": "239c47e7c2f88ff7f6a9129f137ad5e3ff76a0020d655877c9acf096c10ccbff"
+          "sha256": "a5b2a885b9f8af09afb21509ede985d14efbae03f5cceeb66261cf8acd3a743d"
         },
         {
           "path": "SquanchOn/media/fonts/SquanchBolt-OFL.txt",
@@ -558,11 +558,11 @@
       "files": [
         {
           "path": "SquanchOn/asset-source/build-fonts.py",
-          "sha256": "706d829aaef4f6d9d9df6517e50449a962e7db173a393f252f9699f746a6885b"
+          "sha256": "54fcb61e874050b41cf65a7c376f27b47c7dafb5d160cedaedc4e96908ad6507"
         },
         {
           "path": "SquanchOn/media/fonts/Squanch-FONTLOG.txt",
-          "sha256": "06a89e034ce5de6fcb1a79ab96d5ef280237a20de206b8458e05dca88f6ccac1"
+          "sha256": "a64c0d88e4ac8523706727a00398298648f53f27249c95382936c82f3d515d00"
         }
       ]
     },
