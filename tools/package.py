@@ -28,7 +28,7 @@ if not files:
 for path in files:
     relative = path.relative_to(ADDON)
     if any(part.casefold() in {'private-media', 'private-provenance', 'wtf', 'savedvariables', '__pycache__'}
-           for part in relative.parts) or path.name in {'LocalMedia.lua', 'HordeReticleData.lua'}:
+           for part in relative.parts) or path.name == 'LocalMedia.lua':
         raise SystemExit(f'Private assembly content cannot enter a public package: {relative}')
 for path in files:
     if path.is_symlink() or not path.is_file():

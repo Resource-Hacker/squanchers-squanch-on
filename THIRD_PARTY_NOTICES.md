@@ -18,8 +18,8 @@ original contributions. [Provenance](LICENSES/TargetCrosshairs-PROVENANCE.md)
 identifies the functional reference without claiming a clean-room process.
 The independently generated polygons in `media/native-indicators` have
 [source and provenance](SquanchOn/asset-source/NATIVE-INDICATORS-PROVENANCE.md).
-No historical TNI image library, PowerAuras texture library, exported aura script
-or throwknife audio is distributed here.
+No historical TNI image library is distributed here. The Horde reticle's own
+GPL-2.0 data and media are listed in their section below.
 
 ## Bundled libraries and private local assets
 
@@ -55,3 +55,15 @@ restriction or permission for those projects.
 
 All names acknowledge their respective authors and imply no endorsement,
 sponsorship, ownership transfer or additional permissions.
+
+## Horde reticle (GPL-2.0)
+
+`HordeReticle.lua`, `HordeReticleData.lua` and `media/horde-reticle/` are
+distributed under the GNU General Public License version 2
+(`LICENSES/GPL-2.0.txt`), separately from the MIT-licensed remainder. They are a
+standalone rendering of the author's own "The Terminator" aura group, built in
+M33kAuras (a WeakAuras fork, GPL-2.0, <https://github.com/m33shoq/M33kAuras>).
+Several layers began as the Wago imports <https://wago.io/OWg3rTo0a> and
+<https://wago.io/jxJdu2yc6>. The five textures and `throwknife.ogg` are unmodified
+PowerAurasMedia files as shipped inside that GPL-2.0 package; the package carries
+no separate per-file authorship or license statement for them.

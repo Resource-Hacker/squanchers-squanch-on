@@ -1,11 +1,13 @@
--- SPDX-License-Identifier: MIT
--- Original reticle renderer; game-owned Horde artwork and original geometry.
+-- SPDX-License-Identifier: GPL-2.0-only
+-- Standalone rendering of the author's exported The Terminator aura group.
+-- See THIRD_PARTY_NOTICES.md and LICENSES/GPL-2.0.txt for data/media provenance.
 local addonName, addon = ...
-local config = assert(addon.ReticleConfig, "Load ReticleConfig.lua before HordeReticle.lua")
-local data = config.layers
-local module = {frames = {}, source = config, enabled = true}
+local data = assert(addon.HordeReticleData, "Load HordeReticleData.lua before HordeReticle.lua")
+local module = {frames = {}, source = data, enabled = true}
 addon.HordeReticle = module
 
+local media = "Interface\\AddOns\\" .. addonName .. "\\media\\horde-reticle\\"
+local strata = {[2] = "BACKGROUND", [4] = "MEDIUM", [5] = "HIGH", [9] = "TOOLTIP"}
 local group, mouseAnchor, driver
 local elapsedState = 0
 local lastCast
@@ -24,6 +26,12 @@ end
 local function number(fn, ...)
   local value = query(fn, ...)
   return type(value) == "number" and value or nil
+end
+local function texturePath(path)
+  if type(path) ~= "string" then return path end
+  if not path:find("\\PowerAurasMedia\\Auras\\", 1, true) then return path end
+  local name = path:match("\\([^\\]+)$")
+  return name and media .. name or path
 end
 local function clamp(value)
   return math.max(0, math.min(1, value))
@@ -45,7 +53,7 @@ local function cooldown(spell)
   end
 end
 local function gcdInfo()
-  -- The selected Forever client uses 29515 for its global cooldown.
+  -- Forever's own M33 GCD watcher uses 29515, other clients use 61304.
   local interface = _G.GetBuildInfo and tonumber((select(4, _G.GetBuildInfo())))
   return cooldown(interface == 16001 and 29515 or 61304)
 end
@@ -78,45 +86,72 @@ local function autoShotRange(unit)
   return result == 1 or result == true
 end
 
--- Clip native/owned artwork from the bottom; foreground and background share
--- one coordinate rectangle, including during a global-cooldown fill.
+-- Linear progress artwork is clipped geometrically. Cropping uses the exact
+-- saved zoom (1 + crop) and artwork rotation, including non-square Execute UVs.
 local function setProgressTexture(texture, frame, d, progress)
-  progress = math.max(.0001, clamp(progress))
+  progress = math.max(0.0001, clamp(progress))
   texture:ClearAllPoints()
   texture:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT")
   texture:SetSize(frame:GetWidth(), frame:GetHeight() * progress)
-  texture:SetTexCoord(0, 1, 1-progress, 1)
+  local hordeFill = frame.id == "Cursor GCD "
+  local radians = math.rad(d.rotation or 0)
+  local cosine, sine = math.cos(radians), math.sin(radians)
+  local function uv(u, v)
+    -- GCD fills the existing Horde silhouette; its imported crop/23.5px
+    -- rectangle otherwise renders the same art at only 71.2% of the base.
+    local x = (u - 0.5) * (hordeFill and 1 or 1.4142 / (1 + (d.crop_x or 0)))
+    local y = (v - 0.5) * (hordeFill and 1 or 1.4142 / (1 + (d.crop_y or 0)))
+    return 0.5 + x * cosine - y * sine - (d.user_x or 0),
+      0.5 + x * sine + y * cosine + (d.user_y or 0)
+  end
+  local ulx, uly = uv(0, 1 - progress)
+  local llx, lly = uv(0, 1)
+  local urx, ury = uv(1, 1 - progress)
+  local lrx, lry = uv(1, 1)
+  texture:SetTexCoord(ulx, uly, llx, lly, urx, ury, lrx, lry)
 end
 
 local function makeFrame(id, index)
   local d = data[id]
-  local parent = d.cursor and mouseAnchor or group
+  local parent = d.anchorFrameType == "MOUSE" and mouseAnchor or group
   local frame = CreateFrame("Frame", nil, parent)
-  frame:SetSize(unpack(d.size))
-  frame:SetPoint("CENTER", parent, "CENTER", unpack(d.offset or {0,0}))
-  frame:SetFrameStrata(d.strata or "MEDIUM")
+  frame:SetSize(d.width, d.height)
+  frame:SetPoint(d.selfPoint, parent, "CENTER", d.xOffset, d.yOffset)
+  -- Owner-selected foreground mouseover glow; the imported aura used BACKGROUND.
+  frame:SetFrameStrata(id == "Mouseover Glow" and "TOOLTIP" or (strata[d.frameStrata] or "MEDIUM"))
   frame:SetFrameLevel(group:GetFrameLevel() + index * 4)
   frame:EnableMouse(false)
-  frame:SetAlpha(d.opacity or 1)
+  frame:SetAlpha(d.alpha or 1)
   frame:Hide()
   frame.id, frame.data = id, d
-  if d.progress then
-    local background = frame:CreateTexture(nil,"BACKGROUND")
-    background:SetTexture(d.art, "CLAMP", "CLAMP")
-    background:SetDesaturated(true)
-    background:SetVertexColor(unpack(d.background))
-    background:SetBlendMode(d.blend or "BLEND")
+  if id == "Cursor GCD " then
+    frame.fillWidth, frame.fillHeight = data["No Combat"].width, data["No Combat"].height
+    frame:SetSize(frame.fillWidth, frame.fillHeight)
+  end
+  if d.regionType == "progresstexture" then
+    local background = frame:CreateTexture(nil, "BACKGROUND")
+    background:SetTexture(texturePath(d.sameTexture and d.foregroundTexture or d.backgroundTexture), "CLAMP", "CLAMP")
+    background:SetVertexColor(unpack(d.backgroundColor))
+    background:SetBlendMode(d.blendMode)
     setProgressTexture(background, frame, d, 1)
     frame.background = background
-    frame.smoothedProgress = .667
+    frame.smoothedProgress = 0.667
   end
-  local foreground = frame:CreateTexture(nil,"ARTWORK")
-  foreground:SetTexture(d.art, "CLAMP", "CLAMP")
-  if id ~= "Pet Tracker" then foreground:SetDesaturated(true) end
-  foreground:SetVertexColor(unpack(d.color))
-  foreground:SetBlendMode(d.blend or "BLEND")
+  local foreground = frame:CreateTexture(nil, "ARTWORK")
+  foreground:SetTexture(texturePath(d.regionType == "progresstexture" and d.foregroundTexture or d.texture),
+    d.regionType == "texture" and "CLAMPTOBLACKADDITIVE" or "CLAMP",
+    d.regionType == "texture" and "CLAMPTOBLACKADDITIVE" or "CLAMP")
+  foreground:SetVertexColor(unpack(d.regionType == "progresstexture" and d.foregroundColor or d.color))
+  foreground:SetBlendMode(d.blendMode)
   foreground:SetAllPoints(frame)
-  if d.progress then setProgressTexture(foreground, frame, d, 1) end
+  if d.regionType == "progresstexture" then setProgressTexture(foreground, frame, d, 1) end
+  if id == "Mouseover Dot" or id == "Mouseover Glow" then
+    -- Aura104 supplies the central-diamond shape used by the dot. Its only
+    -- nontransparent pixels occupy [51,77) x [32,62) in the 128px source.
+    -- Reuse that shape for both layers instead of spilling a circular glow.
+    foreground:SetTexture(media .. "Aura104", "CLAMP", "CLAMP")
+    foreground:SetTexCoord(51 / 128, 77 / 128, 32 / 128, 62 / 128)
+  end
   frame.texture = foreground
   module.frames[id] = frame
 end
@@ -130,11 +165,12 @@ local function active(frame, show)
     frame.shownAt = now
     frame.finishedAt = nil
     frame:Show()
-    if frame.id == "Execute" and _G.PlaySound and _G.SOUNDKIT and type(SOUNDKIT.RAID_WARNING) == "number" then
-      _G.PlaySound(SOUNDKIT.RAID_WARNING, "Master")
+    if frame.id == "Execute" and _G.PlaySoundFile then
+      _G.PlaySoundFile(media .. "throwknife.ogg", "Master")
     end
   elseif frame:IsShown() then
-    if frame.data.exit then frame.finishedAt = now else frame:Hide() end
+    local finish = frame.data.animation.finish
+    if finish and finish.type ~= "none" then frame.finishedAt = now else frame:Hide() end
   end
 end
 
@@ -176,7 +212,8 @@ function module:Refresh()
   self.powerProgress = power and maximum and maximum > 0 and power / maximum or 0
   active(self.frames["Low Mana"], self.enabled and combat and power ~= nil
     and maximum ~= nil and maximum > 0 and power / maximum * 100 < 15)
-  -- Retain the selected raw-health threshold rather than guessing a percentage.
+  -- Explicit correction: the saved Conditions trigger ignored its raw HP <20
+  -- filter. Honor that stored filter, without inventing a percentage threshold.
   local health = number(_G.UnitHealth, "player")
   active(self.frames["Low Health"], self.enabled and combat and health ~= nil and health < 20)
   active(self.frames.Execute, self.enabled and combat and usableKillShot())
@@ -200,25 +237,33 @@ end
 
 local function transition(frame, now)
   local d = frame.data
-  local alpha, scale = d.opacity or 1, 1
-  local age = now-(frame.shownAt or now)
-  if d.enter and age < .25 then
-    local progress=age/.25
-    if d.enter == "grow" then scale=math.max(.0001,progress) end
-    alpha=alpha*progress
-  elseif frame.active and d.pulse then
-    scale=1+.05*pulse(math.max(0,now-(module.warningPulseStart or frame.shownAt+.25)),.75)
+  local alpha, scale = d.alpha or 1, 1
+  local start = d.animation.start
+  local age = now - (frame.shownAt or now)
+  if start and start.type == "preset" and age < 0.25 then
+    local progress = age / 0.25
+    if start.preset == "shrink" then scale = math.max(0.0001, progress) end
+    alpha = alpha * progress
+  elseif frame.active and d.animation.main.type == "preset"
+    and d.animation.main.preset == "pulse" then
+    scale = 1 + 0.05 * pulse(math.max(0, now - (module.warningPulseStart or frame.shownAt + 0.25)), 0.75)
   end
   if frame.finishedAt then
-    local duration=d.exit == "ease" and 1 or .25
-    local progress=(now-frame.finishedAt)/duration
-    if progress>=1 then frame:Hide();return end
-    if d.exit == "ease" then progress=1-(1-progress)^3 end
-    alpha=(d.opacity or 1)*(1-progress)
-    if d.exit == "shrink" then scale=math.max(.0001,1-progress) end
+    local finish = d.animation.finish
+    local duration = finish.type == "custom" and (tonumber(finish.duration) or 1) or 0.25
+    local progress = (now - frame.finishedAt) / duration
+    if progress >= 1 then frame:Hide(); return end
+    if finish.type == "custom" and finish.easeType == "easeOut" then
+      progress = 1 - (1 - progress) ^ (finish.easeStrength or 3)
+    end
+    alpha = (d.alpha or 1) * (1 - progress)
+    if finish.preset == "shrink" and finish.type == "preset" then
+      scale = math.max(0.0001, 1 - progress)
+    end
   end
-  if frame.id == "Cursor GCD " then scale=1 end
-  frame:SetSize((frame.fillWidth or d.size[1])*scale,(frame.fillHeight or d.size[2])*scale)
+  -- Keep the progress silhouette registered to its base during fades too.
+  if frame.id == "Cursor GCD " then scale = 1 end
+  frame:SetSize((frame.fillWidth or d.width) * scale, (frame.fillHeight or d.height) * scale)
   frame:SetAlpha(alpha)
 end
 
@@ -249,7 +294,7 @@ local function render(now, elapsed)
     if frame:IsShown() then
       transition(frame, now)
       local d = frame.data
-      if d.progress then
+      if d.regionType == "progresstexture" then
         setProgressTexture(frame.background, frame, d, 1)
         local target = 1
         if id == "Low Mana" then
@@ -269,7 +314,8 @@ local function render(now, elapsed)
         local p = pulse(now - (frame.shownAt or now), 2)
         frame.texture:SetVertexColor(0, 0, 0, d.color[4] + (1 - d.color[4]) * p)
       elseif id == "Target" then
-        local color = config.targetColors[module.targetAttackable and 1 or 2]
+        local color = module.targetAttackable and d.conditions[1].changes[1].value
+          or d.conditions[2].changes[1].value
         local p = pulse(now - (module.frames["No Combat"].shownAt or now), 2)
         frame.texture:SetVertexColor(color[1] * (1 - p), color[2] * (1 - p),
           color[3] * (1 - p), color[4] + (1 - color[4]) * p)
@@ -309,16 +355,25 @@ function module:ApplyReticleScale()
       local parentScale = frame:GetParent():GetEffectiveScale()
       frame:SetScale(scale / parentScale)
       if id == "Mouseover Dot" or id == "Mouseover Glow" then
+        local shadow = self.frames["No Combat"]
         local effectiveScale = frame:GetEffectiveScale()
         local pixelFactor = PixelUtil.GetPixelToUIUnitFactor()
         local pixel = pixelFactor / effectiveScale
-        local halfWidth, halfHeight=config.dotSize[1]/2,config.dotSize[2]/2
-        local insetScale=math.max(.0001,1-pixel*math.sqrt(halfWidth^2+halfHeight^2)/(halfWidth*halfHeight))
-        frame.fillWidth,frame.fillHeight=2*halfWidth*insetScale,2*halfHeight*insetScale
-        local groupScale=group:GetEffectiveScale()/effectiveScale
+        local halfWidth = shadow.data.width * 26 / 256
+        local halfHeight = shadow.data.height * 30 / 256
+        -- Parallel diamond edges: one physical pixel measured perpendicular
+        -- to each edge, independent of UI scale and the virtual canvas size.
+        local insetScale = math.max(0.0001, 1 - pixel
+          * math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight)
+          / (halfWidth * halfHeight))
+        frame.fillWidth = 2 * halfWidth * insetScale
+        frame.fillHeight = 2 * halfHeight * insetScale
+        -- The imported group's BOTTOMLEFT anchor adds its half-size to the
+        -- screen center. Preserve that exact origin when following the cursor.
+        local groupScale = group:GetEffectiveScale() / effectiveScale
         frame:ClearAllPoints()
-        frame:SetPoint("CENTER",mouseAnchor,"CENTER",group:GetWidth()/2*groupScale,
-          group:GetHeight()/2*groupScale+config.dotYOffset)
+        frame:SetPoint("CENTER", mouseAnchor, "CENTER", 0,
+          shadow.data.height * (0.5 - 47 / 128))
         frame:SetSize(frame.fillWidth, frame.fillHeight)
       end
     end
@@ -329,15 +384,15 @@ function module:Initialize()
   if self.initialized then return end
   group = CreateFrame("Frame", "SquancherHordeReticleGroup", UIParent)
   group:SetSize(2, 2)
-  -- Preserve the established two-unit group origin used by the aim-point API.
+  -- M33's groupOffset=true anchors this exact two-unit group by BOTTOMLEFT.
   -- Centered exactly on the screen centre, where the locked cursor rests.
   group:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  group:SetScale(1)
+  group:SetScale(data["The Terminator"].scale)
   group:EnableMouse(false)
   mouseAnchor = CreateFrame("Frame", nil, UIParent)
   mouseAnchor:SetSize(1, 1)
   mouseAnchor:EnableMouse(false)
-  for index, id in ipairs(config.order) do makeFrame(id, index) end
+  for index, id in ipairs(data["The Terminator"].controlledChildren) do makeFrame(id, index) end
   self.initialized = true
   self.group = group
   self:ApplyReticleScale()

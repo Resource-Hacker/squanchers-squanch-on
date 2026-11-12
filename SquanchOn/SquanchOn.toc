@@ -18,7 +18,7 @@ Media.lua
 LayoutEditor.lua
 MouseoverCasting.lua
 MouseoverInteractIcon.lua
-ReticleConfig.lua
+HordeReticleData.lua
 HordeReticle.lua
 CameraFraming.lua
 TargetCrosshairs.lua

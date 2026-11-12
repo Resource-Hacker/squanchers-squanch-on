@@ -329,6 +329,50 @@
           "sha256": "d6ef350c07edf6be550c586e32473776e310d212bf39962cafee04a8d415405f"
         }
       ]
+    },
+    {
+      "name": "Horde reticle",
+      "license": "GPL-2.0-only",
+      "source": "Standalone rendering of the author's own 'The Terminator' aura group built in M33kAuras 5.20.7 (a WeakAuras fork, GPL-2.0, https://github.com/m33shoq/M33kAuras). Several layers began as Wago imports https://wago.io/OWg3rTo0a and https://wago.io/jxJdu2yc6 and were then customised.",
+      "modifications": "Renderer written for Squanch-On; layer data exported unchanged except centring; five PowerAurasMedia textures and one sound copied unmodified from the M33kAuras package.",
+      "files": [
+        {
+          "path": "HordeReticle.lua",
+          "sha256": "5a3cf3b687578040507a35689dc52bfab4405186995b10728ccee77327e028c3"
+        },
+        {
+          "path": "HordeReticleData.lua",
+          "sha256": "c86172418525b0e690ea60b7daa7ae5e679a41e06e36e176fe17d435df94aedd"
+        },
+        {
+          "path": "LICENSES/GPL-2.0.txt",
+          "sha256": "db296f2f7f35bca3a174efb0eb392b3b17bd94b341851429a3dff411b1c2fc73"
+        },
+        {
+          "path": "media/horde-reticle/Aura104.tga",
+          "sha256": "0155fa40d26ba1489802eebf8b944b86e4625b2bb84c071fc63496e1eeca342b"
+        },
+        {
+          "path": "media/horde-reticle/Aura105.tga",
+          "sha256": "2f6ff9c1d004c7f04f5c2cc2fafa9fd122b133e049862fd6c4aea48656364a47"
+        },
+        {
+          "path": "media/horde-reticle/Aura17.tga",
+          "sha256": "cb6b2b45cda487b61b69de35b62eedec92ba8d22621191376abf2e01670ce90a"
+        },
+        {
+          "path": "media/horde-reticle/Aura22.tga",
+          "sha256": "6788311135108b52bcb88dddfc5cdfa90a33bd20632f3fe781afc6a0b62be8fd"
+        },
+        {
+          "path": "media/horde-reticle/Aura4.tga",
+          "sha256": "6e12332a0ff65d15771425b9853cd8ba2e9babc784bd7544b6cf21a706d59dfb"
+        },
+        {
+          "path": "media/horde-reticle/throwknife.ogg",
+          "sha256": "26d606c4fff54d559a8636af62a20284f29c38aa7239b7a350aad362aff96318"
+        }
+      ]
     }
   ]
 }
