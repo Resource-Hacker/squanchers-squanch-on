@@ -273,29 +273,17 @@ local function createRow(list)
     end
     -- The unit frames' inner border itself (same textured bevel, same tint),
     -- drawn inside each bar.
-    local rim = CreateFrame('Frame', nil, row)
-    rim:SetAllPoints(row); rim:EnableMouse(false); rim:SetFrameLevel(bar:GetFrameLevel() + 1)
+    local rim = skin:SmallBorder(row)
+    rim:SetFrameLevel(bar:GetFrameLevel() + 1)
     text:SetFrameLevel(rim:GetFrameLevel() + 1)
-    local function outline()
-        if rim:GetWidth() > 2 and rim:GetHeight() > 2 then skin:TexturedUnitOutline(rim, 1) end
-    end
-    rim:SetScript('OnSizeChanged', outline); outline()
     row.rim = rim
     row.bar, row.cells = bar, cells
     return row
 end
 
 -- Columns ------------------------------------------------------------------
--- Internal lines share the unit frames' inner outline as it appears on screen
--- (Skin.lineColor: the flat equivalent of that tinted outline art).
--- Column dividers are the unit frames' inner border too: the vertical strip of
--- the same bevel, as wide as the border drawn round the header and the bars.
-local function paintRule(line)
-    local skin = ns.DarkSkin
-    if skin.UnitOutlineStrip then skin:UnitOutlineStrip(line, true)
-    else local color = skin.lineColor; line:SetColorTexture(color[1], color[2], color[3], 1) end
-end
-local function ruleWidth() return 1 end
+-- Column dividers are the small border too (Skin:SmallRule), as wide as the
+-- border drawn round the header and the bars.
 -- Each cell is as wide as its column less the padding, so a long name is cut
 -- inside the name column and numbers end on their column's right edge.
 local function placeCells(cells, parent, columns)
@@ -323,7 +311,7 @@ function Meter:LayoutColumns()
     end
     width.name = math.max(1, inner - width.rank - width.value - width.rate - width.percent)
     local columns, left, dividers = {}, 0, 0
-    local thick = ruleWidth(self.grid)
+    local thick = ns.DarkSkin:SmallBorderWidth(self.grid)
     for _, key in ipairs(ORDER) do
         if width[key] > 0 then
             columns[key] = { left = left, width = width[key] }
@@ -332,7 +320,7 @@ function Meter:LayoutColumns()
                 local line = self.dividers[dividers]
                 if not line then
                     line = self.grid:CreateTexture(nil, 'ARTWORK')
-                    paintRule(line)
+                    ns.DarkSkin:SmallRule(line, true, thick)
                     self.dividers[dividers] = line
                 end
                 line:ClearAllPoints()
@@ -745,14 +733,8 @@ function Meter:Initialize()
     local headFace = head:CreateTexture(nil, 'BACKGROUND', nil, -7)
     headFace:SetTexture(WHITE); headFace:SetAllPoints(head)
     headFace:SetGradient('VERTICAL', CreateColor(.055, .055, .055, 1), CreateColor(.17, .17, .17, 1))
-    local headRim = CreateFrame('Frame', nil, head)
-    headRim:SetAllPoints(head); headRim:EnableMouse(false)
-    -- The unit frames' inner border around the header strip.
-    local function paintHead()
-        if headRim:GetWidth() > 2 and headRim:GetHeight() > 2 then skin:TexturedUnitOutline(headRim, 1) end
-    end
-    paintHead()
-    headRim:SetScript('OnSizeChanged', paintHead)
+    -- The small border around the header strip.
+    local headRim = skin:SmallBorder(head)
     local headText = CreateFrame('Frame', nil, head)
     headText:SetAllPoints(head); headText:EnableMouse(false)
     self.head, self.headText, self.titles, self.dividers = head, headText, {}, {}
@@ -784,7 +766,6 @@ function Meter:Initialize()
         local color = skin.headerTextColor
         for _, title in pairs(self.titles) do title:SetTextColor(color[1], color[2], color[3], color[4]) end
         modeBox.text:SetTextColor(color[1], color[2], color[3], color[4])
-        for _, line in ipairs(self.dividers) do paintRule(line) end
     end
     theme()
     skin:OnTheme(theme)

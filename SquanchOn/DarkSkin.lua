@@ -34,10 +34,10 @@ Skin.chatDefaults = {
 }
 Skin.chatTimestampFormat = "|cffb2b2b2[%H:%M]|r "
 Skin.rimColor = { 0.90, 0.684, 0.378 }
--- Flat rules and dividers: the one colour for every solid line meant to look
--- like the textured inner outline (a flat line at the inner colour reads far
--- brighter than that texture). Owner-tuned for the shipped inner colour and
--- scaled per channel with theme.inner, about inner * (0.34 / 0.70).
+-- The flat equivalent of the textured inner outline (a flat line at the inner
+-- colour reads far brighter than that texture), scaled per channel with
+-- theme.inner. Only the nameplates still draw flat lines with it (bar border,
+-- cast icon rim); everything else uses Skin:SmallBorder / Skin:SmallRule.
 local LINE_DEFAULT = { 0.34, 0.26, 0.145 }
 Skin.lineColor = { 0.34, 0.26, 0.145 }
 Skin.headerTextColor = { 0.902, 0.686, 0.376, 0.6 }
@@ -342,6 +342,52 @@ function Skin:TexturedUnitOutline(frame, width, exclusion)
         end
     end
     self:SetUnitOutlineOccluded(frame,exclusion~=nil)
+end
+
+-- THE SMALL BORDER. Every thin border, rule and divider the addon draws is the
+-- unit frames' inner border above; other modules use only these three.
+--   Skin:SmallBorderWidth(frame)        its thickness in the frame's own units
+--   Skin:SmallBorder(frame[, width])    an outline round the frame; returns its host
+--   Skin:SmallRule(texture[, vertical[, width]])  one free-standing line
+-- The unit frames draw it 1 / effective scale thick, so the default width
+-- weighs the same on screen whatever scale the owner has. Colour follows the
+-- theme through innerTinted; nothing here runs per frame.
+function Skin:SmallBorderWidth(frame)
+    local scale = frame and frame:GetEffectiveScale() or 1
+    return 1 / (scale > 0 and scale or 1)
+end
+-- Paints the texture and sets its thickness; the caller anchors its length.
+function Skin:SmallRule(texture, vertical, width)
+    self:UnitOutlineStrip(texture, vertical)
+    width = width or self:SmallBorderWidth(texture:GetParent())
+    if vertical then texture:SetWidth(width) else texture:SetHeight(width) end
+    return width
+end
+local smallBorders = setmetatable({}, weak) -- owner frame -> outline host
+local function fitSmallBorder(host)
+    local w, h = host:GetSize()
+    local width = host.smallWidth or Skin:SmallBorderWidth(host)
+    if host.fitW == w and host.fitH == h and host.fitWidth == width then return end
+    host.fitW, host.fitH, host.fitWidth = w, h, width
+    Skin:TexturedUnitOutline(host, width)
+end
+-- The host is a mouse-transparent child one level above the frame, covering
+-- it; re-anchor or re-level it freely. It refits when its size changes and
+-- rechecks its scale when shown.
+function Skin:SmallBorder(frame, width)
+    local host = smallBorders[frame]
+    if not host then
+        host = CreateFrame("Frame", nil, frame)
+        mouseTransparent(host)
+        host:SetAllPoints(frame)
+        host:SetFrameLevel(frame:GetFrameLevel() + 1)
+        host:SetScript("OnSizeChanged", fitSmallBorder)
+        host:SetScript("OnShow", fitSmallBorder)
+        smallBorders[frame] = host
+    end
+    host.smallWidth = width
+    fitSmallBorder(host)
+    return host
 end
 
 function Skin:StylePanelBackground(texture, border)
@@ -766,13 +812,22 @@ function Skin:RaisedPlate(frame, style)
         top, bottom = math.min(1, top * FACE_BRIGHTNESS), math.min(1, bottom * FACE_BRIGHTNESS)
         face:SetGradient("VERTICAL", CreateColor(bottom, bottom, bottom, 1),
             CreateColor(top, top, top, 1))
-        local gold = enabled and (hovered and 1 or 0.70 / 0.90) or 0.30 / 0.90
+        -- Lit bevel: at rest the heading text's on-screen colour, so it does
+        -- not outshine the labels; brighter under the mouse, dim when disabled.
+        local litR, litG, litB
+        if enabled and not hovered then
+            local flat = Skin.headerTextFlat
+            litR, litG, litB = flat[1] or BORDER_R * 0.61, flat[2] or BORDER_G * 0.61, flat[3] or BORDER_B * 0.61
+        else
+            local gold = enabled and 0.80 or 0.30 / 0.90
+            litR, litG, litB = BORDER_R * gold, BORDER_G * gold, BORDER_B * gold
+        end
         for side, edge in pairs(edges) do
             if side == "TOP" or side == "BOTTOM" then edge:SetHeight(2 * pixel)
             else edge:SetWidth(2 * pixel) end
             local lit = side == "TOP" or side == "LEFT"
             if pressed then lit = not lit end
-            if lit then edge:SetColorTexture(BORDER_R * gold, BORDER_G * gold, BORDER_B * gold, 1)
+            if lit then edge:SetColorTexture(litR, litG, litB, 1)
             else edge:SetColorTexture(0.025, 0.022, 0.018, 1) end
         end
     end

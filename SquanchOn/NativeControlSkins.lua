@@ -83,15 +83,9 @@ local function sliderTrackAtlas(atlas)
 end
 -- The native minimal checkbox paints a black square over its whole 30-unit hit
 -- frame. Keep that frame, state and click area; draw one stepper-sized face.
--- Its rim is four solid pixel-snapped lines: at the compact Options scale the
--- sampled atlas rim loses its horizontal edges at fractional row offsets.
+-- Its rim is the small border, as thick on screen as on the unit frames
+-- whatever the Options window's scale; half strength while disabled.
 local checkFaces = setmetatable({}, { __mode = "k" })
-local function paintCheckRim(face)
-    local color, shade = ns.DarkSkin.innerBorderColor, face.enabled and 1 or 0.5
-    for _, line in pairs(face.rim) do
-        line:SetColorTexture(color[1] * shade, color[2] * shade, color[3] * shade, 1)
-    end
-end
 local function compactCheck(button, enabled)
     local face = checkFaces[button]
     if not face then
@@ -103,30 +97,13 @@ local function compactCheck(button, enabled)
         face.fill = button:CreateTexture(nil, "BACKGROUND")
         face.fill:SetAllPoints(face)
         face.fill:SetColorTexture(0.11, 0.11, 0.11, 1)
-        face.rim = {}
-        for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
-            local line = button:CreateTexture(nil, "BORDER")
-            if side == "TOP" or side == "BOTTOM" then
-                line:SetPoint(side .. "LEFT", face, side .. "LEFT")
-                line:SetPoint(side .. "RIGHT", face, side .. "RIGHT")
-            else
-                line:SetPoint("TOP" .. side, face, "TOP" .. side)
-                line:SetPoint("BOTTOM" .. side, face, "BOTTOM" .. side)
-            end
-            face.rim[side] = line
-        end
     end
     local height = button:GetHeight()
     local size = height > 4 and math.min(16, height) or 16
     face:ClearAllPoints()
     face:SetPoint("LEFT", button, "LEFT", 1, 0)
     face:SetSize(size, size)
-    local pixel = PixelUtil.GetPixelToUIUnitFactor() / button:GetEffectiveScale()
-    face.enabled = enabled
-    for side, line in pairs(face.rim) do
-        if side == "TOP" or side == "BOTTOM" then line:SetHeight(2 * pixel) else line:SetWidth(2 * pixel) end
-    end
-    paintCheckRim(face)
+    ns.DarkSkin:SmallBorder(face):SetAlpha(enabled and 1 or 0.5)
     for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
         local texture = button[method] and button[method](button)
         if texture then texture:SetAlpha(0) end
@@ -505,19 +482,17 @@ local function settingsRim(frame)
     if border.raisedFace then skin:FitPanelBackground(border.raisedFace, border) end
     return border
 end
--- One solid two-pixel gold rule on the owner's bottom edge.
+-- One small-border rule on the owner's bottom edge.
 local settingsRules = setmetatable({}, { __mode = "k" })
 local function settingsRule(owner)
     local line = settingsRules[owner]
     if not line then
         line = owner:CreateTexture(nil, "BORDER")
         settingsRules[owner] = line
-        local color = ns.DarkSkin.lineColor
-        line:SetColorTexture(color[1], color[2], color[3], ns.DarkSkin.borderAlpha)
         line:SetPoint("BOTTOMLEFT", owner, "BOTTOMLEFT")
         line:SetPoint("BOTTOMRIGHT", owner, "BOTTOMRIGHT")
     end
-    line:SetHeight(2 * PixelUtil.GetPixelToUIUnitFactor() / owner:GetEffectiveScale())
+    ns.DarkSkin:SmallRule(line)
 end
 -- Theme change: retint what this file coloured and still shows that colour.
 local function sameColor(r, g, b, color)
@@ -525,12 +500,7 @@ local function sameColor(r, g, b, color)
         and math.abs(r - color[1]) < 0.004 and math.abs(g - color[2]) < 0.004 and math.abs(b - color[3]) < 0.004
 end
 ns.DarkSkin:OnTheme(function()
-    for _, face in pairs(checkFaces) do paintCheckRim(face) end
     for texture in pairs(iconHooks) do recolorIcon(texture) end
-    local line = ns.DarkSkin.lineColor
-    for _, rule in pairs(settingsRules) do
-        rule:SetColorTexture(line[1], line[2], line[3], ns.DarkSkin.borderAlpha)
-    end
     for region, state in pairs(settingsColorHooks) do
         local r, g, b, a = region:GetTextColor()
         local header = ns.NativeText and ns.NativeText.headers[region]

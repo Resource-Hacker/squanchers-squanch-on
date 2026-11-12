@@ -809,13 +809,13 @@ function Window:Build()
     self.profileNote = W:Label(frame, '', 8, GREY[1], GREY[2], GREY[3]); self.profileNote:SetPoint('RIGHT', self.closeX, 'LEFT', -10, 0)
     local function rule(y, fromBottom)
         local line = frame:CreateTexture(nil, 'ARTWORK')
-        W:Flat(line, W.line, 1); line:SetHeight(1)
+        skin:SmallRule(line)
         line:SetPoint(fromBottom and 'BOTTOMLEFT' or 'TOPLEFT', PAD, y); line:SetPoint(fromBottom and 'BOTTOMRIGHT' or 'TOPRIGHT', -PAD, y)
         return line
     end
     rule(-TOP); rule(BOTTOM, true)
     local divider = frame:CreateTexture(nil, 'ARTWORK')
-    W:Flat(divider, W.line, 1); divider:SetWidth(1)
+    skin:SmallRule(divider, true)
     divider:SetPoint('TOPLEFT', PAD + LEFT_W + 4, -TOP); divider:SetPoint('BOTTOMLEFT', PAD + LEFT_W + 4, BOTTOM)
 
     -- Left column: search and the category tree.

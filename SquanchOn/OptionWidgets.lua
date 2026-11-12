@@ -6,12 +6,12 @@ local W = {}
 ns.OptionWidgets = W
 local WHITE = [[Interface\Buttons\WHITE8X8]]
 -- The theme's live colour tables (DarkSkin updates them in place). Accents
--- follow the rim, gold text the heading colour, ordinary text the body colour;
--- LINE is the shared flat-rule colour derived from the inner outline.
+-- follow the rim, gold text the heading colour, ordinary text the body colour.
+-- Thin borders and rules are DarkSkin's small border (SmallBorder, SmallRule).
 local Skin = ns.DarkSkin
-local GOLD, LINE = Skin.rimColor, Skin.lineColor
+local GOLD = Skin.rimColor
 local HEADING, TEXT = Skin.headerTextColor, Skin.bodyTextColor
-local MUTED = Skin.innerBorderColor -- the raised bevel's resting gold
+local MUTED = Skin.headerTextFlat -- the raised bevel's resting gold
 local function near(r, g, b, color)
     return type(r) == 'number' and math.abs(r - color[1]) < .004 and math.abs(g - color[2]) < .004 and math.abs(b - color[3]) < .004
 end
@@ -94,14 +94,24 @@ function W:Button(parent, text, width, callback, height, style)
     control:SetScript('OnClick', callback)
     return control
 end
+-- Boxes (inputs, checks, swatches): the small border starting where the thin
+-- gear rim's gold used to start, with the dark face filling it to its edge.
+local BOX_INSET = Skin.styles.inner.edge * 4.5 / 13 - Skin.styles.inner.offset
+local function box(control, face)
+    local border = Skin:SmallBorder(control)
+    border:ClearAllPoints()
+    border:SetPoint('TOPLEFT', control, 'TOPLEFT', BOX_INSET, -BOX_INSET)
+    border:SetPoint('BOTTOMRIGHT', control, 'BOTTOMRIGHT', -BOX_INSET, BOX_INSET)
+    face:ClearAllPoints(); face:SetAllPoints(border)
+    return border
+end
 function W:Edit(parent, width)
     local control = CreateFrame('EditBox', nil, parent)
     control:SetSize(width, 22); control:SetAutoFocus(false)
     control:SetFont(fontPath(), 10, ''); control:SetTextColor(TEXT[1], TEXT[2], TEXT[3]); control:SetTextInsets(6, 6, 0, 0)
     followers[control] = BODY_LABEL
     local face = control:CreateTexture(nil, 'BACKGROUND'); face:SetColorTexture(.03, .03, .03, .85)
-    -- The face ends at the rim's painted inner edge, never outside the gold line.
-    ns.DarkSkin:FitPanelBackground(face, ns.DarkSkin:Panel(control, 'inner', 0))
+    box(control, face)
     control:SetScript('OnEscapePressed', function(self) self:ClearFocus() end)
     control:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
     return control
@@ -114,7 +124,7 @@ function W:Check(parent)
     mark:SetPoint('TOPLEFT', 4, -4); mark:SetPoint('BOTTOMRIGHT', -4, 4)
     flat(mark, GOLD, 1)
     control:SetCheckedTexture(mark)
-    ns.DarkSkin:FitPanelBackground(face, ns.DarkSkin:Panel(control, 'inner', 0))
+    box(control, face)
     control:SetHighlightTexture(WHITE); control:GetHighlightTexture():SetVertexColor(1, .78, .42, .08)
     control:GetHighlightTexture():ClearAllPoints(); control:GetHighlightTexture():SetAllPoints(face)
     return control
@@ -154,7 +164,7 @@ end
 local BODY, HEAD, DIM = 8, 10, 0.4
 local HOVER = { 1, 0.85, 0.55 }
 local GREY = { 0.62, 0.62, 0.6 }
-W.bodySize, W.headerSize, W.gold, W.line = BODY, HEAD, GOLD, LINE
+W.bodySize, W.headerSize, W.gold = BODY, HEAD, GOLD
 W.headerText, W.bodyText = HEADING, TEXT
 
 local function rim(frame, style)
@@ -164,9 +174,7 @@ end
 local function face(frame)
     local texture = frame:CreateTexture(nil, 'BACKGROUND')
     texture:SetColorTexture(.03, .03, .03, .85)
-    -- End at the rim's painted inner edge so no dark margin shows outside the gold line.
-    local border = rim(frame)
-    if border and ns.DarkSkin.FitPanelBackground then ns.DarkSkin:FitPanelBackground(texture, border) else texture:SetAllPoints() end
+    box(frame, texture)
     return texture
 end
 local function dim(control, disabled)
@@ -338,9 +346,12 @@ function W:Slider(parent, width)
     local track = slider:CreateTexture(nil, 'BACKGROUND')
     track:SetColorTexture(.03, .03, .03, .85); track:SetHeight(4)
     track:SetPoint('LEFT', 0, 0); track:SetPoint('RIGHT', 0, 0)
-    local edge = slider:CreateTexture(nil, 'BACKGROUND', nil, -1)
-    flat(edge, GOLD, .9, .55)
+    -- The small border one unit outside the track, under the slider's own
+    -- regions so the thumb crosses over it.
+    local edge = Skin:SmallBorder(slider)
+    edge:ClearAllPoints()
     edge:SetPoint('TOPLEFT', track, -1, 1); edge:SetPoint('BOTTOMRIGHT', track, 1, -1)
+    edge:SetFrameLevel(math.max(0, slider:GetFrameLevel() - 1))
     local thumb = slider:CreateTexture(nil, 'OVERLAY')
     thumb:SetColorTexture(1, 1, 1, 1); thumb:SetSize(6, 12); thumb:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
     followers[thumb] = ACCENT
@@ -773,7 +784,7 @@ function W:Section(parent, width)
     reset:SetSize(34, 16); reset:SetPoint('RIGHT', 0, 0)
     reset.text = self:Label(reset, 'Reset', BODY, GREY[1], GREY[2], GREY[3]); reset.text:SetPoint('RIGHT', -2, 0)
     local rule = control:CreateTexture(nil, 'ARTWORK')
-    flat(rule, LINE, 1); rule:SetHeight(1)
+    Skin:SmallRule(rule)
     rule:SetPoint('LEFT', control.title, 'RIGHT', 8, 0); rule:SetPoint('RIGHT', reset, 'LEFT', -6, 0)
     control.reset = reset
     local function hover()
