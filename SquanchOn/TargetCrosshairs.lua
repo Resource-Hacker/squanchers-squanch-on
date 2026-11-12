@@ -264,6 +264,27 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- Rotating separate Line regions rotates their individual local axes.
   -- Owner: every target ring is one solid line (the dashed art is retired).
   local ring = image(ringFrame, "circle", "OVERLAY")
+  -- Owner: a couple of pixels thicker at the same radius. Two copies sit one
+  -- physical pixel outside and inside the main line, so the mean radius holds
+  -- at every ring size (a thicker texture would scale with the ring instead).
+  local ringEdges = {}
+  for index, direction in ipairs({ 1, -1 }) do
+    local edge = image(ringFrame, "circle", "OVERLAY")
+    edge.direction = direction
+    ringEdges[index] = edge
+  end
+  local function fitRingEdges()
+    local scale = ringFrame:GetEffectiveScale()
+    local pixel = scale and scale > 0 and PixelUtil.GetPixelToUIUnitFactor() / scale or 1
+    for _, edge in ipairs(ringEdges) do
+      local d = pixel * edge.direction
+      edge:ClearAllPoints()
+      edge:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
+      edge:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+    end
+  end
+  fitRingEdges()
+  ringFrame:HookScript("OnSizeChanged", fitRingEdges)
   local ringSpin = ring:CreateAnimationGroup()
   local ringTurn = ringSpin:CreateAnimation("Rotation")
   ringTurn:SetDegrees(-360)
@@ -488,6 +509,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
 
   local function applyColor(red, green, blue, opacity)
     ring:SetVertexColor(red, green, blue)
+    for _, edge in ipairs(ringEdges) do edge:SetVertexColor(red, green, blue) end
     pointers:SetVertexColor(red, green, blue)
     for _, rectangle in ipairs(rectangles) do
       rectangle:SetVertexColor(red, green, blue)
