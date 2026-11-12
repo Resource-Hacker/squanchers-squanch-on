@@ -440,6 +440,23 @@ function NP:RestoreCVars()
 end
 
 -- Driver ---------------------------------------------------------------------
+-- Mouseover ending raises no event. While a plate is hovered (and only then)
+-- a watcher asks each frame whether the mouse is still on it, so the highlight
+-- ends on the very frame the mouse leaves, like the reticle's chevrons. Asked
+-- by plate, the way the mouseover event finds it: comparing unit tokens can
+-- come back unreadable for players.
+local watcher = CreateFrame('Frame')
+watcher:Hide()
+function NP:HoverCheck()
+  local hovered = self.hoverFrame
+  if not hovered then watcher:Hide(); return end
+  if self:PlateFor('mouseover') == hovered then return end
+  self.hoverFrame = nil
+  watcher:Hide()
+  ns.NameplateStyle:SetHover(hovered, false)
+  if ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(hovered) end
+end
+watcher:SetScript('OnUpdate', function() NP:HoverCheck() end)
 local ticker
 local function tick() NP:Tick() end
 function NP:Tick()
@@ -450,14 +467,7 @@ function NP:Tick()
     if self.hoverFrame and ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(self.hoverFrame) end
   end
   local Style = ns.NameplateStyle
-  -- Mouseover ending raises no event, so the tick notices it. Asked by plate,
-  -- the way the mouseover event finds it: comparing unit tokens can come back
-  -- unreadable for players, which ended and restarted the hover on every tick.
-  if self.hoverFrame and self:PlateFor('mouseover') ~= self.hoverFrame then
-    local left = self.hoverFrame
-    Style:SetHover(left, false); self.hoverFrame = nil
-    if ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(left) end
-  end
+  self:HoverCheck()
   for frame in pairs(self.active) do
     -- Threat and "not in combat" follow the fight without a reliable event.
     if self.combat and frame.npKind == 'enemynpc' then Style:Color(frame) end
@@ -619,6 +629,7 @@ events:SetScript('OnEvent', function(_, event)
       if NP.hoverFrame then ns.NameplateStyle:SetHover(NP.hoverFrame, false) end
       local left = NP.hoverFrame
       NP.hoverFrame = frame
+      watcher:SetShown(frame ~= nil)
       if frame then ns.NameplateStyle:SetHover(frame, true) end
       if ns.NameplateEnhance then
         if left then ns.NameplateEnhance:Emphasis(left) end
