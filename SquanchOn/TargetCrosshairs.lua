@@ -579,6 +579,14 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     hookIcons()
     -- Hostile and icon-less targets keep the configured size on the health bar.
     local icon, size, dx, dy = iconFit(plate)
+    -- Friendly icon ring (owner): one solid line, fully opaque in range. Out of
+    -- range it fades with the target unit frame through the shared parent alpha.
+    local solid = icon ~= nil
+    if solid ~= marker.solidRing then
+      marker.solidRing = solid
+      ring:SetTexture(artwork .. (solid and "circle" or "circle-dashed") .. ".tga")
+      ringFrame:SetAlpha(solid and 1 or alpha)
+    end
     local anchor = icon or destination
     size = size or baseSize
     if size ~= fitted then
@@ -623,7 +631,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     visibility:SetSize(size * 1.22, size * 1.22)
     local _, height = GetPhysicalScreenSize()
     local thickness = height and height > 0 and 1536 / height or 1
-    ringFrame:SetAlpha(alpha)
+    ringFrame:SetAlpha(marker.solidRing and 1 or alpha)
     ringSpin:Stop()
     ringTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
     for index, guide in ipairs(guides) do
