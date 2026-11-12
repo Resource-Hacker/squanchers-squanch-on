@@ -233,6 +233,24 @@ function Drawer:Layout()
     self.layouting=false
 end
 
+-- The drawer title wears the shared heading look (the unselected chat tab's
+-- label): heading gold at the tab's opacity. NativeText keeps owning its font
+-- size; only the colour is set here and again on theme changes.
+local headings={}
+function Drawer:HeadingLook(region)
+    local skin=ns.DarkSkin
+    if not skin or not skin.headerTextColor then return end
+    local function paint()
+        local color=skin.headerTextColor
+        region:SetTextColor(color[1],color[2],color[3],color[4] or 1)
+    end
+    if not headings[region] then
+        headings[region]=true
+        if skin.OnTheme then skin:OnTheme(paint) end
+    end
+    paint()
+end
+
 function Drawer:Initialize()
     if self.ready then return true end
     if InCombatLockdown() then self.pending=true;return end
@@ -257,6 +275,7 @@ function Drawer:Initialize()
     title:SetPoint('BOTTOM',handle,'TOP',0,2)
     title:SetText(QUESTS_LABEL or 'Quests')
     if ns.NativeText then ns.NativeText:Header(title,'questHeader') end
+    Drawer:HeadingLook(title)
     title:Hide()
     -- Hover is presentation only. It never changes secure drawer visibility.
     handle:HookScript('OnEnter',function() title:Show() end)
@@ -290,6 +309,7 @@ function Drawer:Initialize()
     label:SetAllPoints(plate)
     label:SetText(QUESTS_LABEL or 'Quests')
     if ns.NativeText then ns.NativeText:Header(label,'questHeader') end
+    Drawer:HeadingLook(label)
     local close=CreateFrame('Button',nil,frame,'SecureHandlerClickTemplate')
     close:SetSize(16,16)
     close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-4,-2)
