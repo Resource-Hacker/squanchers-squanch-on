@@ -39,15 +39,39 @@ local function quiet()
     return true
 end
 
--- The 3D portrait cannot take a secret alpha, so it is shown or hidden on what
--- addon code may know: the frame is quiet and health has stopped changing
--- (out of combat it regenerates in ticks until it is full).
-local lastChange = 0
-local function modelShown(frame, show)
+-- The 3D portrait cannot take a secret alpha, so it is tied to the frame's
+-- fade through geometry instead: it is anchored to the fill of a hidden status
+-- bar that the client sets to the same value. Fill full = portrait at its
+-- place; fill empty = no width, nothing drawn. Exactly in step with the frame.
+local gate, wrapped
+local function tie(frame)
     local model = frame.PortraitModel
-    if not model or frame.Portrait ~= model then return end
-    if show then if frame.USE_PORTRAIT ~= false then model:SetAlpha(1) end else model:SetAlpha(0) end
-    if model.SetModelAlpha then pcall(model.SetModelAlpha, model, show and 1 or 0) end
+    if not model or frame.Portrait ~= model or not model.backdrop then return nil end
+    if not gate then
+        gate = CreateFrame('StatusBar', nil, frame)
+        gate:SetStatusBarTexture([[Interface\Buttons\WHITE8X8]])
+        gate:GetStatusBarTexture():SetAlpha(0)
+        gate:SetMinMaxValues(0, 1); gate:SetValue(1); gate:EnableMouse(false)
+    end
+    local place = frame.squancherPortraitPlace
+    if place and place ~= wrapped then
+        local function anchored()
+            place()
+            local inset = ns.UnitFrames and ns.UnitFrames.BORDER or 1
+            gate:ClearAllPoints()
+            gate:SetPoint('TOPLEFT', model.backdrop, 'TOPLEFT', inset, -inset)
+            gate:SetPoint('BOTTOMRIGHT', model.backdrop, 'BOTTOMRIGHT', -inset, inset)
+            model:ClearAllPoints(); model:SetAllPoints(gate:GetStatusBarTexture())
+        end
+        wrapped = anchored
+        frame.squancherPortraitPlace = anchored
+        anchored()
+    end
+    return gate
+end
+local function modelShown(frame, value)
+    local bar = tie(frame)
+    if bar then bar:SetValue(value) end
 end
 function Fade:Refresh()
     local frame = _G.SquanchOnUF_Player
@@ -58,7 +82,7 @@ function Fade:Refresh()
         if alpha ~= nil then
             self.shown = false
             frame:SetAlpha(alpha)
-            modelShown(frame, GetTime() - lastChange < 3.5)
+            modelShown(frame, alpha)
             -- Aura rows own their cells' rims; they follow the same alpha.
             for _, key in ipairs({ 'Buffs', 'Debuffs' }) do if frame[key] then frame[key]:SetAlpha(alpha) end end
             return
@@ -66,7 +90,7 @@ function Fade:Refresh()
     end
     self.shown = true
     frame:SetAlpha(1)
-    modelShown(frame, true)
+    modelShown(frame, 1)
     for _, key in ipairs({ 'Buffs', 'Debuffs' }) do if frame[key] then frame[key]:SetAlpha(1) end end
 end
 
@@ -79,10 +103,6 @@ for _, event in ipairs({ 'UNIT_HEALTH', 'UNIT_MAXHEALTH', 'UNIT_POWER_UPDATE', '
 end
 local hooked
 events:SetScript('OnEvent', function(_, event)
-    if event == 'UNIT_HEALTH' or event == 'UNIT_MAXHEALTH' or event == 'PLAYER_REGEN_ENABLED' then
-        lastChange = GetTime()
-        if C_Timer then C_Timer.After(3.6, function() Fade:Refresh() end) end
-    end
     if not hooked and ns.LayoutEditor and ns.LayoutEditor.Open then
         hooked = true
         hooksecurefunc(ns.LayoutEditor, 'Open', function() Fade:Refresh() end)
