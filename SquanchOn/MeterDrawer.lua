@@ -43,9 +43,11 @@ local HEADER, PAD, THROTTLE, MIN_WIDTH = 18, 6, .25, 40
 -- The table under the title strip: a row of column names, then the rows.
 -- Widths in interface units; the name column takes what is left and the
 -- optional columns go (share, second value, rank) before it gets under NAME_MIN.
-local COLUMNS, CELL, NAME_MIN = 13, 3, 60
+local COLUMNS, CELL, NAME_MIN = 13, 3, 40
 local ORDER = { 'rank', 'name', 'value', 'rate', 'percent' }
-local WIDTH = { rank = 20, value = 46, rate = 44, percent = 30 }
+-- Sized for the drawer beside the minimap (about 157 units inside): all four
+-- fixed columns leave the name some 45 units, enough for a first name.
+local WIDTH = { rank = 14, value = 38, rate = 32, percent = 28 }
 local ALIGN = { rank = 'CENTER', name = 'LEFT', value = 'RIGHT', rate = 'RIGHT', percent = 'RIGHT' }
 local VALUE_TITLE = {
     DamageDone = 'Damage', Dps = 'DPS', HealingDone = 'Healing', Hps = 'HPS', Absorbs = 'Absorbs',
@@ -337,7 +339,8 @@ function Meter:LayoutColumns()
     local titles = self.titles
     titles.rank:SetText('#'); titles.name:SetText('Name'); titles.percent:SetText('%')
     titles.value:SetText(VALUE_TITLE[mode] or self.modeLabels[mode] or '')
-    titles.rate:SetText(RATE_FIRST[mode] and 'Total' or 'Per sec')
+    local perSecond = mode:find('Heal') and 'HPS' or mode:find('Damage') and 'DPS' or '/sec'
+    titles.rate:SetText(RATE_FIRST[mode] and 'Total' or perSecond)
     placeCells(titles, self.head, columns)
 end
 -- The dividers run from the column names to the last row shown.
