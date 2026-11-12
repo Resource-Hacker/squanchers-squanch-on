@@ -248,6 +248,7 @@ local function alphaAnim(region, key)
   if not group then
     group = region:CreateAnimationGroup()
     group.fade = group:CreateAnimation('Alpha')
+    group.fade:SetSmoothing('IN_OUT')
     group:SetToFinalAlpha(true)
     region[key] = group
   end
@@ -256,6 +257,9 @@ end
 local function fade(region, from, to, seconds, done)
   local group = alphaAnim(region, 'sqHoverFade')
   group:Stop()
+  -- Start from the first value at once: without this the region shows at its
+  -- old alpha for one frame before the animation takes hold (a visible flash).
+  region:SetAlpha(from)
   group.fade:SetFromAlpha(from); group.fade:SetToAlpha(to); group.fade:SetDuration(seconds)
   group:SetScript('OnFinished', done)
   group:Play()
@@ -334,7 +338,7 @@ function Hover:Set(frame, shown)
     if NP.active[left] and eligible(left) and ring.display:IsShown() then
       ring.leaving = left
       fade(ring.display, ring.display:GetAlpha(), 0, LEAVE, function() teardown(ring, left) end)
-      if left.Faction then fade(left.Faction, 1, 0, LEAVE) end
+      if left.Faction then fade(left.Faction, left.Faction:GetAlpha(), 0, LEAVE) end
       glide(left, LEAVE, true)
     else
       teardown(ring, left)
@@ -343,8 +347,10 @@ function Hover:Set(frame, shown)
   if not wanted then return end
   -- Hovered again while its ring was still fading out: take that ring back.
   local ring = wanted.sqHoverRing
+  local taken = false
   if ring and ring.leaving == wanted then
     ring.leaving = nil
+    taken = true
     if wanted.Name and wanted.Name.sqHoverGlide then wanted.Name.sqHoverGlide:Stop() end
   else
     ring = freeRing()
@@ -356,7 +362,7 @@ function Hover:Set(frame, shown)
     glide(wanted, APPEAR, false)
   end
   fade(ring.display, ring.display:GetAlpha(), 1, APPEAR)
-  if wanted.Faction then fade(wanted.Faction, 0, 1, APPEAR) end
+  if wanted.Faction then fade(wanted.Faction, taken and wanted.Faction:GetAlpha() or 0, 1, APPEAR) end
   live, current = ring, wanted
   events:RegisterUnitEvent('UNIT_HEALTH', wanted.unit)
   events:RegisterUnitEvent('UNIT_MAXHEALTH', wanted.unit)
