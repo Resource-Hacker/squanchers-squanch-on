@@ -1059,6 +1059,15 @@ function Skin:FitChatToast(toast)
     if width > 0 then scale = math.min(scale, panel:GetWidth() / width) end
     toast:SetScale(scale * panelScale / parentScale)
     local ratio = panelScale / toast:GetEffectiveScale()
+    -- Quick-join toasts are permanently shown frames whose own art fades in and
+    -- out; a rim and fill on them would sit above the chat as an empty box.
+    if toast ~= BNToastFrame then
+        toast:SetFrameStrata("DIALOG")
+        toast:ClearAllPoints()
+        toast:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", 0, CHAT_TOAST_GAP * ratio)
+        toast.squancherToastFitting = nil
+        return
+    end
     local border = self:Panel(toast, "compact", 0)
     -- The rim keeps the panel's own thickness instead of shrinking with the toast.
     border:SetScale(ratio)
