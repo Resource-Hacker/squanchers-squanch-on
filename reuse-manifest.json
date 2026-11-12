@@ -574,7 +574,7 @@
       "files": [
         {
           "path": "SquanchOn/asset-source/generate-frame-media.py",
-          "sha256": "52e0f99ab1d4cd94e6af0bf78e7cc1d085a147b12ef0c2c21f506dcf85297f42"
+          "sha256": "3f18cc72bf433f3a5a75758ea42f172976e6663e7b3990807f6455d0bff34b06"
         },
         {
           "path": "SquanchOn/media/textures/bar-smooth.tga",
@@ -606,35 +606,51 @@
       "files": [
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-12.tga",
-          "sha256": "bf1424b151dd19bc036d6a4df588691944a5edb9dc784bdfb35d84473fedad75"
+          "sha256": "f8cda89992fe83ad8dc937ce5d02b4c8a6a23618588762376f56b3ad18837b7f"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-3.tga",
-          "sha256": "1cb9c2c6a8d883f6f9939bd14fa29a3235cc94dc1cd2a03c52e58c23e2f8363c"
+          "sha256": "fac3670fda9f7b19cd40d2d208bd7fe23a4faf9d86069507caf98ea06ee9a6bd"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-5.tga",
-          "sha256": "c9dc97ed07d6a60d0117eb1856f0d4b915489d1a7ac37fd277f7036e8bf2a999"
+          "sha256": "59f1a33a614c53618d7947c4995133cfad6d9cbc88fdf2653854e951d6863b71"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-8.tga",
-          "sha256": "78c21819f5ba1aba7be3d5aec256b8b91e36fafd7f1e5375ba75e3d9bd0a2cbd"
+          "sha256": "f138bffc774b05666a54cf2b342965f8d2e2c31e4dab9c56cfa09662132f614e"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-deep-12.tga",
-          "sha256": "e21d3caba75c993b22c541d3fe79e484ebebfac59cd3f29c5b13e8e5580bf8a1"
+          "sha256": "58f90589e216514af0bfee9e5274eb1b52ed544514672acde71ca01b92111c16"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-deep-3.tga",
-          "sha256": "d38e515b2f3d9a43442a95dfe9b2d57008107b8b9fda1bfe2e1ad80e3e395a2e"
+          "sha256": "31750272a23ac85513ede2f7aec1c24871af0ab02a5710b19bd0cfc0f4403fe9"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-deep-5.tga",
-          "sha256": "fbcf56e0edaab7f7ccf5bfdcf435eb2ac21f104de6ac69cf244b1ba9873c7765"
+          "sha256": "43609b6e17cbeb4d4e1b0621d2dde94f43922b77da8e664f80c9136f8c7201ff"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-deep-8.tga",
-          "sha256": "8a0ab0690ade2e847025d331c28d103884b45485e4f38ad905dbb81fcbace315"
+          "sha256": "ec5ef5dfd6b9c875c9e545f4c583a26cf7fca98d3fbad76ae6796c9a068be2bf"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-default-12.tga",
+          "sha256": "76304fe1cb0391beea839b1a2573611c7126af01b774ecfb029ead84f4ab66b9"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-default-3.tga",
+          "sha256": "3d00c9c24874b44524c502eb419542656ab74609fef117f3777c56c62af9a5b4"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-default-5.tga",
+          "sha256": "a483a99e623129d22d8f61f1b42070264f3128da451cb68b35dffb22a7583bd6"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-default-8.tga",
+          "sha256": "945f8b0c5b69ca8dad04b6b960e70ed9d2d82c53149dae1ee673dc74a55a3a36"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-flat-12.tga",
@@ -654,99 +670,83 @@
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-glass-12.tga",
-          "sha256": "ba0f2a3ba4629f44a19a0adea8f19f73281a1a6ca6f54f8623dac12de57d858c"
+          "sha256": "3833904caa422eb27301404f8fd7e626765d883f183ad593e647c8c28df17b9b"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-glass-3.tga",
-          "sha256": "69c7af7860c0b28f6acdf07ee1920d1eddecf10978df21d81f83734a70e2bae1"
+          "sha256": "f67535c5f5119076abdd279cab95df208bc498bf4f490e6805226a690fe62db7"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-glass-5.tga",
-          "sha256": "87a8960f3025a680c5cc2bb7c431f0b38b2afd069551c66cc788627c60992fea"
+          "sha256": "a1f1c1ebd60b7105c1e0528a702a90283fbccca7fc79a98284a736ef6fdfcf19"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-glass-8.tga",
-          "sha256": "909a37ddce61b2d9b4aa4f97768a9e041eac9b6b121f2005a3e45bb5a59586ff"
+          "sha256": "7d0aee6213bc5bab7a072a9e61a3e58c8791136e2f172a7f36f64a7da7847010"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-gloss-12.tga",
-          "sha256": "50237ab32e9af12c531696f36a99435bf0618fa173a70389b6c4a91285e6c29a"
+          "sha256": "dcf5734eb64bf1e8645e1832c3c990e630fb60b1384b6d1bebb3b6b3b818938e"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-gloss-3.tga",
-          "sha256": "74b86380d3a626c80a440c791b234ed3571910c7873919e4bfc688e3f8bb4851"
+          "sha256": "322dffaf7ce68bf93efcc9acaa9b682efa6124db294de27272f4a189e87c55f3"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-gloss-5.tga",
-          "sha256": "f51566439c4905dce409ce7dc372963e9c0d5e6dca16709b15e3cf76883e80d0"
+          "sha256": "596d558a366c25825a0c2aee8f8aba18ccae3a576ebc4e1c1606e31085b5ba65"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-gloss-8.tga",
-          "sha256": "e2d5ffd57333f41cc5f0bb012ab05acfe8dfdbf72dacadab7b4bc1468fc3b295"
+          "sha256": "7f2eb979ee3f9812cbf701bf085c7479ccb8cdb6297dcfbc051be340e2154918"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-groove-12.tga",
-          "sha256": "902014912b96c10433693071e5c591a3c2b5a59bfb8725dfead8ee53df8a2f05"
+          "sha256": "945cb15ceda196fa8df4d04a4560bf79285fcc3b79718b230dba9cb6083dd12d"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-groove-3.tga",
-          "sha256": "b0a3ab185d547b84c4a755cf2f09021ba8b1cc41f150a3ed829a0e01288ae480"
+          "sha256": "1824045983d1098a7261cf488febaede41655c0f2e16e9695dfe38ff526531e7"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-groove-5.tga",
-          "sha256": "c93936fd8f6efe3815e3a374ec9c2f8113feb9a182a667d7195a2fadf88bc83c"
+          "sha256": "5bbf4f6938f3715521ffe695cbd55c14e5562a82819c79e08d2e92f9c39df792"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-groove-8.tga",
-          "sha256": "0c60edb1ac7a639f1b52358d62549e7087d7f6cbc4ab9c212848cbf92718728d"
+          "sha256": "bc5c43297ef6f8609a82aaa1f4e50f9b57d0fe098c1a9cfb093e7d98f809d875"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-rim-12.tga",
+          "sha256": "1ec666a4b8e3a2aafe43bbff7323812ebe1683c09cc0804993f06810195cfac4"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-rim-3.tga",
+          "sha256": "68436ec44646fe349181b880f6972edcf70f381c5c1dea033ce8957fa67b8245"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-rim-5.tga",
+          "sha256": "e21aac6358b02b6977478d2890391c442f11ee58c388919bfba7b9c32bddaf75"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-rim-8.tga",
+          "sha256": "5af3c81355495474ea04e05d3f1dd917b7251709e25bc445a4e43299ce43f289"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-round-12.tga",
-          "sha256": "1700eeeb0c5c8a87fcb6896a017c39254efda578468fdc6fad4e087ce03bfac6"
+          "sha256": "e22d7b5ab437e6c0b7ab125039ea9225aeab00328e04537f44d4540597d75b42"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-round-3.tga",
-          "sha256": "5ae698c09fa2e7dc003551f79c8e90299dc56a907bf7bbc1dad00e5578a48b2c"
+          "sha256": "d1fd439b5351d9a1297ee9616b40e694e85b24b87fb57ba0b96815e29f46cb46"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-round-5.tga",
-          "sha256": "b33273a981794211571182b77118efb5ecf80276580120665db62a4835c0521f"
+          "sha256": "fd8aa5ca522489450c3f4a1aa69ddbd6b75b9e02e6fd1998eac8474505b5f759"
         },
         {
           "path": "SquanchOn/media/Crosshairs/ring-round-8.tga",
-          "sha256": "f8d7403364624c3e1c41c95e88f619b76273ad3e82b60149a9d975a484137586"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-12.tga",
-          "sha256": "7ab00e2f213d59146d083369853d2f5213eb756b7875effe84fd53ca0f8b00a5"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-3.tga",
-          "sha256": "1645c254660c2dd255eaae12fa9614d213a0a988dd7aad04a4c6747fdbdec39a"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-5.tga",
-          "sha256": "68b6bb2b9291576085327bbf7a8514c6ad09ee2d2e6cf6f0a0647bda1e5b05de"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-8.tga",
-          "sha256": "0482774858174520d953e0455ce6e20f3ed365a295c0fb3c46146dcb67cc644d"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-12.tga",
-          "sha256": "d69a006b8d215b7c809b6bea29167e12ced1ee2e009b45607b1a6092d8cbc339"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-3.tga",
-          "sha256": "0b2ce846e06a8aeff2dbf2b542befcba99c0c8b8be04e8433fccd0ea320cc123"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-5.tga",
-          "sha256": "04c21ff3eeaba01dcdac636444b8526e634bb16991432b730cbdac1bfed1685b"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-8.tga",
-          "sha256": "7fb144fa01ea94f776230c3f6f6618cc4e3de90c2dd484f8a661643d2d623756"
+          "sha256": "2d5585b1e536cb56e325f16cdbe593c96c06d23a4eabe6f6a663ff54ced79c40"
         },
         {
           "path": "SquanchOn/media/borders/border-double.tga",
@@ -815,6 +815,38 @@
         {
           "path": "SquanchOn/media/textures/bar-underline.tga",
           "sha256": "41a4fd4041fd7bb74918fa6fead74fcdb5ef4b6241021293ef7209ebc72d0038"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-12.tga",
+          "sha256": "f2236a62bf2b628627288fea7ba8c32b23f19ee684847abe2ff7b5bd64fb37fa"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-3.tga",
+          "sha256": "819593c70f38c48aa1a91a575a2831754d0f6d9d7ab4e2b662c768ec8b1bd4fb"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-5.tga",
+          "sha256": "ebd509eb3805c8551dd7462a9744afddbe0b291b2c66ebb6d52a52bbd3066e98"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-8.tga",
+          "sha256": "6ab9fb738947a64bebf36ba377a63e30aa35cfc6cc169b97c5575dec8e9d7bd3"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-12.tga",
+          "sha256": "2d492965a3063dc2f5cb06013daa2d7a1ab5a8c2e7b92a55eb446202499553d9"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-3.tga",
+          "sha256": "898d4e33132f350e06ee100499a5134e53671b00cc2e7e85f31c955227064f5d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-5.tga",
+          "sha256": "a44ca18cce593ad263d083f009fef0b0734582714d555cf3d7d72e2070862f65"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-8.tga",
+          "sha256": "664537de2e5c2cd32b6711df2a3124ea2ecafda2494be00574ee16dc4885a3c9"
         }
       ]
     },

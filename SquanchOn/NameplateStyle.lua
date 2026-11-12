@@ -475,7 +475,12 @@ local function updateIndicators(frame)
     if shown then
       icon:ClearAllPoints()
       if previous then icon:SetPoint('LEFT', previous, 'RIGHT', 1.5, 0)
-      else icon:SetPoint('BOTTOM', frame.Health, 'TOP', indicators.x or 0, indicators.y or 0) end
+      else
+        icon:SetPoint('BOTTOM', frame.Health, 'TOP', indicators.x or 0, indicators.y or 0)
+        -- Where the first icon's centre sits above the bar's centre (for the target ring).
+        frame.npIconRise = (frame.npBarHeight or 0) / 2 + (indicators.y or 0) + (indicators.size or 0) / 2
+        frame.npIconSize = indicators.size
+      end
       previous = icon
     end
   end
@@ -509,6 +514,8 @@ function Style:Layout(frame)
     or UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
   if not frame.npScaleGroup then frame:SetScale(frame.npBase) end
   health:SetSize(width, height)
+  -- Recorded for the target ring: nameplate regions cannot be measured.
+  frame.npBarWidth, frame.npBarHeight = width, height
   health:SetStatusBarTexture(texture(settings.health.texture))
   health.bg:SetColorTexture(rgb(settings.health.background))
   local bar = barShown(frame, settings, config)

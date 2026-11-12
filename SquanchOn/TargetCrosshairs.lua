@@ -227,7 +227,17 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- share its strata. To sit BEHIND the bar, name and icons the marker is
   -- nested in the selected Squanch-On plate at the plate's base level; its
   -- scale and alpha stay its own.
+  local anchored, fitted, baseSize, bound
   local nestedIn
+  -- The configured ring size is in screen terms; inside a plate it is restated
+  -- in the plate's units, before the client's enlargement of the selected plate.
+  local function plainSize()
+    if not nestedIn then return baseSize end
+    local world, ui = WorldFrame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    local grown = tonumber(GetCVar and GetCVar("nameplateSelectedScale")) or 1
+    if not (world and ui and ui > 0 and grown > 0) then return baseSize end
+    return baseSize * world / ui / grown
+  end
   local function nest(unitFrame)
     local host = available(unitFrame) and unitFrame.isNameplate and unitFrame.Health and unitFrame or nil
     if host == nestedIn then return end
@@ -243,8 +253,12 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     end
     sink(display)
     if display.SetIgnoreParentAlpha then display:SetIgnoreParentAlpha(host ~= nil) end
-    if display.SetIgnoreParentScale then display:SetIgnoreParentScale(host ~= nil) end
-    if host and display.SetIgnoreParentScale then display:SetScale(WorldFrame:GetEffectiveScale()) else display:SetScale(1) end
+    -- Inside a plate the marker takes the plate's scale, so it grows and
+    -- shrinks with the icon it hugs and never has to be measured on screen
+    -- (nameplate regions are restricted: the client refuses to measure them).
+    if display.SetIgnoreParentScale then display:SetIgnoreParentScale(false) end
+    display:SetScale(1)
+    fitted, anchored, bound = nil, nil, nil
     display:SetShown(shown)
   end
 
@@ -323,11 +337,17 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local ringGloss = image(ringFrame, "ring-gloss-5", "OVERLAY")
   ringGloss:SetDrawLayer("OVERLAY", 2)
   ringGloss:Hide()
+  -- The plate border is drawn inside the bar, over its top and bottom rows; the
+  -- same tint covers the same share of the ring at its outer and inner edge.
+  local ringRim = image(ringFrame, "ring-rim-5", "OVERLAY")
+  ringRim:SetBlendMode("BLEND")
+  ringRim:SetDrawLayer("OVERLAY", 3)
+  ringRim:Hide()
   local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
   -- The plate bar is translucent, so a ring behind it would show through.
   -- Each ring texture is therefore drawn as two cropped pieces, one above and
   -- one below the bar, leaving the band behind the bar empty.
-  local pieces = { ring, ringGloss, ringEdges[1], ringEdges[2] }
+  local pieces = { ring, ringGloss, ringRim, ringEdges[1], ringEdges[2] }
   local twins = {}
   for index, texture in ipairs(pieces) do
     twins[index] = ringFrame:CreateTexture(nil, "OVERLAY")
@@ -368,17 +388,19 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       end
     end
   end
+  -- The cut is computed from the layout alone: the bar's height, and where
+  -- the ring's anchor (the icon, or the bar itself) sits relative to the bar.
+  local cutAnchor, cutDY
   local function measureBand()
     local health = bandHealth
     cut = nil
-    if available(health) and health:IsShown() then
-      local own, theirs = ringFrame:GetEffectiveScale(), health:GetEffectiveScale()
-      local _, barY = health:GetCenter()
-      local _, ringY = ringFrame:GetCenter()
-      if own and theirs and barY and ringY and own > 0 then
-        local pixel = PixelUtil.GetPixelToUIUnitFactor() / own
-        cut = { y = barY * theirs / own - ringY, band = health:GetHeight() * theirs / own }
-      end
+    local host = nestedIn
+    if host and available(health) and health:IsShown() then
+      -- Layout numbers the plate recorded when it placed its bar and icon.
+      local height = tonumber(host.npBarHeight)
+      local offset = 0                         -- the ring centre above the bar centre
+      if cutAnchor and cutAnchor ~= health then offset = tonumber(host.npIconRise) end
+      if height and offset then cut = { y = -(offset + (cutDY or 0)), band = height } end
     end
     layoutPieces()
   end
@@ -388,10 +410,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if cut then
       local alpha = health:GetEffectiveAlpha()
       if barLook and type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then ringFrame:SetAlpha(alpha) end
-      -- The selected plate grows for a moment; measure again once it settles.
-      if C_Timer and C_Timer.After then
-        for _, delay in ipairs({ 0, 0.1, 0.35, 0.8 }) do C_Timer.After(delay, measureBand) end
-      end
     end
   end
   -- Bar look: which units take it, the ring face of the bar texture in use, and
@@ -411,7 +429,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local plates, media = not Plater and suite.Nameplates, suite.Media
     local health = plates and plates.Settings and plates:Settings().health
     local path = media and type(health) == "table" and media:Resolve("statusbar", health.texture)
-    return type(path) == "string" and RING_FACES[path:lower():match("bar%-(%a+)%.tga$") or ""] or "flat"
+    if type(path) ~= "string" then return "flat" end
+    path = path:lower()
+    -- The client's own bar texture, the plates' default.
+    if path:find("targetingframe[\\/]ui%-statusbar") then return "default" end
+    return RING_FACES[path:match("bar%-(%a+)%.tga$") or ""] or "flat"
   end
   local function barColor(plate)
     local frame = available(plate) and (plate.unitFrame or plate.UnitFrame)
@@ -433,9 +455,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local pixel = scale and scale > 0 and PixelUtil.GetPixelToUIUnitFactor() / scale or 1
     for _, edge in ipairs(ringEdges) do
       local d = pixel * edge.direction * limit(settings.friendlyThickness, 1, 0, 12) / 2
-      -- Bar look: the two lines are the bar's dark border, on the ring's outer
-      -- and inner edge (half the ring's drawn width away, plus half a line).
-      if edge.border then d = edge.direction * (edge.border + pixel * 0.75) end
+      -- Bar look: the two dark lines touch the ring's outer and inner edge from
+      -- outside (edge.border is the inflation that moves the line that far).
+      if edge.border then d = edge.direction * edge.border end
       edge.inflate = d
     end
     layoutPieces()
@@ -548,8 +570,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   end
   pulse:SetLooping("REPEAT")
 
-  local bound, boundPlate, maps, cutoff, alpha
-  local anchored, fitted, baseSize
+  local boundPlate, maps, cutoff, alpha
   -- Friendly targets: fit the ring around Plater's nameplate indicator icon
   -- (class icon when enabled, otherwise the faction emblem). Plater reuses
   -- these textures, so record which one it assigned to each plate. Squanch-On's
@@ -784,6 +805,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     warningState(false)
     display:Hide()
     nest(nil)
+    cutBand(nil)
   end
 
   local function watchVisibility(region)
@@ -830,7 +852,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- Same line as the plain ring (2.5 of 128) plus the friendly extra screen
       -- pixels, drawn by the nearest generated width at the same mean radius.
       local scale = publicQuery(display.GetEffectiveScale, display)
-      local pixels = (size or baseSize) * (scale or 0) / PixelUtil.GetPixelToUIUnitFactor()
+      local pixels = (size or plainSize()) * (scale or 0) / PixelUtil.GetPixelToUIUnitFactor()
       local wanted = 2.5 + (icon and pixels > 0 and limit(settings.friendlyThickness, 1, 0, 12) * 128 / pixels or 0)
       local width = RING_WIDTHS[1]
       for _, candidate in ipairs(RING_WIDTHS) do
@@ -855,16 +877,29 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       else
         ringGloss:Hide()
       end
+      -- As opaque as the bar it copies; the plain ring keeps the ring opacity.
+      local health = nestedIn and nestedIn.Health
+      local opacity = barLook and available(health) and health:IsShown() and health:GetEffectiveAlpha()
+      if type(opacity) ~= "number" or (issecretvalue and issecretvalue(opacity)) then opacity = barLook and 1 or alpha end
+      ringFrame:SetAlpha(opacity)
     end
     do
       local plates = not Plater and suite.Nameplates
       local border = barLook and plates and plates.Settings and plates:Settings().border
       local color = type(border) == "table" and border.color
       local width = tonumber(art:match("%-(%d+)$"))
+      local rimmed = barLook and width and type(color) == "table" and (tonumber(border.thickness) or 0) > 0
+      if rimmed then
+        ringRim:SetTexture(artwork .. "ring-rim-" .. width .. ".tga")
+        ringRim:SetVertexColor(color[1] or 0, color[2] or 0, color[3] or 0)
+        ringRim:SetAlpha(tonumber(color[4]) or 1)
+      end
+      ringRim:SetShown(rimmed and true or false)
       for _, edge in ipairs(ringEdges) do
-        if barLook and width and type(color) == "table" and (tonumber(border.thickness) or 0) > 0 then
-          -- Half the ring's drawn width in the ring frame's units.
-          edge.border = (size or baseSize) * width / 128 / 2
+        if rimmed then
+          -- The line art (2.5 wide at radius 46 of 128, like the ring) moves by
+          -- 46/64 of its inflation: half the ring's width plus half a line out.
+          edge.border = (size or plainSize()) * (width / 2 + 1.25) / 92
           edge:SetBlendMode("BLEND")
           edge:SetDrawLayer("ARTWORK")
           edge:SetVertexColor(color[1] or 0, color[2] or 0, color[3] or 0)
@@ -880,7 +915,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- Friendly and hostile rings share the configured ring opacity in range;
     -- out of range both fade with the target unit frame through the parent alpha.
     local anchor = icon or destination
-    size = size or baseSize
+    size = size or plainSize()
     if size ~= fitted then
       display:SetSize(size, size)
       fitted = size
@@ -900,6 +935,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     paintHealth()
     display:Show()
     self:RefreshRange()
+    -- Cut the ring around the bar on every refit (it was only done on a style change).
+    cutAnchor, cutDY = anchor, icon and dy or 0
+    cutBand(nestedIn and nestedIn.Health)
   end
 
   function marker:ApplyStyle()
