@@ -218,7 +218,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   self.TargetCrosshairs = marker
   local artwork = "Interface\\AddOns\\" .. addonName .. "\\media\\Crosshairs\\"
   local display = CreateFrame("Frame", "SQMSTargetCrosshairsFrame", WorldFrame)
-  display:SetFrameStrata("BACKGROUND")
+  -- Behind every nameplate: plates draw in BACKGROUND, so the marker lives in
+  -- the WORLD strata beneath it (measured: plate parent WORLD, plate art BACKGROUND).
+  if not pcall(display.SetFrameStrata, display, "WORLD") then display:SetFrameStrata("BACKGROUND") end
   display:SetFrameLevel(1)
   display:EnableMouse(false)
   display:Hide()
@@ -293,6 +295,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     edge:Hide() -- friendly icon ring only
     ringEdges[index] = edge
   end
+  -- The selected plate's bar wears an additive gloss (the target overlay); the
+  -- bar-look ring wears the same gloss at the same strength so the two match.
+  local ringGloss = image(ringFrame, "ring-gloss-5", "OVERLAY")
+  ringGloss:SetDrawLayer("OVERLAY", 2)
+  ringGloss:Hide()
   -- Bar look: which units take it, the ring face of the bar texture in use, and
   -- the colour the selected plate's health bar shows right now.
   local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
@@ -738,6 +745,18 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- The bar look blends like the bar it copies; the plain ring stays additive.
       ring:SetBlendMode(barLook and "BLEND" or "ADD")
     end
+    do
+      local plates = not Plater and suite.Nameplates
+      local target = plates and plates.Settings and plates:Settings().target
+      local gloss = barLook and type(target) == "table" and tonumber(target.overlayAlpha) or 0
+      if gloss > 0 then
+        ringGloss:SetTexture(artwork .. "ring-gloss-" .. (art:match("%-(%d+)$") or "5") .. ".tga")
+        ringGloss:SetAlpha(gloss)
+        ringGloss:Show()
+      else
+        ringGloss:Hide()
+      end
+    end
     for _, edge in ipairs(ringEdges) do
       edge:SetShown(icon ~= nil and not barLook and (tonumber(settings.friendlyThickness) or 1) > 0)
     end
@@ -788,7 +807,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     visibility:SetSize(size * 1.22, size * 1.22)
     local _, height = GetPhysicalScreenSize()
     local thickness = height and height > 0 and 1536 / height or 1
-    ringFrame:SetAlpha(alpha)
+    -- The bar look is as opaque as the bar it copies.
+    ringFrame:SetAlpha(barLook and 1 or alpha)
     ringSpin:Stop()
     ringTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
     for index, guide in ipairs(guides) do

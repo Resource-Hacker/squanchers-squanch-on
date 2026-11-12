@@ -391,6 +391,12 @@ local function updateName(frame)
   if not config then return end
   local kind = frame.npKind
   local ok, name = pcall(UnitName, unit)
+  -- UnitName gives a character's first name only on this client; the client's
+  -- own GetUnitName carries the surname as shown in the world.
+  if ok and type(unit) == 'string' and (kind == 'enemyplayer' or kind == 'friendlyplayer') and GetUnitName then
+    local fine, full = pcall(GetUnitName, unit, false)
+    if fine and full ~= nil and (not public(full) or full ~= '') then name = full end
+  end
   if ok then
     if settings.translit and public(name) and type(name) == 'string' then name = latin(name) end
     -- Players carry their guild on a second line, as "<Guild>".
