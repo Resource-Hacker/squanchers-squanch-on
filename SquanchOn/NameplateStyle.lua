@@ -628,6 +628,10 @@ local handlers = {
 function Style:Build(frame)
   local settings = NP:Settings()
   frame:SetFrameStrata('BACKGROUND')
+  -- World markers (the target ring, level 1-3 of the same strata) stay behind
+  -- every part of a plate, whatever level the client gives the plate's base.
+  if frame.SetFixedFrameLevel then frame:SetFixedFrameLevel(true) end
+  frame:SetFrameLevel(20)
 
   local health = CreateFrame('StatusBar', nil, frame)
   health:SetPoint('CENTER', frame, 'CENTER', 0, 0)
