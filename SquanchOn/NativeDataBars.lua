@@ -36,10 +36,9 @@ function DataBars:UpdateXP(refreshQuests)
     if not holder then return end
     local current, maximum = UnitXP("player"), UnitXPMax("player")
     local capped = UnitLevel("player") >= GameRulesUtil.GetEffectiveMaxLevelForPlayer() or maximum <= 0
-    -- Exact profile hideInCombat=true, hideAtMaxLevel=false. The quest drawer's
-    -- secure frames anchor to this bar, so it is protected while combat lasts:
-    -- hide on PLAYER_REGEN_DISABLED (lockdown starts after it), show at combat end.
-    if not InCombatLockdown() then holder:SetShown(not self.inCombat) end
+    -- Owner: the bar stays in combat (hiding it also dropped the quest drawer
+    -- anchored to it). Visibility is never written during combat.
+    if not InCombatLockdown() and not holder:IsShown() then holder:Show() end
     if capped then current, maximum = 1, 1 end
     holder.fill:SetMinMaxValues(0, maximum)
     holder.fill:SetValue(current)
@@ -120,8 +119,7 @@ function DataBars:Initialize()
     reputation.fill:SetOrientation("VERTICAL")
     reputation:Hide() -- ElvUI reputation.enable defaults false and profile did not override.
     if ns.DarkSkin then ns.DarkSkin:Panel(reputation, "compact", 0) end
-    self.inCombat = InCombatLockdown() and true or nil
-    holder:SetShown(not self.inCombat) -- not anchored to yet: still unprotected
+    holder:Show()
     self:UpdateXP(true)
     self:UpdateReputation()
 end
@@ -136,8 +134,6 @@ events:SetScript("OnEvent", function(_, event)
         DataBars.questsDirty = true
         C_Timer.After(0, function() if DataBars.questsDirty then DataBars:UpdateXP(true) end end)
     elseif DataBars.xp then
-        if event == "PLAYER_REGEN_DISABLED" then DataBars.inCombat = true
-        elseif event == "PLAYER_REGEN_ENABLED" then DataBars.inCombat = nil end
         DataBars:UpdateXP(event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LEVEL_UP")
         if event == "UPDATE_FACTION" or event == "PLAYER_ENTERING_WORLD" then DataBars:UpdateReputation() end
     end
