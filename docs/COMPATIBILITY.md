@@ -36,8 +36,8 @@ and their handlers. Squanch-On's tooltip adapter changes presentation and defaul
 anchoring; it does not recreate ElvUI's custom content extensions. Native item
 use, sorting and deposits likewise remain with Blizzard's bags and bank.
 
-Plater and DynamicCam remain optional separate integrations. Plater normally
-provides LibRangeCheck-3.0 for conservative melee/proximity cues; unavailable
+Plater and DynamicCam remain optional separate integrations. The bundled
+LibRangeCheck-3.0 provides conservative melee/proximity cues; unavailable
 checks hide those cues. Replacement native window and minimap surfaces
 need their own visual and interaction checks.
 

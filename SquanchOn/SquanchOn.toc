@@ -11,6 +11,7 @@
 
 libs/LibStub/LibStub.lua
 libs/LibDispel/LibDispel.lua
+libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua
 libs/oUF/oUF_Forever.xml
 
 DefaultProfile.lua

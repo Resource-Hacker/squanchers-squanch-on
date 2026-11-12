@@ -32,6 +32,13 @@ the supplying distribution are recorded in `libs/provenance.json` and
 individual library licenses. The rewrite uses those libraries directly, without
 copying ElvUI or BenikUI frame, tooltip, options or lifecycle implementations.
 
+LibRangeCheck-3.0 (MINOR 39) is separately MIT-licensed, copyright 2023 The
+WoWUIDev Community (original author mitch0); see
+`libs/LibRangeCheck-3.0/LICENSE`. It is the unmodified source file from
+[upstream commit 3f9e454](https://github.com/WeakAuras/LibRangeCheck-3.0/tree/3f9e454971a011d08fc1b5c73c0a0ad4168c2f44),
+not taken from the ElvUI distribution, and supplies the melee and proximity
+range checks.
+
 ElvUI and BenikUI supplied behavioral and settings references. Their custom
 engine licenses remain attached to those separate originals; neither engine is
 renamed or distributed here.

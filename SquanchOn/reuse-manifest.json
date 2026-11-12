@@ -1,7 +1,7 @@
 {
   "format": 1,
   "original_license": "MIT",
-  "notes": "Public SquanchOn files only. Independently licensed oUF, LibDispel and LibStub retain their own notices. ElvUI/BenikUI engines, owner settings and private media are excluded.",
+  "notes": "Public SquanchOn files only. Independently licensed oUF, LibDispel, LibRangeCheck-3.0 and LibStub retain their own notices. ElvUI/BenikUI engines, owner settings and private media are excluded.",
   "components": [
     {
       "name": "PT Sans Narrow Bold 2.003",
@@ -310,6 +310,22 @@
         {
           "path": "libs/LibDispel/LibDispel.lua",
           "sha256": "a06704974644432ed3e8bc1375c22034fb69af7bcd29ad42f65ad6e6cdfce417"
+        }
+      ]
+    },
+    {
+      "name": "LibRangeCheck-3.0 (MINOR 39)",
+      "license": "MIT",
+      "source": "https://github.com/WeakAuras/LibRangeCheck-3.0/tree/3f9e454971a011d08fc1b5c73c0a0ad4168c2f44",
+      "modifications": "Unmodified upstream source file and license text at the pinned commit; copyright 2023 The WoWUIDev Community. Upstream TOC files and development tooling omitted.",
+      "files": [
+        {
+          "path": "libs/LibRangeCheck-3.0/LICENSE",
+          "sha256": "e3fdaf76f03ccf2bf5ec951f5e14eaf1178a6f6af8f7c9d321e3256fa31e25f9"
+        },
+        {
+          "path": "libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua",
+          "sha256": "61d412559b082bdcd8fc5d29c67b27b7dfdb782e8c55fcb483fdce5c0edddf8b"
         }
       ]
     },

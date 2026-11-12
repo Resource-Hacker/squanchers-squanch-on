@@ -56,9 +56,9 @@ The selected-target nameplate uses a dashed ring. Cardinal blocks indicate
 conservative five-yard hostile melee reach; rotating triangles indicate a learned damage
 or healing spell in range. Mend Pet and Health Funnel apply only to your own pet.
 
-**LibRangeCheck-3.0**, normally provided by optional **Plater**, is needed for
-five-yard melee and friendly/NPC proximity checks. It is not bundled; without it,
-those cues stay hidden. Friendly ring rotation alone is proximity feedback,
+The bundled MIT-licensed **LibRangeCheck-3.0** provides the five-yard melee and
+friendly/NPC proximity checks; Plater is not needed for them. Without a usable
+checker those cues stay hidden. Friendly ring rotation alone is proximity feedback,
 not healing readiness. Unknown range stays hidden. Range does not guarantee
 resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
 in progress.
