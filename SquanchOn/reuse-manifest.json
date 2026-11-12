@@ -373,6 +373,102 @@
           "sha256": "26d606c4fff54d559a8636af62a20284f29c38aa7239b7a350aad362aff96318"
         }
       ]
+    },
+    {
+      "name": "Overpass Bold",
+      "license": "OFL-1.1",
+      "source": "https://github.com/RedHatOfficial/Overpass",
+      "modifications": "static Bold instance of the variable font",
+      "files": [
+        {
+          "path": "media/fonts/Overpass-Bold.ttf",
+          "sha256": "c841a93c7c8aec6178dbadab8570c0063dfe10c386a6f90043b07bee5c91ed05"
+        },
+        {
+          "path": "media/fonts/Overpass-OFL.txt",
+          "sha256": "86e5ff25c701ec446d20b1a85b02ee6d36de8503a7288a4c948f5459809af1f0"
+        }
+      ]
+    },
+    {
+      "name": "Afacad Medium",
+      "license": "OFL-1.1",
+      "source": "https://github.com/Dicotype/Afacad",
+      "modifications": "static weight-570 instance of the variable font",
+      "files": [
+        {
+          "path": "media/fonts/Afacad-Medium.ttf",
+          "sha256": "b0d1c6be104dd24dfcc6a47ab3fb148eb36b4ec5071fdf4b6be548f89b11fb71"
+        },
+        {
+          "path": "media/fonts/Afacad-OFL.txt",
+          "sha256": "a65e37f173d58cab5d4f8eb6373f4e24ee79ad6c80235dbe845a117917af2d99"
+        }
+      ]
+    },
+    {
+      "name": "Oxanium Bold",
+      "license": "OFL-1.1",
+      "source": "https://github.com/sevmeyer/oxanium",
+      "modifications": "static Bold instance of the variable font",
+      "files": [
+        {
+          "path": "media/fonts/Oxanium-Bold.ttf",
+          "sha256": "9bb5f16051e72812b0ac759dfc5be53b8ee9a14434817abe7d646a4ba5ce00c4"
+        },
+        {
+          "path": "media/fonts/Oxanium-OFL.txt",
+          "sha256": "fe17c0f2581d71b4e1ea7e636e7f4877c29223e11bb1dd1a871e8c3f2a86336b"
+        }
+      ]
+    },
+    {
+      "name": "Almendra Bold",
+      "license": "OFL-1.1",
+      "source": "https://github.com/google/fonts/tree/main/ofl/almendra",
+      "modifications": "unmodified",
+      "files": [
+        {
+          "path": "media/fonts/Almendra-Bold.ttf",
+          "sha256": "5895ef04d0d56c60083ec302e72db99b952b044ab2b440ee12283649b5edc971"
+        },
+        {
+          "path": "media/fonts/Almendra-OFL.txt",
+          "sha256": "b7eae5e3c3447f70caa14e0c43f5e0d953f54ee59df406f6362863bcee1a0a95"
+        }
+      ]
+    },
+    {
+      "name": "Unit-frame media",
+      "license": "MIT",
+      "source": "This repository",
+      "modifications": "Generated numerically by asset-source/generate-frame-media.py; no source images.",
+      "files": [
+        {
+          "path": "asset-source/generate-frame-media.py",
+          "sha256": "9c7883a75e0f06c25f870744132b5055fc0219393c44bcd7fbcdd2d49fde2b89"
+        },
+        {
+          "path": "media/textures/bar-smooth.tga",
+          "sha256": "c3f718cf1781359553066d5d103789f071ad1ab460f8a9a46f172775d6771f6b"
+        },
+        {
+          "path": "media/textures/glow-edge.tga",
+          "sha256": "ebc8d14373af7c22dce4ea9333a2757a02ce754a2a40e0cccdb9295286813228"
+        },
+        {
+          "path": "media/textures/role-dps.tga",
+          "sha256": "cbe76efa60149050bc9671cbd440cf8e1751ad0e50f7c1c0fdf7d9ebf81db2b0"
+        },
+        {
+          "path": "media/textures/role-healer.tga",
+          "sha256": "7efef7e9c2e22ec9ac9d7ba4daa3084d5718a834c0281737b05c8e160b26c9c3"
+        },
+        {
+          "path": "media/textures/role-tank.tga",
+          "sha256": "d3f2219fddc08f00ffa80153c9bec4c5add1856be0cfa844a206c131052449e2"
+        }
+      ]
     }
   ]
 }

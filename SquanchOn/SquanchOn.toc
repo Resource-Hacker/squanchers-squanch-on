@@ -13,6 +13,7 @@ libs/LibStub/LibStub.lua
 libs/LibDispel/LibDispel.lua
 libs/oUF/oUF_Forever.xml
 
+DefaultProfile.lua
 Core.lua
 Media.lua
 LayoutEditor.lua

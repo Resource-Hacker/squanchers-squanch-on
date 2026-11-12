@@ -1,11 +1,13 @@
-# Compatibility and staged rewrite status
+# Compatibility and rewrite status
 
 ## Client and evidence
 
-**0.3.0-rewrite targets Forever interface 16001 and is staged for review.**
-Fresh live acceptance of this independent rewrite has not completed. Retail,
-other Classic clients and Windows gameplay are also unverified. Changing a TOC
-number does not establish compatibility.
+**0.3.0-rewrite targets Forever interface 16001 and is only partly verified.**
+It has been checked live solo, out of combat, with the player targeting
+themselves. Hostile targets, debuffs, combat, pet, party/raid frames, the tooltip
+and the settings editor have not been verified in this rewrite. Retail, other
+Classic clients and Windows gameplay are also unverified. Changing a TOC number
+does not establish compatibility.
 
 The reticle control comes from the author's working gameplay setup. The
 0.1.0-alpha unit-frame replacement was rejected for visual differences. An
@@ -13,18 +15,19 @@ intermediate 0.2.0-candidate used original ElvUI/BenikUI engines; this 0.3 rewri
 supersedes that packaging approach with independently written behavior. Acceptance
 of the original-engine setup does not validate this new renderer.
 
-Lua syntax, executable load dependencies, reuse hashes and private staging have
-been checked. Those checks establish source/artifact integrity, not successful
-game loading, matching appearance or working controls. The existing gameplay
+Lua syntax, executable load dependencies and reuse hashes are checked by the
+packager. Those checks establish source/artifact integrity, not matching
+appearance or working controls. The existing gameplay
 images show earlier component examples; their [provenance](images/README.md)
 remains explicit and does not certify the rewrite.
 
 ## Runtime ownership
 
-The public package is one complete `SquanchOn/` addon. It embeds separately
-licensed oUF and LibDispel plus public-domain LibStub. Squanch-On owns frame
-layout, its settings editor, tooltip presentation, reticle/mouselook and native
-UI adapters. oUF owns the secure unit-frame machinery and element lifecycle.
+The package is one complete `SquanchOn/` addon; no other addon is required. It
+embeds separately licensed oUF and LibDispel plus public-domain LibStub, the
+GPL-2.0 Horde reticle, and its fonts and textures. Squanch-On owns frame
+layout, buff and debuff icons, its settings editor, tooltip presentation,
+reticle/mouselook and native UI adapters. oUF owns the secure unit-frame machinery and element lifecycle.
 ElvUI and BenikUI engines, original options addons and original profile managers
 are neither included nor required.
 
@@ -35,19 +38,34 @@ use, sorting and deposits likewise remain with Blizzard's bags and bank.
 
 Plater and DynamicCam remain optional separate integrations. Plater normally
 provides LibRangeCheck-3.0 for conservative melee/proximity cues; unavailable
-checks hide those cues. Replacement native window, aura and minimap surfaces
+checks hide those cues. Replacement native window and minimap surfaces
 need their own visual and interaction checks.
+
+## Buff and debuff icons
+
+Squanch-On draws its own icons on one line above the player and target frames:
+on the player, debuffs on the left and buffs on the right; on the target, buffs
+on the left and debuffs on the right. A gap separates the halves and overflow
+stacks upward. Two movable bars, "Buff bar" and "Debuff bar" in `/sqedit`,
+replace the game's own buff and debuff rows. `/sqauras [count]` fills the rows
+with placeholder icons to judge spacing; run it again to return to live auras.
+
+Temporary weapon enchants are not shown on the buff bar. The separate proc,
+enhancement and cooldown tracker panels are currently off. Only buffs on the
+player and a self-target have been seen live; debuffs and hostile-target auras
+are unverified.
 
 ## Settings and supported controls
 
 Suite settings and rewritten unit-frame profiles live in `SquanchOnDB`. Original
 `SQMS_*` bindings and the `SquancherMouselookSuite` global alias remain for
-compatibility. The complete resolved local frame/tooltip configuration can be
-preserved as data during an explicit migration, including nested settings and
-fields the rewrite does not implement. Preservation does not mean every field
-has the original engine's behavior. Original ElvUI databases and DynamicCam
-profiles should remain separately backed up; neither public packaging nor private
-media assembly migrates them.
+compatibility. A first run with no saved settings starts from the author's
+layout (`SquanchOn/DefaultProfile.lua`). Its positions were authored on a
+5120x1440 display; other resolutions may need `/sqedit`. An existing
+`SquanchOnDB` is kept as it is. The layout includes nested settings and fields
+the rewrite does not implement; they are kept as data, which does not mean every
+field has the original engine's behavior. The addon does not read or migrate
+ElvUI databases or DynamicCam profiles.
 
 `/squanchon` and `/squancher` open a new capability-limited settings editor,
 not the native ElvUI editor. Its controls are selected from the renderer's actual
@@ -59,22 +77,27 @@ aura filters, all-class resource behavior and the complete native options catalo
 are not claimed as reproduced. Unsupported imported settings stay preserved;
 unsupported controls are not presented as working settings.
 
-`/squanchon tooltip` edits the imported tooltip presentation profile when one is
-available: text sizes, opacity, cursor/fixed anchoring and health-bar height.
-`/sqedit` can move its fixed anchor. Native tooltip content and comparison logic
-remain independent of those presentation controls. Public default operation does
-not require a personal imported profile.
+`/squanchon tooltip` edits the tooltip presentation profile: text sizes,
+opacity, cursor/fixed anchoring and health-bar height. `/sqedit` can move its
+fixed anchor. Native tooltip content and comparison logic remain independent of
+those presentation controls. Neither the settings editor nor the tooltip has
+been verified live in this rewrite.
 
-A separate local media overlay can supply exact original appearance assets and
-reticle bytes. The public package uses its bundled font and game resources where
-needed. Missing original assets and fallbacks remain a limit on visual matching.
-See [local overlays](LOCAL-ASSEMBLY.md) and [component licenses](COMPONENT-LICENSES.md).
+## Fonts, textures and reticle
+
+Text uses bundled SIL OFL 1.1 fonts: PT Sans Narrow Bold, Overpass Bold, Afacad
+Medium, Oxanium Bold and Almendra Bold. They stand in for the author's original
+fonts (Expressway, Homizio, Forced Square, Harry P), which are not distributed,
+so text shapes are close but not identical. Frame textures are original and
+generated; ready-check icons use the game's own files. The Horde reticle ships
+exactly, under GPL-2.0. See [installation](LOCAL-ASSEMBLY.md) and
+[component licenses](COMPONENT-LICENSES.md).
 
 ## Remaining acceptance
 
-- Compare player, target, pet, target-of-target and enabled group frames, portraits,
-  casts, auras, text/tag output, fade behavior and decoration against the current
-  accepted reference. Inspect actual settings changes and mover behavior.
+- Check hostile targets, debuffs, pet, target-of-target and enabled group frames,
+  portraits, casts, text/tag output, fade behavior and decoration. Inspect actual
+  settings changes and mover behavior.
 - Exercise combat, group/raid, class resources, specialized filters and range
   behavior in their actual contexts. A solo out-of-combat screenshot cannot
   certify them.
@@ -85,9 +108,7 @@ See [local overlays](LOCAL-ASSEMBLY.md) and [component licenses](COMPONENT-LICEN
   behavior. Windows input remains a separate check. The historical external
   interact-on-down / target-on-up helper is not included.
 - Range describes reach, not cooldown, resources, form or line of sight.
-- Distinguish public replacement artwork/sound from any private original reticle
-  overlay when reporting appearance or behavior.
 
 Report the exact client/interface, version, input sequence and expected/observed
-behavior with a sanitized error or image. Never upload full WTF directories,
-personal settings or private overlay archives.
+behavior with a sanitized error or image. Never upload full WTF directories or
+personal settings.

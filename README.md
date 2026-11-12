@@ -9,18 +9,19 @@ move the mouse to steer, **hold right mouse to open real mouseover at the reticl
 then release to close mouseover while the camera stays locked. Hold the free-cursor
 key when you need the interface; release it to return to mouselook.
 
-[**Build the standalone candidate**](docs/LOCAL-ASSEMBLY.md)
+[**Install**](docs/LOCAL-ASSEMBLY.md)
 · [How the reticle works](docs/RETICLE.md)
 · [Install and configure](#install-and-configure)
 · [Changelog](CHANGELOG.md)
 · [Report an issue](https://github.com/Resource-Hacker/squanchers-squanch-on/issues/new?template=bug_report.md)
 
-**0.3.0-rewrite · Forever interface 16001 · staged, not yet accepted in game.**
-This candidate independently implements the unit-frame layout, tooltip presentation
-and settings controls inside Squanch-On, using bundled, separately licensed
-libraries. It requires no ElvUI or BenikUI engine. Source/package checks have
-passed; visual equivalence, settings behavior and combat/group acceptance remain
-unverified. See [compatibility](docs/COMPATIBILITY.md).
+**0.3.0-rewrite · Forever interface 16001 · partly verified in game.**
+Everything is in one `SquanchOn/` folder: unit frames, aura icons, tooltip
+presentation, settings controls, the Horde reticle, fonts and textures. No other
+addon is required. It has been checked live only solo, out of combat, with the
+player targeting themselves. Hostile targets, debuffs, combat, pet, party/raid
+frames, the tooltip and the settings editor have not been verified in this
+rewrite. See [compatibility](docs/COMPATIBILITY.md).
 
 ## The reticle is the control
 
@@ -57,9 +58,9 @@ the addon. [Controls, safeguards and implementation details →](docs/RETICLE.md
   </tr>
 </table>
 
-These are real development gameplay details from the author's existing setup,
+These are real development gameplay details from the author's earlier setup,
 with Plater. They illustrate the reticle and target artwork; a still image does
-not demonstrate the hold/release transition or certify the new standalone UI.
+not demonstrate the hold/release transition or certify the rewrite.
 [Image provenance and credits](docs/images/README.md).
 
 ## Read range at a glance
@@ -83,8 +84,14 @@ of sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-rang
 - **Native bags and bank:** Blizzard owns item use, sorting, deposits and tooltips;
   Squanch-On supplies the shared visual treatment.
 - **Unit frames:** independently written health/power layout, portraits, casts,
-  text, auras and group presentation built on oUF. The new editor exposes the
+  text and group presentation built on oUF. The new editor exposes the
   renderer's supported controls; it does not reproduce the full ElvUI editor.
+- **Buff and debuff icons:** drawn by Squanch-On on one line above the player and
+  target frames (player: debuffs left, buffs right; target: buffs left, debuffs
+  right; a gap in the middle; overflow stacks upward). Two movable bars, "Buff
+  bar" and "Debuff bar" in `/sqedit`, replace the game's own buff and debuff
+  rows. Temporary weapon enchants are not shown on the buff bar. The separate
+  proc, enhancement and cooldown tracker panels are currently off.
 - **Tooltips:** shared presentation and default anchors while Blizzard retains
   tooltip content, comparisons and native health handling.
 - **A consistent theme:** dark translucent panels, gold equipment-style borders,
@@ -94,35 +101,26 @@ of sight. [Exact marker meanings and current limits](docs/RETICLE.md#target-rang
 - **Optional integrations:** Plater retains nameplate behavior; DynamicCam can
   own camera framing. Both are installed separately.
 
-The public package is one complete **SquanchOn** addon folder, including its
-required oUF, LibDispel and LibStub libraries with their own notices. ElvUI and
-BenikUI implementations are not copied into the rewrite or loaded as dependencies.
-Existing resolved settings can be preserved as local data without implying that
-every imported option has been implemented.
+The package is one complete **SquanchOn** addon folder, including its required
+oUF, LibDispel and LibStub libraries with their own notices. ElvUI and BenikUI
+implementations are not copied into the rewrite or loaded as dependencies.
 
-A separate private overlay can retain exact locally held fonts, textures and an
-original reticle. Those files remain outside the public release. The public addon
-uses bundled/game defaults when exact media is absent; those fallbacks do not
-establish matching appearance. [Package and component boundaries](docs/COMPONENT-LICENSES.md).
+With no saved settings, the first run starts from the author's layout. Its
+positions were authored on a 5120x1440 display; on other resolutions, use
+`/sqedit` to move things. Text uses bundled SIL OFL fonts that stand in for the
+author's original fonts, which are not distributed, so text shapes are close but
+not identical. Frame textures are original; the Horde reticle ships under
+GPL-2.0. [Package and component licenses](docs/COMPONENT-LICENSES.md).
 
 ## Install and configure
 
-1. Back up the working addon folders and `WTF`, then close the game normally
-   before replacing files or migrating settings.
-2. Build the public package using [the installation guide](docs/LOCAL-ASSEMBLY.md),
-   and extract its single `SquanchOn/` folder under `Interface/AddOns`.
-3. For a migrated setup, preserve the complete current configuration separately
-   and transfer it deliberately into `SquanchOnDB`; keep original ElvUI databases
-   and DynamicCam settings as rollback state. Packaging does not migrate settings.
-4. Disable overlapping frame/tooltip owners for the review profile. Optional
-   Plater and DynamicCam remain separate. Retain originals for rollback.
-5. Review actual loading, reticle controls, frame appearance, supported settings,
-   tooltips and movers before accepting the candidate.
-
-`tools/package.py` creates the complete public addon ZIP and checksum. A private
-exact-media overlay is optional and separate; the former original-engine
-`tools/assemble_local.py` workflow is retired. Neither packaging nor private
-staging demonstrates successful game loading or behavioral equivalence.
+1. Close the game and back up `Interface/AddOns` and `WTF`.
+2. Copy the single `SquanchOn/` folder into `Interface/AddOns`
+   ([installation page](docs/LOCAL-ASSEMBLY.md)).
+3. Disable other addons that own unit frames, tooltips or the buff rows. Plater
+   and DynamicCam are optional and installed separately.
+4. Log in. An existing `SquanchOnDB` is kept; otherwise the author's layout is
+   used. Adjust positions with `/sqedit`.
 
 | Command | Purpose |
 | --- | --- |
@@ -131,16 +129,16 @@ staging demonstrates successful game loading or behavioral equivalence.
 | `/sqms nameplates` / `/sqms crosshairs` | Indicator settings |
 | `/squanchon` or `/squancher` | Unit-frame settings and profiles |
 | `/sqedit` or `/squanchon edit` | Move and resize the interface |
+| `/sqauras [count]` | Preview placeholder buff and debuff icons; run again to stop |
 | `/squanchon tooltip` | Tooltip text, opacity and anchors |
 | `/sqms camera` | DynamicCam framing status |
 | `/sqms camera setup` / `/sqms camera restore` | Create a separate framing profile / restore the saved source profile |
 
 Saved settings live in the normal `SavedVariables/SquanchOn.lua` file as
 `SquanchOnDB`, including the rewrite's unit-frame profiles. The new editor shows
-supported renderer controls and preserves other imported settings as data.
-Tooltip presentation editing needs an imported tooltip profile; Blizzard still
-owns content and comparisons. The public package includes no personal settings,
-account exports, macros or private media. [Supported controls and limits](docs/COMPATIBILITY.md#settings-and-supported-controls).
+supported renderer controls and preserves other settings as data. Blizzard still
+owns tooltip content and comparisons. The package's default layout carries no
+per-character records, account exports or macros. [Supported controls and limits](docs/COMPATIBILITY.md#settings-and-supported-controls).
 
 ## Development and attribution
 
@@ -157,10 +155,10 @@ includes those addon files; `--check-only` validates without creating a ZIP. Git
 Actions runs the same packaging checks. These checks do not certify game behavior.
 See [contribution guidance](CONTRIBUTING.md) and [compatibility](docs/COMPATIBILITY.md).
 
-Original Squanch-On code and geometric artwork use the [MIT license](LICENSE).
-Bundled PT Sans, Choonster's TargetNameplateIndicator contribution, oUF and
-LibDispel retain their own notices; LibStub retains its public-domain declaration.
-Private local originals and media remain outside the public package. See
+Original Squanch-On code and generated artwork use the [MIT license](LICENSE).
+The Horde reticle code, data and media are GPL-2.0-only. The bundled fonts are
+SIL OFL 1.1. Choonster's TargetNameplateIndicator contribution, oUF and
+LibDispel retain their own notices; LibStub retains its public-domain declaration. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [reuse-manifest.json](reuse-manifest.json) for exact scopes and file hashes.
 Game-provided art and gameplay images retain Blizzard's rights. This project is

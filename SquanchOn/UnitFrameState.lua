@@ -159,26 +159,32 @@ end
 local function hovered(frame,unit)
     return frame:IsVisible() and (frame:IsMouseOver() or flag(UnitIsUnit,'mouseover',unit))
 end
+-- Geometry and textures change only with layout; events below just show, hide and tint.
+function UF:LayoutGlows(frame)
+    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow','ThreatIndicator'}) do positionGlow(frame,frame[key]) end
+    local texture=frame.HoverWash
+    if not texture then
+        texture=frame.Health:CreateTexture(nil,'ARTWORK',nil,1);frame.HoverWash=texture;texture:Hide()
+        texture:SetPoint('TOPLEFT',frame.Health,'TOPLEFT')
+        texture:SetPoint('BOTTOMRIGHT',frame.Health:GetStatusBarTexture(),'BOTTOMRIGHT')
+    end
+    local wash=(self.db.colors.frameGlow or {}).mouseoverGlow or {}
+    texture:SetTexture(self:Texture(wash.texture or self.db.statusbar))
+end
 function UF:RefreshGlows(frame)
     local c=self.db.colors.frameGlow or {};local unit=frame.__unit
     if not unit then return end
     -- The hover edge follows mainGlow; mouseoverGlow owns the wash over the health fill.
     local target=c.targetGlow or {};local main=c.mainGlow or {};local wash=c.mouseoverGlow or {};local focus=c.focusGlow or {}
-    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow','ThreatIndicator'}) do positionGlow(frame,frame[key]) end
     local hover=not frame.db.disableMouseoverGlow and hovered(frame,unit)
     reveal(frame.TargetGlow,target.enable==true and not frame.db.disableTargetGlow and flag(UnitIsUnit,unit,'target'))
     reveal(frame.MouseGlow,main.enable==true and hover)
     reveal(frame.FocusGlow,focus.enable==true and not frame.db.disableFocusGlow and flag(UnitIsUnit,unit,'focus'))
     paintGlow(frame.TargetGlow,glowColor(frame,target));paintGlow(frame.MouseGlow,glowColor(frame,main));paintGlow(frame.FocusGlow,glowColor(frame,focus))
     local texture=frame.HoverWash
-    if not texture then
-        texture=frame.Health:CreateTexture(nil,'ARTWORK',nil,1);frame.HoverWash=texture
-        texture:SetPoint('TOPLEFT',frame.Health,'TOPLEFT')
-        texture:SetPoint('BOTTOMRIGHT',frame.Health:GetStatusBarTexture(),'BOTTOMRIGHT')
-    end
-    texture:SetTexture(self:Texture(wash.texture or self.db.statusbar))
-    texture:SetVertexColor(glowColor(frame,wash))
-    texture:SetShown(wash.enable==true and hover)
+    local washed=wash.enable==true and hover
+    if washed then texture:SetVertexColor(glowColor(frame,wash)) end
+    texture:SetShown(washed)
     -- Leaving a unit in the world raises no event; watch only while something is lit.
     if hover and not self.hoverClock then
         self.hoverClock=C_Timer.NewTicker(.1,function()
@@ -244,7 +250,7 @@ function UF:ConfigureState(frame)
         end
         frame:HookScript('OnEnter',function() UF:RefreshFade(frame);UF:RefreshGlows(frame) end)
         frame:HookScript('OnLeave',function() UF:RefreshFade(frame);UF:RefreshGlows(frame) end)
-        frame:HookScript('OnShow',function() UF:RefreshFade(frame);UF:RefreshGlows(frame);UF:StartRangeClock() end)
+        frame:HookScript('OnShow',function() UF:LayoutGlows(frame);UF:RefreshFade(frame);UF:RefreshGlows(frame);UF:StartRangeClock() end)
         frame:HookScript('OnHide',function() UF:StartRangeClock() end)
         local health=frame.Health.PostUpdate
         frame.Health.PostUpdate=function(self,unit,current,maximum,...)
@@ -284,7 +290,7 @@ function UF:ConfigureState(frame)
         local prediction=frame.HealthPrediction[key]
         if prediction then prediction:SetStatusBarColor(rgba(colors[name],0,1,0,.5)) end
     end
-    self:RefreshFade(frame);self:RefreshGlows(frame);self:StartRangeClock()
+    self:LayoutGlows(frame);self:RefreshFade(frame);self:RefreshGlows(frame);self:StartRangeClock()
 end
 
 function UF:StartRangeClock()
@@ -302,13 +308,19 @@ end
 
 local state=CreateFrame('Frame')
 for _,event in ipairs({'UPDATE_MOUSEOVER_UNIT','PLAYER_TARGET_CHANGED','PLAYER_FOCUS_CHANGED','PLAYER_REGEN_ENABLED','PLAYER_REGEN_DISABLED',
-    'UNIT_TARGET','UNIT_HEALTH','UNIT_MAXHEALTH','UNIT_POWER_UPDATE','UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP',
+    'UNIT_TARGET','UNIT_SPELLCAST_START','UNIT_SPELLCAST_STOP',
     'UNIT_SPELLCAST_CHANNEL_START','UNIT_SPELLCAST_CHANNEL_STOP','UNIT_ENTERED_VEHICLE','UNIT_EXITED_VEHICLE'}) do state:RegisterEvent(event) end
+-- Health and power reach the fader through their own element callbacks; this
+-- handler only sees the rarer state changes, and skips hidden or unfaded frames.
+local glowEvents={UPDATE_MOUSEOVER_UNIT=true,PLAYER_TARGET_CHANGED=true,PLAYER_FOCUS_CHANGED=true,UNIT_TARGET=true}
 state:SetScript('OnEvent',function(_,event,unit)
+    local glow=glowEvents[event]
+    local global=not unit or unit=='player' or glow
     for _,frame in ipairs(UF.objects) do
-        if frame.squancherState and (not unit or unit=='player' or unit==frame.__unit or event:match('^PLAYER_')) then
-            if frame.squancherPortraitPlace and event=='PLAYER_TARGET_CHANGED' and frame:IsShown() then frame.squancherPortraitPlace() end
-            UF:RefreshFade(frame);UF:RefreshGlows(frame)
+        if frame.squancherState and frame:IsShown() and (global or unit==frame.__unit) then
+            if event=='PLAYER_TARGET_CHANGED' and frame.squancherPortraitPlace then frame.squancherPortraitPlace() end
+            if event~='UPDATE_MOUSEOVER_UNIT' and frame.db.fader and frame.db.fader.enable then UF:RefreshFade(frame) end
+            if glow then UF:RefreshGlows(frame) end
         end
     end
 end)

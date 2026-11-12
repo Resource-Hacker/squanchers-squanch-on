@@ -1310,6 +1310,9 @@ function addon:OnEvent(event, ...)
       return
     end
 
+    -- First run: start from the shipped layout. The table is released either way.
+    if SquanchOnDB == nil and addon.DefaultProfile then SquanchOnDB = addon.DefaultProfile end
+    addon.DefaultProfile = nil
     SquanchOnDB = SquanchOnDB or {}
     copyDefaults(defaults, SquanchOnDB)
     -- Retired cursor-peek / AHK settings have no owner in this native version.

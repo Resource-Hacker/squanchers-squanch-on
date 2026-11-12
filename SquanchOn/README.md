@@ -1,4 +1,4 @@
-# Squancher's Squanch-On — 0.2.0-candidate
+# Squancher's Squanch-On — 0.3.0-rewrite
 
 **Keep the camera locked. Open mouseover only when you mean it.**
 
@@ -12,24 +12,17 @@ free-cursor key for the interface; release to return to mouselook.
 
 ## Install
 
-This candidate targets **Forever interface 16001** and restores the actual
-original ElvUI unit-frame engine and native editor. Fresh live equivalence
-acceptance is required before treating it as a finished release.
+Copy this `SquanchOn` folder into `Interface/AddOns`. Nothing else is required:
+the unit frames, buff and debuff bars, reticle, fonts and textures are all in
+this one folder. It targets **Forever interface 16001**.
 
-This is the public **integration-only** folder. Its runtime requires original-name
-`ElvUI`, `ElvUI_Libraries`, `ElvUI_Options` and `ElvUI_BenikUI`, with this project's
-scoped loaders. The repository's offline `tools/assemble_local.py` combines those
-legitimate local inputs with this package for private use. A stock unscoped ElvUI
-install or upstream source-only ZIP is not an equivalent input.
+With no saved settings, the first login starts from the author's layout. It was
+arranged on a 5120x1440 display; on other resolutions use `/sqedit` to move
+things. Settings live in `SquanchOnDB`.
 
-[Assembly instructions](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/LOCAL-ASSEMBLY.md)
-explain checks and the five-folder output. The assembled original components and
-restricted media must remain private. Preserve the current working installation
-and fresh WTF before a client-stopped switch.
-
-Suite settings use `SquanchOnDB`; unit frames keep original ElvUI databases,
-profiles and movers. Do not replace them with the alpha's reduced import schema.
-The public folder contains no private profile exports.
+So far this version has been checked solo and out of combat only. Hostile
+targets, combat, pets, groups, the tooltip and the settings editor still need
+verification.
 
 ## Controls
 
@@ -45,6 +38,7 @@ The public folder contains no private profile exports.
 | `/sqedit` | Move and resize supported interface components. |
 | `/squanchon tooltip` | Tooltip settings. |
 | `/sqms camera` | Optional DynamicCam framing status. |
+| `/sqauras [count]` | Preview placeholder buffs and debuffs to judge layout. |
 
 To replace the Caps Lock/Up preset, run `/sqms bindings off`, then assign
 **Hold to release mouselook** in WoW's Key Bindings. This also removes the
@@ -69,10 +63,8 @@ not healing readiness. Unknown range stays hidden. Range does not guarantee
 resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
 in progress.
 
-Plater and DynamicCam remain optional and installed separately. The four original
-ElvUI/Benik folders above are required. Native adapters replace the other retired
-UI owners; their detailed acceptance remains separate from unit-frame fidelity.
-[Compatibility and migration limits](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
+Plater and DynamicCam remain optional and installed separately.
+[Compatibility notes](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
 
 ## Source and attribution
 
@@ -80,9 +72,9 @@ To build **from a source checkout**, install Python 3, Git and Lua 5.1, then run
 `python tools/package.py` in that checkout. Developer tools are intentionally not
 inside this installation package. Packaging checks do not certify game behavior.
 
-Original Squanch-On code and geometric artwork use [MIT](LICENSE). Bundled PT Sans
-and Choonster's contribution retain their notices. Original runtime dependencies
-keep their separate licenses; this project does not relicense them.
+Original Squanch-On code and generated artwork use [MIT](LICENSE). The Horde
+reticle module and its media are GPL-2.0; bundled fonts are SIL OFL 1.1; oUF,
+LibDispel and Choonster's contribution keep their own notices.
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [reuse-manifest.json](reuse-manifest.json)
 and `LICENSES/`. Game-provided art remains Blizzard's property. This project is
 not endorsed by Blizzard or the referenced addon projects.

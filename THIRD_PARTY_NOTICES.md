@@ -1,12 +1,12 @@
 # Third-party notices and provenance
 
 The MIT license covers original Squanch-On contributions only. It does not
-relicense ElvUI, BenikUI, their libraries, third-party fonts or game resources.
-The public package contains independently rewritten SquanchOn frame, tooltip and
-options behavior. ElvUI and BenikUI engines are not included or required.
-See [component licenses and local assembly](docs/COMPONENT-LICENSES.md).
+relicense the GPL-2.0 Horde reticle, the bundled fonts and libraries, ElvUI,
+BenikUI or game resources. The package contains independently rewritten SquanchOn
+frame, tooltip and options behavior. ElvUI and BenikUI engines are not included
+or required. See [component licenses](docs/COMPONENT-LICENSES.md).
 
-## Included public material
+## Included material
 
 | Component | Scope and attribution | Terms |
 | --- | --- | --- |
@@ -16,12 +16,12 @@ See [component licenses and local assembly](docs/COMPONENT-LICENSES.md).
 `TargetCrosshairs.lua`, its numerical circle/arrow artwork and generator are
 original contributions. [Provenance](LICENSES/TargetCrosshairs-PROVENANCE.md)
 identifies the functional reference without claiming a clean-room process.
-The independently generated polygons in `media/native-indicators` have
+The independently generated polygons in `SquanchOn/media/native-indicators` have
 [source and provenance](SquanchOn/asset-source/NATIVE-INDICATORS-PROVENANCE.md).
 No historical TNI image library is distributed here. The Horde reticle's own
 GPL-2.0 data and media are listed in their section below.
 
-## Bundled libraries and private local assets
+## Bundled libraries and references
 
 oUF is separately MIT-licensed by Trond A Ekseth, Val Voronov, Adrian L Lange
 and Rainrider; see `SquanchOn/libs/oUF/LICENSE.txt`. LibDispel is separately MIT-licensed
@@ -32,24 +32,20 @@ the supplying distribution are recorded in `SquanchOn/libs/provenance.json` and
 individual library licenses. The rewrite uses those libraries directly, without
 copying ElvUI or BenikUI frame, tooltip, options or lifecycle implementations.
 
-ElvUI and BenikUI supplied behavioral and owner-settings references. Their
-custom engine licenses remain attached to those separate originals; neither
-engine is renamed or distributed here. A separate private owner-local assembly
-may supply exact locally held fonts, textures and original reticle code/assets.
-That private output retains its source notices and per-file provenance, is not a
-public release, and grants no redistribution rights. The retired original-engine
-assembler cannot build that output.
+ElvUI and BenikUI supplied behavioral and settings references. Their custom
+engine licenses remain attached to those separate originals; neither engine is
+renamed or distributed here.
 
-Exact externally supplied fonts, textures and libraries retain their own rights.
-This public package does not supply Expressway, Homizio, Prototype, DOCK11,
-Homespun, Action Man, Forced Square or Harry P files. Blizzard paths reference
-installed game resources; no extracted game images, fonts, sounds, FrameXML or
-binaries are bundled.
+The fonts the author's original setup used (Expressway, Homizio, Forced Square,
+Harry P) and the original ElvUI/BenikUI textures are not distributed; the
+bundled fonts and textures described below take their place. Blizzard paths
+reference installed game resources, including the ready-check icons; no
+extracted Blizzard images, fonts, sounds, FrameXML or binaries are bundled.
 
 Plater and DynamicCam remain optional external addons with their own authors,
 licenses and update ownership. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
 Bagnon and Semlar's Crosshairs supplied functional/settings references; their
-complete implementations and assets are not part of this public package. Their
+complete implementations and assets are not part of this package. Their
 individual licenses differ; this is a statement of package contents, not a blanket
 restriction or permission for those projects.
 
@@ -58,12 +54,26 @@ sponsorship, ownership transfer or additional permissions.
 
 ## Horde reticle (GPL-2.0)
 
-`HordeReticle.lua`, `HordeReticleData.lua` and `media/horde-reticle/` are
+`SquanchOn/HordeReticle.lua`, `SquanchOn/HordeReticleData.lua` and `SquanchOn/media/horde-reticle/` are
 distributed under the GNU General Public License version 2
-(`LICENSES/GPL-2.0.txt`), separately from the MIT-licensed remainder. They are a
+(`SquanchOn/LICENSES/GPL-2.0.txt`), separately from the MIT-licensed remainder. They are a
 standalone rendering of the author's own "The Terminator" aura group, built in
 M33kAuras (a WeakAuras fork, GPL-2.0, <https://github.com/m33shoq/M33kAuras>).
 Several layers began as the Wago imports <https://wago.io/OWg3rTo0a> and
 <https://wago.io/jxJdu2yc6>. The five textures and `throwknife.ogg` are unmodified
 PowerAurasMedia files as shipped inside that GPL-2.0 package; the package carries
 no separate per-file authorship or license statement for them.
+
+## Bundled layout fonts (SIL OFL 1.1)
+
+Besides PT Sans Narrow Bold above, the shipped layout's text uses four freely
+licensed fonts in `SquanchOn/media/fonts`, each beside its own license text: Overpass
+Bold, Afacad Medium, Oxanium Bold (static instances cut from the projects'
+variable fonts) and Almendra Bold (unmodified). They stand in for the
+differently licensed fonts the author's original setup used, so text shapes are
+close to, not identical with, that setup.
+
+## Unit-frame textures
+
+`SquanchOn/media/textures` (glow edge, status-bar face, role marks) are original numerical
+constructions produced by `SquanchOn/asset-source/generate-frame-media.py`, MIT.

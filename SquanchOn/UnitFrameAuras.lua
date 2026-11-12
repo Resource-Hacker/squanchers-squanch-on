@@ -115,9 +115,13 @@ function UF:SortAuraButtons(container)
         else
             button:ClearAllPoints()
             point(button,container.initialAnchor,container,container.initialAnchor,((index-1)%per)*stride*sx,math.floor((index-1)/per)*stride*sy)
-            self:ApplyFont(button.Count,config.countFont or self.db.font,config.countFontSize or 8,config.countFontOutline or 'OUTLINE')
-            button.Count:ClearAllPoints()
-            point(button.Count,config.countPosition or 'BOTTOMRIGHT',button,config.countPosition or 'BOTTOMRIGHT',config.countXOffset or 0,config.countYOffset or 0)
+            if button.sqCountConfig~=config then
+                -- Count style depends only on the row's settings; set it once per button.
+                button.sqCountConfig=config
+                self:ApplyFont(button.Count,config.countFont or self.db.font,config.countFontSize or 8,config.countFontOutline or 'OUTLINE')
+                button.Count:ClearAllPoints()
+                point(button.Count,config.countPosition or 'BOTTOMRIGHT',button,config.countPosition or 'BOTTOMRIGHT',config.countXOffset or 0,config.countYOffset or 0)
+            end
         end
     end
 end
