@@ -68,8 +68,9 @@ bundled fonts and textures described below take their place. Blizzard paths
 reference installed game resources, including the ready-check icons; no
 extracted Blizzard images, fonts, sounds, FrameXML or binaries are bundled.
 
-Plater remains an optional external addon with its own authors, license and
-update ownership; DynamicCam is no longer used. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
+Plater is a separate nameplate addon with its own authors, license and update
+ownership; it is not required or bundled. DynamicCam is not required or
+bundled. ProjectAzilroka, MoveAny, Masque, AddOnSkins,
 Bagnon and Semlar's Crosshairs supplied functional/settings references; their
 complete implementations and assets are not part of this package. Their
 individual licenses differ; this is a statement of package contents, not a blanket
@@ -131,6 +132,6 @@ textures with it and lists what it offers.
 
 ## Range item identifiers
 
-`Range.lua` contains item identifiers taken from the range tables of
+`SquanchOn/Range.lua` contains item identifiers taken from the range tables of
 LibRangeCheck-3.0 (MIT, The WoWUIDev Community), which is also bundled in
-`libs/LibRangeCheck-3.0` with its license.
+`SquanchOn/libs/LibRangeCheck-3.0` with its license.

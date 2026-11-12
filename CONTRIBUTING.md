@@ -7,12 +7,15 @@ surface. Describe what changes for a player and how it was observed.
   open while held, closed on release without unlocking the camera.
 - Preserve native input, explicit macro targeting, combat deferral and hardware
   cursor behavior. Keep visual feedback separate from input dispatch.
+- Register settings through `SquanchOn/Options.lua` so they get search, undo,
+  reset and combat queueing, and store them in the active profile.
 - Keep account data, raw saved variables, per-character records, macros and
   external input helpers out of the repository and release archives. The shipped
   default layout is regenerated with `tools/export_defaults.lua`, not edited by hand.
-- Retain upstream licenses and provenance, including separately MIT-licensed oUF
-  and LibDispel, LibStub's public-domain source declaration, the GPL-2.0-only
-  Horde reticle and the SIL OFL fonts. Update both reuse manifests when an
+- Retain upstream licenses and provenance, including separately MIT-licensed
+  oUF, LibDispel, LibRangeCheck-3.0 and LibSerialize, zlib-licensed LibDeflate,
+  LibStub's public-domain source declaration, the DynamicCam (MIT) parts of
+  `Camera.lua`, the GPL-2.0-only Horde reticle and the SIL OFL fonts. Update both reuse manifests when an
   attributed file changes; document the source revision and any modifications.
 
 From a source checkout with Python 3, Git and `luac5.1` installed:

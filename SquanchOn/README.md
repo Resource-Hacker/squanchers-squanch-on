@@ -13,15 +13,20 @@ free-cursor key for the interface; release to return to mouselook.
 ## Install
 
 Copy this `SquanchOn` folder into `Interface/AddOns`. Nothing else is required:
-the unit frames, buff and debuff bars, reticle, fonts and textures are all in
-this one folder. It targets **Forever interface 16001**.
+mouselook and reticle, camera, unit frames, buff and debuff bars, chat drawers,
+bag window, damage meter, settings, fonts and textures are all in this one
+folder. It targets **Forever interface 16001**.
 
 With no saved settings, the first login starts from the author's layout. It was
 arranged on a 5120x1440 display; on other resolutions use `/sqedit` to move
-things. Settings live in `SquanchOnDB`.
+things. Settings live in `SquanchOnDB` as profiles; one profile is selected per
+character, and settings from an earlier version are migrated at first login
+with a backup kept in the saved file.
 
-So far this version has been checked solo and out of combat only. Hostile
-targets, combat, pets, groups, the tooltip and the settings editor still need
+The author has checked this version live only solo on the Forever client.
+Combat, hostile-target debuffs, pet/party/raid frames, profile switching,
+export and import, theme recolouring, the camera takeover, bag interactions
+beyond opening the window, the meter in combat and other resolutions still need
 verification.
 
 ## Controls
@@ -34,9 +39,8 @@ verification.
 | Free-cursor key released | Return to the center and resume mouselook. |
 | `/sqms` / `/sqms off` | Mouselook help and status / disable control. |
 | `/sqms nameplates` / `/sqms crosshairs` | Indicator settings. |
-| `/squanchon` | Unit-frame settings and profiles. |
+| `/squanchon` | The settings window: category tree, search, undo, reset, profiles. |
 | `/sqedit` | Move and resize supported interface components. |
-| `/squanchon tooltip` | Tooltip settings. |
 | `/sqms camera` | Camera status; `options` opens its settings, `on`, `off` and `restore` control it. |
 | `/sqms camera takeover` | Import the DynamicCam profile in use and disable DynamicCam (then `/reload`). |
 | `/sqauras [count]` | Preview placeholder buffs and debuffs to judge layout. |
@@ -51,22 +55,27 @@ cast a spell or select a hard target. Native mouselook, the held mouseover gate 
 cursor return need no external input helper. The author's historical combined-click
 interact-on-down / target-on-up helper is not bundled.
 
-## Range and integrations
+## Range, camera and nameplates
 
-The selected-target nameplate uses a dashed ring. Cardinal blocks indicate
+The selected-target nameplate uses a solid ring. Cardinal blocks indicate
 conservative five-yard hostile melee reach; rotating triangles indicate a learned damage
 or healing spell in range. Mend Pet and Health Funnel apply only to your own pet.
+On a friendly player the ring takes the class colour.
 
-The bundled MIT-licensed **LibRangeCheck-3.0** provides the five-yard melee and
-friendly/NPC proximity checks; Plater is not needed for them. Without a usable
-checker those cues stay hidden. Friendly ring rotation alone is proximity feedback,
-not healing readiness. Unknown range stays hidden. Range does not guarantee
-resources, cooldown, form or line of sight. Cross-class/combat acceptance remains
-in progress.
+The bundled MIT-licensed **LibRangeCheck-3.0** and the shared range module
+(`Range.lua`) answer distance questions from learned spells and item-range
+checks; no other addon is needed. Unknown range stays hidden. Friendly ring
+rotation alone is proximity feedback, not healing readiness. Range does not
+guarantee resources, cooldown, form or line of sight. Cross-class and combat
+acceptance remains in progress.
 
-Squanch-On drives the camera itself (zoom curves, eased wheel zoom, situations).
-DynamicCam is no longer used and must be disabled for the camera to run; its
-profile is imported once. Plater remains optional and installed separately.
+Squanch-On has its own camera (`Camera.lua`): every DynamicCam setting, zoom
+curves and situations. It stays inactive while DynamicCam is loaded; `/sqms
+camera takeover` imports the DynamicCam profile once and disables DynamicCam.
+
+Squanch-On does not ship nameplates yet; a native nameplate module is planned.
+The author uses Plater for nameplates. It is not required; when it is loaded,
+the friendly ring hugs its nameplate icon and its icons take the shared look.
 [Compatibility notes](https://github.com/Resource-Hacker/squanchers-squanch-on/blob/main/docs/COMPATIBILITY.md).
 
 ## Source and attribution
@@ -77,7 +86,8 @@ inside this installation package. Packaging checks do not certify game behavior.
 
 Original Squanch-On code and generated artwork use [MIT](LICENSE). The Horde
 reticle module and its media are GPL-2.0; bundled fonts are SIL OFL 1.1; oUF,
-LibDispel and Choonster's contribution keep their own notices.
+LibDispel, LibRangeCheck-3.0, LibSerialize, LibDeflate, LibStub, the DynamicCam
+parts of `Camera.lua` and Choonster's contribution keep their own notices.
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [reuse-manifest.json](reuse-manifest.json)
 and `LICENSES/`. Game-provided art remains Blizzard's property. This project is
 not endorsed by Blizzard or the referenced addon projects.

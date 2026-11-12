@@ -6,6 +6,7 @@
 | `range-guide.svg` | Original schematic legend for selected-target marker semantics. Static shapes illustrate roles, not an animation or exact client rendering. MIT. |
 | `horde-reticle-gameplay.png` | Author's Forever gameplay development detail, captured 2026-11-10; copied without further image editing. Shows the world Horde reticle near NPCs. |
 | `target-ring-gameplay.png` | Author's Forever gameplay development detail, captured 2026-11-10; copied without further image editing. Shows Duokna's dashed selected-target ring and merchant icon. |
+| `ui-layout-editor.png`, `ui-settings-window.png`, `ui-settings-unit-frames.png`, `ui-settings-camera.png`, `ui-chat-header.png` | Author's Forever captures of the 0.3 standalone interface, 2026-11-11; cropped and, for the layout editor, downscaled. They show the layout editor, the settings window and the chat header. |
 
 Gameplay captures show the author's existing setup with Plater, before the full
 standalone UI consolidation was accepted. They illustrate component artwork,
