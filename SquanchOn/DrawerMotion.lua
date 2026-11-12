@@ -133,6 +133,13 @@ local function finish(state)
     state.rims = nil
     if state.frame:IsVisible() then settle(state.frame) end
     if state.frame:IsVisible() then pcall(refreshRims, state.frame) end
+    -- A fill created during the first show can keep an unresolved rectangle
+    -- (see settle); refit it now that the window has settled.
+    local parchment = ns.NativeParchmentSkins
+    if parchment and parchment.fills and parchment.fills[state.frame] and state.frame:IsVisible()
+        and not InCombatLockdown() then
+        pcall(parchment.Fill, parchment, state.frame)
+    end
 end
 
 local function build(frame, style)

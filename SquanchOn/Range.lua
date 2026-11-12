@@ -159,7 +159,11 @@ local function spellRange(spellID, now)
   end
   if not public(minimum) or type(minimum) ~= "number" then minimum = 0 end
   if not public(maximum) or type(maximum) ~= "number" then maximum = nil end
-  spellRanges[spellID] = {min = minimum, max = maximum, time = now}
+  if known then
+    known.min, known.max, known.time = minimum, maximum, now
+  else
+    spellRanges[spellID] = {min = minimum, max = maximum, time = now}
+  end
   return minimum, maximum
 end
 
@@ -226,8 +230,10 @@ local function evaluate(unit, now, combat)
     end
     if answer(UnitIsVisible, unit) == false then atLeast(entry, 100, "visible") end
   end
-  for _, zone in ipairs(entry.deadZone or {}) do
-    if entry.min and entry.min >= zone[1] then atLeast(entry, zone[2], "spell") end
+  if entry.deadZone then
+    for _, zone in ipairs(entry.deadZone) do
+      if entry.min and entry.min >= zone[1] then atLeast(entry, zone[2], "spell") end
+    end
   end
   return entry
 end

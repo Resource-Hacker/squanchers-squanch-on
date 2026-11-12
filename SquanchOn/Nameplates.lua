@@ -8,12 +8,15 @@
 -- `plate.unitFrame`, the field Plater also uses, so the two cannot run
 -- together: this module refuses to start while Plater is loaded.
 --
--- Work is event driven. One shared 0.2 s ticker (alpha, range, hover and the
--- aura tooltip gate) runs only while at least one plate is on screen.
+-- Work is event driven. One shared 0.2 s ticker (alpha, hover and the aura
+-- tooltip gate; range for a fifth of the plates per tick) runs only while at
+-- least one plate is on screen.
 -- NameplateStyle.lua, NameplateCast.lua and NameplateAuras.lua build and paint
 -- the frame; settings live in SquanchOnDB.nameplates (NP.defaults below).
 local _, ns = ...
-local NP = { active = {}, count = 0 }
+-- generation: bumped by every settings edit; a plate re-applies fonts, textures
+-- and colours only when it differs from the one it was last dressed for.
+local NP = { active = {}, count = 0, generation = 0 }
 ns.Nameplates = NP
 local oUF = _G.SquanchOnUF
 
@@ -425,6 +428,8 @@ function NP:ApplyCVars(zone)
       if not same(current, value) then pcall(SetCVar, name, value) end
     end
   end
+  -- The rings keep nameplateSelectedScale; it may just have changed.
+  if ns.TargetCrosshairs and ns.TargetCrosshairs.ScaleChanged then ns.TargetCrosshairs:ScaleChanged() end
   return true
 end
 function NP:RestoreCVars()
@@ -435,6 +440,7 @@ function NP:RestoreCVars()
   for name, value in pairs(previous) do
     if ask(GetCVar, name) ~= nil then pcall(SetCVar, name, value) end
   end
+  if ns.TargetCrosshairs and ns.TargetCrosshairs.ScaleChanged then ns.TargetCrosshairs:ScaleChanged() end
   ns.db.nameplateCVarsPrevious = nil
   return true
 end
@@ -466,12 +472,18 @@ function NP:Tick()
     if ns.NameplateAuras then ns.NameplateAuras:SetMouse(gate) end
     if self.hoverFrame and ns.NameplateEnhance then ns.NameplateEnhance:Emphasis(self.hoverFrame) end
   end
-  local Style = ns.NameplateStyle
+  local Style, Auras = ns.NameplateStyle, ns.NameplateAuras
   self:HoverCheck()
+  -- Range costs item and spell checks: each plate asks on its own tick out of
+  -- five (once a second), the hovered plate on every tick; the others reuse
+  -- their last answer.
+  local slot = ((self.rangeSlot or 0) + 1) % 5
+  self.rangeSlot = slot
+  local hovered = self.hoverFrame
   for frame in pairs(self.active) do
     -- Threat and "not in combat" follow the fight without a reliable event.
     if self.combat and frame.npKind == 'enemynpc' then Style:Color(frame) end
-    if ns.NameplateAuras then ns.NameplateAuras:Alpha(frame) end
+    if Auras then Auras:Alpha(frame, false, frame.npRangeSlot == slot or frame == hovered) end
   end
 end
 
@@ -483,6 +495,11 @@ function NP:Added(frame, unit)
   -- The record TargetCrosshairs fits the friendly ring to (as Plater's list).
   plate.IconIndicators = frame.npIcons
   if not self.active[frame] then self.active[frame] = true; self.count = self.count + 1 end
+  -- Another unit: the last range answer is not this one's. Plates take the
+  -- five range ticks in turn.
+  frame.npRangeAt = nil
+  self.nextSlot = ((self.nextSlot or 0) + 1) % 5
+  frame.npRangeSlot = self.nextSlot
   if ask(C_NamePlate.GetNamePlateForUnit, 'target') == plate then self.targetFrame = frame end
   local Style = ns.NameplateStyle
   Style:Classify(frame, unit)
@@ -499,8 +516,20 @@ function NP:Removed(frame)
   if self.count == 0 and ticker then ticker:Cancel(); ticker = nil end
 end
 
--- Re-lays out and repaints every visible plate (settings edit, combat edge).
+-- Combat edge: NPC bars change height (healthCombat) and enemy NPCs take or
+-- drop their threat colours. Nothing else of a plate depends on it.
+function NP:CombatEdge()
+  local Style, Auras = ns.NameplateStyle, ns.NameplateAuras
+  for frame in pairs(self.active) do
+    Style:Arrange(frame)
+    if frame.npKind == 'enemynpc' then Style:Color(frame) end
+    if Auras then Auras:Alpha(frame, true) end
+  end
+end
+
+-- Re-lays out and repaints every visible plate (settings edit, zone change).
 function NP:RefreshAll()
+  self.generation = self.generation + 1
   if ns.NameplatePreview then ns.NameplatePreview:Refresh() end
   if not self.started then return end
   local Style = ns.NameplateStyle
@@ -513,6 +542,12 @@ function NP:RefreshAll()
   end
 end
 
+function NP:Retarget(frame)
+  if not (frame and self.active[frame]) then return end
+  local Style = ns.NameplateStyle
+  Style:Arrange(frame); Style:Refresh(frame)
+  if ns.NameplateAuras then ns.NameplateAuras:Refresh(frame) end
+end
 function NP:TargetChanged()
   local frame = self:PlateFor('target')
   local previous = self.targetFrame
@@ -524,13 +559,10 @@ function NP:TargetChanged()
   end
   -- The mouseover ring hands over to (or takes over from) the target ring at once.
   if ns.NameplateHoverRing then ns.NameplateHoverRing:Set(self.hoverFrame, self.hoverFrame ~= nil) end
-  local Style = ns.NameplateStyle
-  for _, changed in ipairs({ previous or false, frame or false }) do
-    if changed and self.active[changed] then
-      Style:Layout(changed); Style:Refresh(changed)
-      if ns.NameplateAuras then ns.NameplateAuras:Refresh(changed) end
-    end
-  end
+  -- The plate that lost the target and the one that got it: bar shown, strips,
+  -- ornaments (no fonts or textures), then what follows the unit.
+  if previous ~= frame then self:Retarget(previous) end
+  self:Retarget(frame)
   if ns.NameplateAuras then
     for shown in pairs(self.active) do ns.NameplateAuras:Alpha(shown) end
   end
@@ -640,6 +672,6 @@ events:SetScript('OnEvent', function(_, event)
     -- Combat edge: enemy and friendly NPC bars change height.
     NP.combat = event == 'PLAYER_REGEN_DISABLED'
     if NP.combat then NP.combatSince = GetTime() end
-    NP:RefreshAll()
+    NP:CombatEdge()
   end
 end)

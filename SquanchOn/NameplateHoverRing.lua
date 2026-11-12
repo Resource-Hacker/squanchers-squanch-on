@@ -7,11 +7,14 @@
 -- drops, the filled arc starting at the top and running clockwise. The selected
 -- plate keeps its bar and target ring (TargetCrosshairs.lua) and gets nothing.
 --
--- Other units' health is a secret value. The ring is SEGMENTS copies of one arc
--- texture, each turned to its place; segment i takes its opacity from a cached
--- step curve (0 below (i - 0.5) / SEGMENTS, 1 above) evaluated by the client
--- and handed straight to SetAlpha. The colour comes from the target ring's
--- health curve with the class colour at full health. Nothing is compared.
+-- Other units' health is a secret value. The filled arc is two half rings,
+-- one behind each half of the ring's square: a texture that paints the left
+-- half of the ring, shown through a frame that clips to one half and turned
+-- about the ring centre. Its angle comes from a linear curve the client
+-- evaluates on the unit's health and goes straight to SetRotation: the right
+-- half sweeps in over the first 50%, the left half over the rest. The colour
+-- comes from the target ring's health curve with the class colour at full
+-- health. Nothing is compared.
 --
 -- One ring serves the one hovered plate. It listens to that unit's health
 -- events only, and to nothing while no friendly player is hovered. Plate
@@ -25,77 +28,76 @@ ns.NameplateHoverRing = Hover
 local ask = NP.Ask
 local UnitClass, UnitIsDeadOrGhost = NP.Unit('UnitClass'), NP.Unit('UnitIsDeadOrGhost')
 
--- media/Crosshairs/segment-<face>-<width>.tga (asset-source/generate-frame-media.py):
--- the arc from the top to 360 / SEGMENTS degrees clockwise of ring-<face>-<width>.
-local SEGMENTS = 60
+-- media/Crosshairs/half-<face>-<width>.tga (asset-source/generate-frame-media.py):
+-- the left half of ring-<face>-<width>, cut on the centre line.
 local ART = 'Interface\\AddOns\\' .. addonName .. '\\media\\Crosshairs\\'
+local PI = math.pi
 
 local function build()
   local display = CreateFrame('Frame')
   display:EnableMouse(false)
   display:Hide()
-  local function art(layer)
-    local texture = display:CreateTexture(nil, layer)
+  local function art(parent, layer)
+    local texture = parent:CreateTexture(nil, layer)
     texture:SetAllPoints(display)
     -- Moves with the emblem it surrounds: neither is snapped to whole pixels.
     if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(false); texture:SetTexelSnappingBias(0) end
     return texture
   end
-  local ring = { display = display, track = art('BACKGROUND'), segments = {} }
+  local ring = { display = display, track = art(display, 'BACKGROUND'), glows = {}, halves = {} }
   -- The same mouseover light the selected ring wears: full gloss on the line
   -- and soft additive lines stepping outward, in the ring's colour.
-  -- The gloss follows the filled arc: one additive copy per segment.
-  ring.gloss = {}
-  ring.glows = {}
   for index, strength in ipairs({ 0.35, 0.22, 0.14, 0.07 }) do
-    local glow = art('BORDER')
+    local glow = art(display, 'BORDER')
     glow:SetTexture(ART .. 'circle.tga'); glow:SetBlendMode('ADD')
     glow.strength, glow.step = strength, index
     ring.glows[index] = glow
   end
-  for index = 1, SEGMENTS do
-    local segment = art('ARTWORK')
-    -- A positive rotation turns counter-clockwise; the arc runs clockwise.
-    segment:SetRotation(-(index - 1) * 2 * math.pi / SEGMENTS)
-    ring.segments[index] = segment
-    local shine = art('OVERLAY'); shine:SetBlendMode('ADD')
-    shine:SetRotation(-(index - 1) * 2 * math.pi / SEGMENTS)
-    ring.gloss[index] = shine
+  -- Right half first (health 0..50%), then the left (50..100%). Each clips its
+  -- fill and the gloss that follows the fill.
+  for index = 1, 2 do
+    local clip = CreateFrame('Frame', nil, display)
+    clip:EnableMouse(false)
+    if index == 1 then clip:SetPoint('TOPLEFT', display, 'TOP'); clip:SetPoint('BOTTOMRIGHT', display, 'BOTTOMRIGHT')
+    else clip:SetPoint('TOPLEFT', display, 'TOPLEFT'); clip:SetPoint('BOTTOMRIGHT', display, 'BOTTOM') end
+    clip:SetClipsChildren(true)
+    local half = { clip = clip, fill = art(clip, 'ARTWORK'), gloss = art(clip, 'OVERLAY') }
+    half.gloss:SetBlendMode('ADD')
+    ring.halves[index] = half
   end
   return ring
 end
 
-local steps
-local function stepCurves()
-  if steps ~= nil then return steps end
-  steps = false
+-- Radians for a health fraction (a positive rotation turns counter-clockwise;
+-- the arc runs clockwise from the top). At rotation 0 the art lies in the left
+-- half, so the right clip shows nothing; half a turn fills the right half. The
+-- left clip is empty at half a turn and full at a whole one.
+local function rightTurn(fraction) return -2 * PI * math.min(fraction, 0.5) end
+local function leftTurn(fraction) return -PI - 2 * PI * math.max(fraction - 0.5, 0) end
+local turns
+local function turnCurves()
+  if turns ~= nil then return turns end
+  turns = false
   if C_CurveUtil and C_CurveUtil.CreateCurve and UnitHealthPercent and Enum and Enum.LuaCurveType then
-    local ok, list = pcall(function()
-      local curves = {}
-      for index = 1, SEGMENTS do
-        local curve = C_CurveUtil.CreateCurve()
-        curve:SetType(Enum.LuaCurveType.Step)
-        curve:AddPoint(0, 0)
-        curve:AddPoint((index - 0.5) / SEGMENTS, 1)
-        curve:AddPoint(1, 1)
-        curves[index] = curve
-      end
-      return curves
+    local ok, right, left = pcall(function()
+      local first, second = C_CurveUtil.CreateCurve(), C_CurveUtil.CreateCurve()
+      first:SetType(Enum.LuaCurveType.Linear); second:SetType(Enum.LuaCurveType.Linear)
+      first:AddPoint(0, rightTurn(0)); first:AddPoint(0.5, rightTurn(0.5)); first:AddPoint(1, rightTurn(1))
+      second:AddPoint(0, leftTurn(0)); second:AddPoint(0.5, leftTurn(0.5)); second:AddPoint(1, leftTurn(1))
+      return first, second
     end)
-    if ok then steps = list end
+    if ok then turns = { right, left } end
   end
-  return steps
+  return turns
 end
 
 -- The health fraction as a plain number where the client gives one.
 local function plainFraction(unit)
-  local ok, fraction = pcall(function()
-    local health, maximum = UnitHealth(unit), UnitHealthMax(unit)
-    if NP.Public(health) and NP.Public(maximum) and type(health) == 'number' and type(maximum) == 'number' and maximum > 0 then
-      return math.min(1, math.max(0, health / maximum))
-    end
-  end)
-  if ok then return fraction end
+  local ok, health = pcall(UnitHealth, unit)
+  local fine, maximum = pcall(UnitHealthMax, unit)
+  if ok and fine and NP.Public(health) and NP.Public(maximum) and type(health) == 'number' and type(maximum) == 'number' and maximum > 0 then
+    return math.min(1, math.max(0, health / maximum))
+  end
 end
 
 -- The target ring module, once it exists (it is created at login).
@@ -104,37 +106,37 @@ local function targetRing()
   return marker and marker.FitIcon and marker or nil
 end
 
-local function paintPlain(ring, marker, fraction, red, green, blue)
-  local r, g, b = marker.HealthRGB(fraction, red, green, blue)
-  for index, segment in ipairs(ring.segments) do
-    segment:SetVertexColor(r, g, b)
-    segment:SetAlpha(fraction > (index - 0.5) / SEGMENTS and 1 or 0)
-    ring.gloss[index]:SetAlpha(fraction > (index - 0.5) / SEGMENTS and 1 or 0)
+-- Angles (plain or secret numbers) and colour to the two halves and the glow.
+local function apply(ring, right, left, r, g, b)
+  local first, second = ring.halves[1], ring.halves[2]
+  first.fill:SetRotation(right); first.gloss:SetRotation(right)
+  second.fill:SetRotation(left); second.gloss:SetRotation(left)
+  first.fill:SetVertexColor(r, g, b); second.fill:SetVertexColor(r, g, b)
+  if ring.lit then
+    for index = 1, #ring.glows do ring.glows[index]:SetVertexColor(r, g, b) end
   end
-  for _, glow in ipairs(ring.glows) do glow:SetVertexColor(r, g, b) end
+end
+local function paintPlain(ring, marker, fraction, red, green, blue)
+  apply(ring, rightTurn(fraction), leftTurn(fraction), marker.HealthRGB(fraction, red, green, blue))
+end
+local function paintCurves(ring, marker, unit, curves, key, red, green, blue)
+  local r, g, b = UnitHealthPercent(unit, true, marker.ShiftCurve(key, red, green, blue)):GetRGB()
+  apply(ring, UnitHealthPercent(unit, true, curves[1]), UnitHealthPercent(unit, true, curves[2]), r, g, b)
 end
 
 local function paint(ring, frame)
   local marker, unit = targetRing(), frame.unit
   if not (marker and unit) then return end
-  local class = ask(function() return (select(2, UnitClass(unit))) end)
-  local color = type(class) == 'string' and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+  local ok, _, class = pcall(UnitClass, unit)
+  local color = ok and NP.Public(class) and type(class) == 'string' and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
   local key, red, green, blue = 'white', 1, 1, 1
   if color then key, red, green, blue = class, color.r, color.g, color.b end
   local facts = NP.fake[unit]
   if facts then return paintPlain(ring, marker, (facts.health or 100) / 100, red, green, blue) end
   -- Dead or ghost: the empty track alone.
   if ask(UnitIsDeadOrGhost, unit) == true then return paintPlain(ring, marker, 0, red, green, blue) end
-  local curves = stepCurves()
-  if curves and pcall(function()
-    local r, g, b = UnitHealthPercent(unit, true, marker.ShiftCurve(key, red, green, blue)):GetRGB()
-    for index, segment in ipairs(ring.segments) do
-      segment:SetVertexColor(r, g, b)
-      segment:SetAlpha(UnitHealthPercent(unit, true, curves[index]))
-      ring.gloss[index]:SetAlpha(UnitHealthPercent(unit, true, curves[index]))
-    end
-    for _, glow in ipairs(ring.glows) do glow:SetVertexColor(r, g, b) end
-  end) then return end
+  local curves = turnCurves()
+  if curves and pcall(paintCurves, ring, marker, unit, curves, key, red, green, blue) then return end
   paintPlain(ring, marker, plainFraction(unit) or 0, red, green, blue)
 end
 
@@ -147,14 +149,21 @@ local function attach(ring, frame)
   if not (marker and emblem and scale and scale > 0 and icon and icon > 0) then return false end
   -- The target ring's fit on the selected plate, which the client enlarges; the
   -- same numbers without the enlargement keep ring and emblem in proportion.
-  local grown = tonumber(GetCVar and GetCVar('nameplateSelectedScale')) or 1
+  local grown = marker.SelectedScale and marker.SelectedScale() or tonumber(GetCVar and GetCVar('nameplateSelectedScale')) or 1
   if grown <= 0 then grown = 1 end
   local size, dx, dy = marker.FitIcon('faction', icon, icon, scale * grown, scale * grown, true)
   if grown > 1 then size = size / grown end
   display:SetParent(frame)
   display:SetFrameStrata(frame:GetFrameStrata() or 'BACKGROUND')
   if display.SetFixedFrameLevel then display:SetFixedFrameLevel(true) end
-  display:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 2))
+  local level = math.max(0, frame:GetFrameLevel() - 2)
+  display:SetFrameLevel(level)
+  for index = 1, 2 do
+    -- The fills draw over the track, still beneath the plate's own parts.
+    local clip = ring.halves[index].clip
+    if clip.SetFixedFrameLevel then clip:SetFixedFrameLevel(true) end
+    clip:SetFrameLevel(level + 1)
+  end
   -- As solid as the allied emblem, which ignores the plate's range fade.
   if display.SetIgnoreParentAlpha then display:SetIgnoreParentAlpha(true) end
   display:SetScale(1)
@@ -168,26 +177,28 @@ local function attach(ring, frame)
     width = marker.LineWidth(size * scale * grown / factor, true)
   end
   local face = marker.BarFace()
-  -- 124 textures: only touched when the art actually changes.
+  -- Textures are only touched when the art actually changes.
   local key = face .. '-' .. width
   local fresh = ring.art ~= key
   ring.art = key
-  if fresh then
-    for _, segment in ipairs(ring.segments) do segment:SetTexture(ART .. 'segment-' .. face .. '-' .. width .. '.tga') end
+  local lit = marker.db.hoverGlow ~= false
+  ring.lit = lit
+  for index = 1, 2 do
+    local half = ring.halves[index]
+    if fresh then
+      half.fill:SetTexture(ART .. 'half-' .. key .. '.tga')
+      half.gloss:SetTexture(ART .. 'half-gloss-' .. width .. '.tga')
+    end
+    half.gloss:SetShown(lit)
   end
   -- The empty part: the plate bar's background colour on the plain ring line.
   local back = settings.health.background
   if fresh then ring.track:SetTexture(ART .. 'ring-flat-' .. width .. '.tga') end
   ring.track:SetVertexColor(back[1] or 0, back[2] or 0, back[3] or 0)
   ring.track:SetAlpha(math.min(1, math.max(0, tonumber(marker.db.hoverRingTrack) or 0.4)))
-  local lit = marker.db.hoverGlow ~= false
   local power = math.max(0, math.min(2, tonumber(marker.db.hoverGlowStrength) or 1))
   local pixel = (PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor() or 1) / scale
   local outer = size * (width / 2 + 1.25) / 92   -- the ring's outer edge, as on the selected ring
-  for _, shine in ipairs(ring.gloss) do
-    if fresh then shine:SetTexture(ART .. 'segment-gloss-' .. width .. '.tga') end
-    shine:SetShown(lit)
-  end
   for _, glow in ipairs(ring.glows) do
     local d = outer + pixel * 1.5 * glow.step
     glow:ClearAllPoints()
@@ -199,12 +210,9 @@ local function attach(ring, frame)
   return true
 end
 
--- Emblem and name follow frame.npHoverRing (NameplateStyle.lua).
-local function relayout(frame)
-  local Style = ns.NameplateStyle
-  Style:Layout(frame)
-  Style:Indicators(frame)
-end
+-- Emblem and name follow frame.npHoverRing (NameplateStyle.lua): only those
+-- two move, so no layout pass is needed.
+local function relayout(frame) ns.NameplateStyle:HoverRing(frame) end
 
 local function eligible(frame)
   local marker = targetRing()
@@ -231,8 +239,6 @@ local function show(ring, frame)
 end
 
 -- Called with every mouseover change of a plate, and when the target changes.
--- Counts real changes, for checking that a steady hover costs one build.
-Hover.builds = 0
 function Hover:Set(frame, shown)
   if not shown and frame ~= current then return end
   if shown and frame == current and current and eligible(frame) then return end
@@ -247,11 +253,9 @@ function Hover:Set(frame, shown)
     events:UnregisterAllEvents()
     live.display:Hide()
     left.npHoverRing = nil
-    -- A removed plate is laid out again when it returns; its emblem goes now.
-    if NP.active[left] then relayout(left) else ns.NameplateStyle:Indicators(left) end
+    relayout(left)
   end
   if not wanted then return end
-  self.builds = self.builds + 1
   live = live or build()
   if show(live, wanted) then
     current = wanted

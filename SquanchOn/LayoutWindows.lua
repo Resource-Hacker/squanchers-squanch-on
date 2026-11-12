@@ -3,7 +3,8 @@
 -- Item windows receive one measured size match; later editor changes stay owned.
 -- Discovery never opens UI or constructs inventory widgets.
 local _, ns = ...
-local module = { native = {}, applying = {}, itemQueued = {}, contentQueued = {}, contentPending = {} }
+local module = { native = {}, applying = {}, itemQueued = {}, contentQueued = {}, contentPending = {},
+    settleQueued = {}, settleTries = {} }
 ns.LayoutWindows = module
 
 local windows = {
@@ -56,6 +57,8 @@ local drawers = { CharacterFrame = true, PlayerSpellsFrame = true, SpellBookFram
     PlayerTalentFrame = true, ProfessionsBookFrame = true, QuestLogFrame = true,
     CommunitiesFrame = true, PVEFrame = true, LFGParentFrame = true,
     CollectionsJournal = true, AchievementFrame = true, EncounterJournal = true }
+
+module.drawers = drawers
 
 local function finite(n)
     return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
@@ -352,13 +355,16 @@ end
 
 function module:Apply(id, frame)
     if ns.SocialDrawer and ns.SocialDrawer:Owns(frame) then ns.SocialDrawer:Queue();return end
-    if InCombatLockdown() or self.applying[frame] or not frame:IsVisible() then return end
+    if self.applying[frame] or not frame:IsVisible() then return end
+    -- Placement skipped by combat is repeated when it ends.
+    if InCombatLockdown() then self.pending = true; return end
     if ns.NativeWindowPlacement then ns.NativeWindowPlacement:Import(frame:GetName(), id, frame) end
     local chat = self:DrawerChat(id, frame)
     local record = ns.LayoutEditor:Read(id)
     if not chat and (not record or not finite(record.scale) or record.scale <= 0) then return end
     local target, rect = chat and ns.LayoutEditor:Rect(chat), chat and ns.LayoutEditor:Rect(frame)
-    if chat and (not target or not rect) then return end
+    -- No rectangle yet (the window is still being laid out): try the next frame.
+    if chat and (not target or not rect) then self:QueueSettle(id, frame); return end
     self.applying[frame] = true
     local ok, err = pcall(function()
         if chat then
@@ -412,6 +418,20 @@ function module:Apply(id, frame)
     self.applying[frame] = nil
     if not ok then return false, err end
     return true
+end
+
+-- One more placement on the frame after a window shows. Another panel opened
+-- in the same instant can make the client reposition this one while Apply's
+-- own writes are being ignored, and nothing else would restate its place.
+-- At most three passes per show, so a window that never resolves cannot loop.
+function module:QueueSettle(id, frame)
+    local tries = self.settleTries[frame] or 0
+    if self.settleQueued[frame] or tries >= 3 then return end
+    self.settleQueued[frame], self.settleTries[frame] = true, tries + 1
+    C_Timer.After(0, function()
+        self.settleQueued[frame] = nil
+        if frame:IsVisible() then self:Apply(id, frame) end
+    end)
 end
 
 local function native(definition)
@@ -472,6 +492,10 @@ local function native(definition)
         module:Refresh()
     end
     frame:HookScript('OnShow', update)
+    frame:HookScript('OnShow', function()
+        module.settleTries[frame] = nil
+        module:QueueSettle(id, frame)
+    end)
     if drawers[name] and frame ~= CharacterFrame then
         if ns.NativeText then ns.NativeText:ScaledRoot(frame) end
         if frame == PlayerSpellsFrame and EventRegistry then
@@ -504,7 +528,8 @@ local function native(definition)
 end
 
 function module:Register()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then self.pending = true; return end
+    self.pending = nil
     if not self.questItemsHooked and type(QuestInfo_Display) == 'function' then
         self.questItemsHooked = true
         hooksecurefunc('QuestInfo_Display', function()
@@ -531,6 +556,8 @@ local events = CreateFrame('Frame')
 events:RegisterEvent('PLAYER_LOGIN')
 events:RegisterEvent('ADDON_LOADED')
 events:RegisterEvent('PLAYER_REGEN_ENABLED')
-events:SetScript('OnEvent', function()
+events:SetScript('OnEvent', function(_, event)
+    -- Combat end repeats the pass only when combat deferred part of it.
+    if event == 'PLAYER_REGEN_ENABLED' and not module.pending and not next(module.contentPending) then return end
     C_Timer.After(0, function() module:Register() end)
 end)

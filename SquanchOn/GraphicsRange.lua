@@ -100,12 +100,21 @@ function G:Write(name, value)
     local current = getCVar(name)
     if current == nil then return true end -- not a CVar of this client
     if tonumber(current) == value then return true end
+    -- The client answered this same write with what it holds now (a clamp or
+    -- a refusal): writing again would only repeat on its CVAR_UPDATE, every frame.
+    local kept = self.kept and self.kept[name]
+    if kept and kept.value == value and kept.held == current then return true end
     local secure = C_CVar and C_CVar.GetCVarInfo and select(6, C_CVar.GetCVarInfo(name))
     if secure and InCombatLockdown and InCombatLockdown() then self.deferred = true; return false end
     local set = (C_CVar and C_CVar.SetCVar) or SetCVar
     self.writing = true
     pcall(set, name, tostring(value))
     self.writing = false
+    local held = getCVar(name)
+    if tonumber(held) ~= value then
+        self.kept = self.kept or {}
+        self.kept[name] = { value = value, held = held }
+    end
     return true
 end
 -- Engine CVars for the stored extra steps (extra 0 = the client's top values).

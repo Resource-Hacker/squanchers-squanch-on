@@ -7,14 +7,15 @@ if not Skin then return end
 local profiles = {}
 Skin.actionButtonProfiles = profiles
 
-local function refresh(button)
-    local state = profiles[button]
-    if not state or state.refreshing then return end
-    if InCombatLockdown() then state.pending=true;return end
-    state.pending=nil
-    state.refreshing = true
+local SLOT_ART = { "SlotArt", "SlotBackground" }
+local STATE_TEXTURES = { "GetPushedTexture", "GetCheckedTexture", "GetHighlightTexture" }
+local ART_METHODS = { "SetNormalAtlas", "SetNormalTexture", "SetPushedAtlas", "SetPushedTexture", "SetCheckedAtlas",
+    "SetCheckedTexture", "SetHighlightAtlas", "SetHighlightTexture", "UpdateButtonArt", "UpdateTextures" }
+
+-- Rim, fill and icon placement. They depend only on the button's size, scale,
+-- level and the screen pixel, so refresh() runs this when one of those changed.
+local function geometry(button, state)
     if ns.NativeText then ns.NativeText:Frame(button) end
-    local width, height = button:GetSize()
     if state.icon then
         state.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         state.icon:ClearAllPoints()
@@ -23,25 +24,31 @@ local function refresh(button)
             -- pixel underlap so antialiasing cannot expose a bright hairline.
             local edge = Skin.styles.icon.edge
             local pixel = PixelUtil.GetPixelToUIUnitFactor() / button:GetEffectiveScale()
-            local x = math.max(0, edge * 3 / 13 - pixel / 2)
-            local top = math.max(0, edge * 3 / 13 - pixel / 2)
-            local bottom = math.max(0, edge * 3 / 13 - pixel / 2)
-            state.icon:SetPoint("TOPLEFT", button, "TOPLEFT", x, -top)
-            state.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -x, bottom)
+            local inset = math.max(0, edge * 3 / 13 - pixel / 2)
+            state.icon:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
+            state.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
         else
             state.icon:SetAllPoints(button)
         end
         state.icon:SetDrawLayer("ARTWORK", -1)
     end
-    -- The shared cell edge owns the border. Suppress the native normal rim
-    -- after art updates so it cannot add padding or a second frame.
-    local nativeNormal = button.GetNormalTexture and button:GetNormalTexture()
-    if nativeNormal then nativeNormal:SetAlpha(0); nativeNormal:Hide() end
-    for _, key in ipairs({ "SlotArt", "SlotBackground" }) do
-        if button[key] then button[key]:Hide() end
+    if state.kind == "bag" then
+        state.border=Skin:ControlBorder(button,"icon",state.alphaOwner,0.5)
+        Skin:BagSlotFill(state.border,button)
+    else
+        state.border=Skin:RawSlotBorder(button,state.alphaOwner,0.5)
+        -- The same neutral inner rim used by native equipment slots.
+        if not state.iconRim then state.iconRim=button:CreateTexture(nil,"ARTWORK",nil,0) end
+        state.iconRim:SetTexture([[Interface\Buttons\UI-Quickslot2]])
+        state.iconRim:SetSize(state.icon:GetWidth()*64/37,state.icon:GetHeight()*64/37)
+        state.iconRim:SetPoint("CENTER",state.icon,"CENTER",0,-state.icon:GetHeight()/37)
+        state.iconRim:SetDesaturated(true)
+        state.iconRim:SetVertexColor(unpack(Skin.innerBorderColor))
     end
-    -- Each rim owns one chat-matched fill with independent baseline fading.
-    state.backdrop:Hide()
+end
+
+-- Native button-state art, rewritten by the client's own art updates.
+local function stateArt(button, state, width, height)
     local pushed = button.GetPushedTexture and button:GetPushedTexture()
     if pushed then
         pushed:SetTexture([[Interface\Buttons\UI-Quickslot-Depress]])
@@ -53,7 +60,7 @@ local function refresh(button)
         -- Native checked/mouseover art is fixed at 46x45 and TOPLEFT, while
         -- this skin insets the icon. Fit only these button-state textures;
         -- native checked/hover state, alpha and spell/cooldown effects remain owned by Blizzard.
-        for _, method in ipairs({ "GetPushedTexture", "GetCheckedTexture", "GetHighlightTexture" }) do
+        for _, method in ipairs(STATE_TEXTURES) do
             local texture = button[method] and button[method](button)
             if texture then
                 texture:ClearAllPoints()
@@ -61,23 +68,42 @@ local function refresh(button)
             end
         end
     end
-    if state.kind == "bag" then
-        state.border=Skin:ControlBorder(button,"icon",state.alphaOwner,0.5)
-        Skin:BagSlotFill(state.border,button)
-        -- The native empty placeholder is opaque artwork, not a bag icon.
-        -- Keep real bags/backpack visible as native texture updates arrive.
-        if state.icon and button.IsBackpack and button.HasBagEquipped then
-            state.icon:SetShown(button:IsBackpack() or button:HasBagEquipped())
-        end
-    else
-        state.border=Skin:RawSlotBorder(button,state.alphaOwner,0.5)
-        -- The same neutral inner rim used by native equipment slots.
-        if not state.iconRim then state.iconRim=button:CreateTexture(nil,"ARTWORK",nil,0) end
-        state.iconRim:SetTexture([[Interface\Buttons\UI-Quickslot2]])
-        state.iconRim:SetSize(state.icon:GetWidth()*64/37,state.icon:GetHeight()*64/37)
-        state.iconRim:SetPoint("CENTER",state.icon,"CENTER",0,-state.icon:GetHeight()/37)
-        state.iconRim:SetDesaturated(true)
-        state.iconRim:SetVertexColor(unpack(Skin.innerBorderColor))
+end
+
+-- iconOnly: a native icon write (SetTexture/Show/Hide). It cannot move or
+-- resize anything, so only the native rim and placeholder are suppressed again.
+local function refresh(button, iconOnly)
+    local state = profiles[button]
+    if not state or state.refreshing then return end
+    if InCombatLockdown() then
+        if not iconOnly then state.pending = "art" elseif not state.pending then state.pending = "icon" end
+        return
+    end
+    local artDue = not iconOnly or state.pending == "art"
+    state.pending=nil
+    state.refreshing = true
+    local width, height = button:GetSize()
+    local scale, level, pixel = button:GetEffectiveScale(), button:GetFrameLevel(), PixelUtil.GetPixelToUIUnitFactor()
+    if state.width ~= width or state.height ~= height or state.scale ~= scale or state.level ~= level
+        or state.pixel ~= pixel or not state.border then
+        geometry(button, state)
+        state.width, state.height, state.scale, state.level, state.pixel = width, height, scale, level, pixel
+        artDue = true
+    end
+    -- The shared cell edge owns the border. Suppress the native normal rim
+    -- after art updates so it cannot add padding or a second frame.
+    local nativeNormal = button.GetNormalTexture and button:GetNormalTexture()
+    if nativeNormal then nativeNormal:SetAlpha(0); nativeNormal:Hide() end
+    for _, key in ipairs(SLOT_ART) do
+        if button[key] then button[key]:Hide() end
+    end
+    -- Each rim owns one chat-matched fill with independent baseline fading.
+    state.backdrop:Hide()
+    if artDue then stateArt(button, state, width, height) end
+    -- The native empty placeholder is opaque artwork, not a bag icon.
+    -- Keep real bags/backpack visible as native texture updates arrive.
+    if state.kind == "bag" and state.icon and button.IsBackpack and button.HasBagEquipped then
+        state.icon:SetShown(button:IsBackpack() or button:HasBagEquipped())
     end
     state.refreshing = false
 end
@@ -99,14 +125,16 @@ function Skin:ActionButton(button, kind, alphaOwner)
     profiles[button] = state
     self.buttons[button] = state.backdrop
     -- Icons fitted to their painted rim, shared cell edges and native pressed art.
-    for _, method in ipairs({ "SetNormalAtlas", "SetNormalTexture", "SetPushedAtlas", "SetPushedTexture", "SetCheckedAtlas", "SetCheckedTexture", "SetHighlightAtlas", "SetHighlightTexture", "UpdateButtonArt", "UpdateTextures" }) do
-        if type(button[method]) == "function" then hooksecurefunc(button, method, function() refresh(button) end) end
+    local function full() refresh(button) end
+    local function iconWrite() refresh(button, true) end
+    for _, method in ipairs(ART_METHODS) do
+        if type(button[method]) == "function" then hooksecurefunc(button, method, full) end
     end
-    button:HookScript("OnSizeChanged", function() refresh(button) end)
+    button:HookScript("OnSizeChanged", full)
     if icon then
-        hooksecurefunc(icon, "SetTexture", function() refresh(button) end)
-        hooksecurefunc(icon, "Show", function() refresh(button) end)
-        hooksecurefunc(icon, "Hide", function() refresh(button) end)
+        hooksecurefunc(icon, "SetTexture", iconWrite)
+        hooksecurefunc(icon, "Show", iconWrite)
+        hooksecurefunc(icon, "Hide", iconWrite)
     end
     refresh(button)
 end
@@ -114,6 +142,7 @@ end
 -- Unavailable features keep their native disabled icon and interaction state.
 -- Their whole-cell alpha must match the rest of the row, including its frame.
 local microOpacityHooks = {}
+local MICRO_ART = { "Background", "PushedBackground" }
 local function uniformMicroOpacity(button)
     button:SetAlpha(1)
 end
@@ -137,7 +166,7 @@ function Skin:BarControls()
                     rim:Hide()
                     if rim.slotFill then rim.slotFill:Hide() end
                 end
-                for _, key in ipairs({"Background", "PushedBackground"}) do
+                for _, key in ipairs(MICRO_ART) do
                     local texture = button[key]
                     if texture then
                         -- Native SetNormal shows Background again; keep its pixel
@@ -163,5 +192,7 @@ end)
 local pendingSkins=CreateFrame("Frame")
 pendingSkins:RegisterEvent("PLAYER_REGEN_ENABLED")
 pendingSkins:SetScript("OnEvent",function()
-    for button,state in pairs(profiles) do if state.pending then refresh(button) end end
+    for button,state in pairs(profiles) do
+        if state.pending then refresh(button, state.pending == "icon") end
+    end
 end)

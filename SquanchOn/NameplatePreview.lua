@@ -109,9 +109,10 @@ local function build(row, index, facts, enhanced)
     copy.start, copy.expirationTime, copy.auraInstanceID = GetTime(), GetTime() + copy.duration, position
     data.auras[position] = copy
   end
-  NP.fake[unit] = data
   -- A unit names its target only while it has one: here, the ones in a fight.
-  if facts.combat then NP.fake[unit .. 'target'] = { name = UnitName('player'), class = select(2, UnitClass('player')) } end
+  row.fakes[unit] = data
+  if facts.combat then row.fakes[unit .. 'target'] = { name = UnitName('player'), class = select(2, UnitClass('player')) } end
+  for token, made in pairs(row.fakes) do NP.fake[token] = made end
   -- The plate hangs on an unscaled holder: a selected plate is scaled, and an
   -- offset on the plate itself would be scaled with it.
   local holder = CreateFrame('Frame', nil, row)
@@ -192,6 +193,12 @@ local function animate(row, elapsed)
   end
 end
 
+-- The made-up units exist only while their row is shown. (Frames cannot be
+-- destroyed; a hidden row runs nothing and keeps its plates for the next show.)
+local function setShown(row, shown)
+  row:SetShown(shown)
+  for token, made in pairs(row.fakes) do NP.fake[token] = shown and made or nil end
+end
 function Preview:Row(enhanced)
   local key = enhanced and 'enhanced' or 'classic'
   local row = self.rows[key]
@@ -206,10 +213,10 @@ function Preview:Row(enhanced)
   row.title:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 9, 'OUTLINE')
   row.title:SetPoint('BOTTOMLEFT', row, 'TOPLEFT', 0, 2)
   row.title:SetText(enhanced and 'Squanch-On preview plates: enhancements on (drag to move)' or 'Squanch-On preview plates: classic look (drag to move)')
-  row.enhanced, row.frames, row.started = enhanced and true or false, {}, GetTime()
+  row.enhanced, row.frames, row.fakes, row.started = enhanced and true or false, {}, {}, GetTime()
   for index, facts in ipairs(CASES) do row.frames[index] = build(row, index, facts, enhanced) end
   row:SetScript('OnUpdate', animate)
-  row:Hide()
+  setShown(row, false)
   self.rows[key] = row
   return row
 end
@@ -227,7 +234,7 @@ function Preview:Show(enhanced, shown)
   if shown == nil then shown = not (self.rows[key] and self.rows[key]:IsShown()) end
   if not shown and not self.rows[key] then return false end
   local row = self:Row(enhanced)
-  row:SetShown(shown)
+  setShown(row, shown)
   if shown then row.started = GetTime(); self:Refresh() end
   return shown
 end
@@ -241,6 +248,6 @@ SlashCmdList.SQUANCHONPLATES = function(message)
   local wanted = nil
   if option == 'on' then wanted = true elseif option == 'off' then wanted = false end
   local shown = Preview:Show(enhanced, wanted)
-  if option == 'off' and Preview.rows.enhanced then Preview.rows.enhanced:Hide() end
+  if option == 'off' and Preview.rows.enhanced then setShown(Preview.rows.enhanced, false) end
   print('Squanch-On preview plates' .. (enhanced and ' (enhancements)' or '') .. ': ' .. (shown and 'shown' or 'hidden'))
 end

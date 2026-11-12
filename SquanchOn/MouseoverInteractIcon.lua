@@ -5,6 +5,8 @@ local _, addon = ...
 local module = { watched = {} }
 addon.MouseoverInteractIcon = module
 local ownedCVars = { "SoftTargetInteract", "SoftTargetIconInteract" }
+local ownedLower = {}
+for _, name in ipairs(ownedCVars) do ownedLower[name:lower()] = name end
 
 local function safe(fn, ...)
   if type(fn) ~= "function" then return nil end
@@ -135,12 +137,9 @@ events:SetScript("OnEvent", function(_, event, unit)
     or (event == "PLAYER_REGEN_ENABLED" and module.pendingPolicy) then
     module:ApplyPolicy()
   elseif event == "CVAR_UPDATE" then
-    for _, name in ipairs(ownedCVars) do
-      if type(unit) == "string" and unit:lower() == name:lower() and GetCVar(name) ~= "0" then
-        module:ApplyPolicy()
-        break
-      end
-    end
+    -- A client that will not hold zero is not asked again on its own echo.
+    local name = type(unit) == "string" and ownedLower[unit:lower()]
+    if name and not module.policyError and GetCVar(name) ~= "0" then module:ApplyPolicy() end
   elseif event == "PLAYER_LEAVING_WORLD" then
     module:Hide()
   elseif event == "NAME_PLATE_UNIT_REMOVED" then

@@ -4,6 +4,8 @@
 local _,ns=...
 local Options={}
 ns.UnitFrameOptions=Options
+-- Listens for the end of combat only while an edit is queued.
+local events=CreateFrame('Frame')
 local points={'CENTER','LEFT','RIGHT','TOP','BOTTOM','TOPLEFT','TOPRIGHT','BOTTOMLEFT','BOTTOMRIGHT'}
 local regions={'Frame','Health','Power','InfoPanel'}
 local outlines={'NONE','OUTLINE','THICKOUTLINE','MONOCHROMEOUTLINE','SHADOW','SHADOWOUTLINE'}
@@ -247,6 +249,7 @@ function Options:Apply()
     end
     if InCombatLockdown() then
         self.pending={kind='apply',config=copy,unit=self.unitKey,profile=UF.state.profile}
+        events:RegisterEvent('PLAYER_REGEN_ENABLED')
         self:Message('Validated settings queued until combat ends.');return
     end
     self:Commit(copy,self.unitKey,UF.state.profile)
@@ -255,7 +258,10 @@ function Options:SelectProfile(name,create)
     local UF=ns.UnitFrames
     name=(name or ''):match('^%s*(.-)%s*$')
     if name=='' or #name>80 then self:Message('Enter a profile name (1–80 characters).');return end
-    if InCombatLockdown() then self.pending={kind='profile',name=name,create=create};self:Message('Profile change queued until combat ends.');return end
+    if InCombatLockdown() then
+        self.pending={kind='profile',name=name,create=create};events:RegisterEvent('PLAYER_REGEN_ENABLED')
+        self:Message('Profile change queued until combat ends.');return
+    end
     if create then
         if UF.state.profiles[name] then self:Message('That profile already exists.');return end
         UF.state.profiles[name]=ns.UnitFrameImport:Copy(UF.db)
@@ -303,8 +309,8 @@ function Options:Open()
     self:Build():Show();self:LoadUnit();return true
 end
 function ns:OpenUnitFrameOptions() return Options:Open() end
-local events=CreateFrame('Frame');events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent',function()
+    events:UnregisterEvent('PLAYER_REGEN_ENABLED')
     local pending=Options.pending;Options.pending=nil
     if not pending then return end
     if pending.kind=='profile' then Options:SelectProfile(pending.name,pending.create)

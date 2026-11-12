@@ -148,9 +148,10 @@ local function glowColor(frame,config)
     end
     return r,g,b,a
 end
-local function paintGlow(glow,...)
-    glow.healthGlow:SetBackdropBorderColor(...)
-    glow.powerGlow:SetBackdropBorderColor(...)
+local function paintGlow(glow,r,g,b,a)
+    glow.sqR=nil
+    glow.healthGlow:SetBackdropBorderColor(r,g,b,a)
+    glow.powerGlow:SetBackdropBorderColor(r,g,b,a)
 end
 -- Glows ease in rather than pop; hiding stays immediate so a stale highlight
 -- never lingers on the wrong unit.
@@ -167,12 +168,26 @@ local function reveal(root,shown)
         root:Hide()
     end
 end
+-- Show or hide one glow; its colour is written only while it shows and only
+-- when it differs from the colour already on it.
+local function light(frame,root,config,shown)
+    if shown then
+        local r,g,b,a=glowColor(frame,config)
+        if root.sqR~=r or root.sqG~=g or root.sqB~=b or root.sqA~=a then
+            paintGlow(root,r,g,b,a)
+            root.sqR,root.sqG,root.sqB,root.sqA=r,g,b,a
+        end
+    end
+    reveal(root,shown)
+end
 local function hovered(frame,unit)
     return frame:IsVisible() and (frame:IsMouseOver() or flag(UnitIsUnit,'mouseover',unit))
 end
 -- Geometry and textures change only with layout; events below just show, hide and tint.
+local glowRoots={'TargetGlow','MouseGlow','FocusGlow','ThreatIndicator'}
+local none={}
 function UF:LayoutGlows(frame)
-    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow','ThreatIndicator'}) do positionGlow(frame,frame[key]) end
+    for _,key in ipairs(glowRoots) do positionGlow(frame,frame[key]) end
     local texture=frame.HoverWash
     if not texture then
         texture=frame.Health:CreateTexture(nil,'ARTWORK',nil,1);frame.HoverWash=texture;texture:Hide()
@@ -183,15 +198,15 @@ function UF:LayoutGlows(frame)
     texture:SetTexture(self:Texture(wash.texture or self.db.statusbar))
 end
 function UF:RefreshGlows(frame)
-    local c=self.db.colors.frameGlow or {};local unit=frame.__unit
+    local c=self.db.colors.frameGlow or none;local unit=frame.__unit
     if not unit then reveal(frame.TargetGlow,false);reveal(frame.MouseGlow,false);reveal(frame.FocusGlow,false);return end
     -- The hover edge follows mainGlow; mouseoverGlow owns the wash over the health fill.
-    local target=c.targetGlow or {};local main=c.mainGlow or {};local wash=c.mouseoverGlow or {};local focus=c.focusGlow or {}
+    local target=c.targetGlow or none;local main=c.mainGlow or none;local wash=c.mouseoverGlow or none;local focus=c.focusGlow or none
     local hover=not frame.db.disableMouseoverGlow and hovered(frame,unit)
-    reveal(frame.TargetGlow,target.enable==true and not frame.db.disableTargetGlow and flag(UnitIsUnit,unit,'target'))
-    reveal(frame.MouseGlow,main.enable==true and hover)
-    reveal(frame.FocusGlow,focus.enable==true and not frame.db.disableFocusGlow and flag(UnitIsUnit,unit,'focus'))
-    paintGlow(frame.TargetGlow,glowColor(frame,target));paintGlow(frame.MouseGlow,glowColor(frame,main));paintGlow(frame.FocusGlow,glowColor(frame,focus))
+    frame.sqHover=hover
+    light(frame,frame.TargetGlow,target,target.enable==true and not frame.db.disableTargetGlow and flag(UnitIsUnit,unit,'target'))
+    light(frame,frame.MouseGlow,main,main.enable==true and hover)
+    light(frame,frame.FocusGlow,focus,focus.enable==true and not frame.db.disableFocusGlow and flag(UnitIsUnit,unit,'focus'))
     local texture=frame.HoverWash
     local washed=wash.enable==true and hover
     if washed then texture:SetVertexColor(glowColor(frame,wash)) end
@@ -202,8 +217,9 @@ function UF:RefreshGlows(frame)
             local any=false
             for _,object in ipairs(UF.objects) do
                 if object.squancherState and object.__unit then
-                    local lit=object.MouseGlow:IsShown() or object.HoverWash and object.HoverWash:IsShown()
-                    if lit or hovered(object,object.__unit) then UF:RefreshGlows(object) end
+                    -- The watch only repaints when the answer changed.
+                    local now=not object.db.disableMouseoverGlow and hovered(object,object.__unit)
+                    if now~=object.sqHover then UF:RefreshGlows(object) end
                     any=any or object.MouseGlow:IsShown() or (object.HoverWash and object.HoverWash:IsShown()) or false
                 end
             end
@@ -304,15 +320,25 @@ function UF:ConfigureState(frame)
     self:LayoutGlows(frame);self:RefreshFade(frame);self:RefreshGlows(frame);self:StartRangeClock()
 end
 
-function UF:StartRangeClock()
+-- Range is read for every unit but the player (fadeTarget above), so the clock
+-- runs only while another shown frame fades by range and stops with the last one.
+local function rangeFrames(refresh)
     local active=false
-    for _,frame in ipairs(self.objects) do
-        if frame:IsShown() and frame.db and frame.db.fader and frame.db.fader.enable and frame.db.fader.range then active=true;break end
+    for _,frame in ipairs(UF.objects) do
+        local fader=frame.db and frame.db.fader
+        if fader and fader.enable and fader.range and frame:IsShown() then
+            if refresh then UF:RefreshFade(frame) end
+            local unit=frame.__unit or frame.unit
+            if not public(unit) or unit~='player' then active=true end
+        end
     end
+    return active
+end
+function UF:StartRangeClock()
+    local active=rangeFrames(false)
     if active and not self.rangeClock then
         self.rangeClock=C_Timer.NewTicker(.2,function()
-            for _,frame in ipairs(UF.objects) do if frame:IsShown() and frame.db.fader.range then UF:RefreshFade(frame) end end
-            UF:StartRangeClock()
+            if not rangeFrames(true) and UF.rangeClock then UF.rangeClock:Cancel();UF.rangeClock=nil end
         end)
     elseif not active and self.rangeClock then self.rangeClock:Cancel();self.rangeClock=nil end
 end

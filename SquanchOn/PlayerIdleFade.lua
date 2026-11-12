@@ -89,9 +89,12 @@ local function guard(frame)
     end)
 end
 
+local rowKeys = { 'Buffs', 'Debuffs' }
 function Fade:Refresh()
     local frame = _G.SquanchOnUF_Player
     if not frame then return end
+    -- Already shown on this frame: only a write that changes something is repeated.
+    local was = self.shown == true and self.frame == frame
     self.frame = frame
     guard(frame)
     if quiet() then
@@ -101,14 +104,17 @@ function Fade:Refresh()
             writing = true; frame:SetAlpha(alpha); writing = false
             modelShown(frame, alpha)
             -- Aura rows own their cells' rims; they follow the same alpha.
-            for _, key in ipairs({ 'Buffs', 'Debuffs' }) do if frame[key] then frame[key]:SetAlpha(alpha) end end
+            for _, key in ipairs(rowKeys) do if frame[key] then frame[key]:SetAlpha(alpha) end end
             return
         end
     end
     self.shown = true
-    frame:SetAlpha(1)
+    local current = frame:GetAlpha()
+    if not was or secret(current) or current ~= 1 then frame:SetAlpha(1) end
     modelShown(frame, 1)
-    for _, key in ipairs({ 'Buffs', 'Debuffs' }) do if frame[key] then frame[key]:SetAlpha(1) end end
+    if not was then
+        for _, key in ipairs(rowKeys) do if frame[key] then frame[key]:SetAlpha(1) end end
+    end
 end
 
 local events = CreateFrame('Frame')

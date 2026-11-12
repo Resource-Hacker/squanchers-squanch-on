@@ -2,7 +2,10 @@
 -- Independently written presentation adapter. Blizzard owns tooltip content,
 -- comparisons, health values and their event handlers; imported settings survive.
 local _, ns = ...
-local Tooltip = {hooked=setmetatable({}, {__mode='k'})}
+-- `styled` holds what was last written to each tooltip, so a repeated native
+-- update of an unchanged tooltip costs a few comparisons. `generation` changes
+-- with every Refresh (settings, display size) and invalidates all of it.
+local Tooltip = {hooked=setmetatable({}, {__mode='k'}),styled=setmetatable({}, {__mode='k'}),generation=0}
 ns.TooltipSkin = Tooltip
 local names={'GameTooltip','ShoppingTooltip1','ShoppingTooltip2','ShoppingTooltip3',
     'ItemRefTooltip','ItemRefShoppingTooltip1','ItemRefShoppingTooltip2','FriendsTooltip',
@@ -86,7 +89,13 @@ local function paint(frame,color,alpha)
         edge:SetFrameLevel(math.max(0,frame:GetFrameLevel()-1))
         frame.SquanchOnTooltipEdge=edge
     end
-    edge:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=quantize(1,frame)})
+    -- The backdrop is rebuilt only when its one-pixel edge changes size.
+    local size=quantize(1,frame)
+    local record=Tooltip.styled[edge]
+    if record~=size then
+        Tooltip.styled[edge]=size
+        edge:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=size})
+    end
     edge:SetBackdropColor(color.r or .054,color.g or .054,color.b or .054,alpha)
     return edge
 end
@@ -107,25 +116,31 @@ function Tooltip:ItemBorder(tt,edge,db,general)
     end
     edge:SetBackdropBorderColor(r,g,b,1)
 end
-function Tooltip:Fonts(tt,db)
+local SIDES={'Left','Right'}
+local MONEY={'PrefixText','SuffixText','GoldButtonText','SilverButtonText','CopperButtonText'}
+-- Lines keep the font they were given until the tooltip is cleared, so each
+-- line is written once per fill; comparison and money text follow new lines.
+function Tooltip:Fonts(tt,db,state)
     local comparison=tt==ShoppingTooltip1 or tt==ShoppingTooltip2 or tt==_G.ShoppingTooltip3
         or tt==ItemRefShoppingTooltip1 or tt==ItemRefShoppingTooltip2
     local name=tt:GetName()
-    if name then
-        for i=1,tt.NumLines and tt:NumLines() or 0 do
-            for _,side in ipairs({'Left','Right'}) do
-                local heading=i==1 and not comparison
-                setFont(_G[name..'Text'..side..i],setting(db,heading and 'headerFont' or 'font'),
-                    setting(db,heading and 'headerFontSize' or comparison and 'smallTextFontSize' or 'textFontSize'),
-                    setting(db,heading and 'headerFontOutline' or 'fontOutline'))
-            end
+    local lines=name and tt.NumLines and tt:NumLines() or 0
+    local money=tt==GameTooltip and tt.hasMoney and tt.numMoneyFrames or 0
+    local first=(state.lines or 0)+1
+    if lines<first and money==(state.money or 0) then return end
+    for i=first,lines do
+        for _,side in ipairs(SIDES) do
+            local heading=i==1 and not comparison
+            setFont(_G[name..'Text'..side..i],setting(db,heading and 'headerFont' or 'font'),
+                setting(db,heading and 'headerFontSize' or comparison and 'smallTextFontSize' or 'textFontSize'),
+                setting(db,heading and 'headerFontOutline' or 'fontOutline'))
         end
     end
-    if tt==GameTooltip and tt.hasMoney then
-        for i=1,tt.numMoneyFrames or 0 do
-            for _,suffix in ipairs({'PrefixText','SuffixText','GoldButtonText','SilverButtonText','CopperButtonText'}) do
-                setFont(_G['GameTooltipMoneyFrame'..i..suffix],setting(db,'font'),setting(db,'textFontSize'),setting(db,'fontOutline'))
-            end
+    state.lines=math.max(lines,state.lines or 0)
+    state.money=money
+    for i=1,money do
+        for _,suffix in ipairs(MONEY) do
+            setFont(_G['GameTooltipMoneyFrame'..i..suffix],setting(db,'font'),setting(db,'textFontSize'),setting(db,'fontOutline'))
         end
     end
     if comparison then
@@ -136,7 +151,7 @@ function Tooltip:Fonts(tt,db)
         end
         -- The accepted Squancher treatment keeps comparison item names at
         -- heading size after native small-body styling.
-        for _,side in ipairs({'Left','Right'}) do
+        for _,side in ipairs(SIDES) do
             setFont(name and _G[name..'Text'..side..'1'],setting(db,'headerFont'),
                 setting(db,'headerFontSize'),setting(db,'headerFontOutline'))
         end
@@ -148,23 +163,30 @@ function Tooltip:HealthBar(tt,db,general)
     if tt~=GameTooltip or not usable(bar) then return 0 end
     local health=db.healthBar or defaults.healthBar
     local position=health.statusPosition or 'BOTTOM'
-    bar:SetAlpha(position=='DISABLED' and 0 or 1)
-    bar:SetHeight(quantize(health.height or 6,bar))
-    local texture=media('statusbar','ElvUI Norm')
-    if texture then bar:SetStatusBarTexture(texture) end
-    local edge=paint(bar,general.backdropfadecolor or {},(general.backdropfadecolor or {}).a or .75)
+    local state=self.styled[bar]
+    if not state then state={};self.styled[bar]=state end
+    local height,border=quantize(health.height or 6,bar),quantize(1,tt) -- imported reference uses pixelPerfect=true.
     local outside=quantize(1,bar)
-    edge:ClearAllPoints();edge:SetPoint('TOPLEFT',bar,'TOPLEFT',-outside,outside)
-    edge:SetPoint('BOTTOMRIGHT',bar,'BOTTOMRIGHT',outside,-outside)
-    edge:SetBackdropBorderColor(0,0,0,1)
-    local border=quantize(1,tt) -- imported reference uses pixelPerfect=true.
-    bar:ClearAllPoints()
-    if position=='TOP' then
-        bar:SetPoint('BOTTOMLEFT',tt,'TOPLEFT',border,0)
-        bar:SetPoint('BOTTOMRIGHT',tt,'TOPRIGHT',-border,0)
-    elseif position=='BOTTOM' then
-        bar:SetPoint('TOPLEFT',tt,'BOTTOMLEFT',border,0)
-        bar:SetPoint('TOPRIGHT',tt,'BOTTOMRIGHT',-border,0)
+    -- Texture, edge and anchors are restated only when one of their inputs changed.
+    if state.generation~=self.generation or state.position~=position or state.height~=height
+        or state.border~=border or state.outside~=outside then
+        state.generation,state.position,state.height,state.border,state.outside=self.generation,position,height,border,outside
+        bar:SetAlpha(position=='DISABLED' and 0 or 1)
+        bar:SetHeight(height)
+        local texture=media('statusbar','ElvUI Norm')
+        if texture then bar:SetStatusBarTexture(texture) end
+        local edge=paint(bar,general.backdropfadecolor or {},(general.backdropfadecolor or {}).a or .75)
+        edge:ClearAllPoints();edge:SetPoint('TOPLEFT',bar,'TOPLEFT',-outside,outside)
+        edge:SetPoint('BOTTOMRIGHT',bar,'BOTTOMRIGHT',outside,-outside)
+        edge:SetBackdropBorderColor(0,0,0,1)
+        bar:ClearAllPoints()
+        if position=='TOP' then
+            bar:SetPoint('BOTTOMLEFT',tt,'TOPLEFT',border,0)
+            bar:SetPoint('BOTTOMRIGHT',tt,'TOPRIGHT',-border,0)
+        elseif position=='BOTTOM' then
+            bar:SetPoint('TOPLEFT',tt,'BOTTOMLEFT',border,0)
+            bar:SetPoint('TOPRIGHT',tt,'BOTTOMRIGHT',-border,0)
+        end
     end
     -- No OnValueChanged replacement, unit query or duplicate health writer.
     if position=='BOTTOM' and bar:IsShown() then
@@ -179,14 +201,24 @@ function Tooltip:Style(tt)
     if InCombatLockdown() then self.pending=true;return end
     if self.styling then return end
     self.styling=true
+    local state=self.styled[tt]
+    if not state then state={};self.styled[tt]=state end
     if not self.hooked[tt] then
         self.hooked[tt]=true
         tt:HookScript('OnShow',function() self:Style(tt) end)
         tt:HookScript('OnSizeChanged',function() self:Style(tt) end)
+        -- Cleared lines are refilled by the client; their fonts are due again.
+        if tt.HasScript and tt:HasScript('OnTooltipCleared') then
+            tt:HookScript('OnTooltipCleared',function() state.lines=nil;state.money=nil end)
+        end
+    end
+    if state.generation~=self.generation then
+        state.generation=self.generation;state.lines=nil;state.money=nil;state.extra=nil
     end
     if tt.NineSlice then tt.NineSlice:SetAlpha(0) end
     if tt.SetBackdrop then tt:SetBackdrop(nil) end
-    for _,key in ipairs({'Delimiter1','Delimiter2'}) do if tt[key] then tt[key]:SetAlpha(0) end end
+    if tt.Delimiter1 then tt.Delimiter1:SetAlpha(0) end
+    if tt.Delimiter2 then tt.Delimiter2:SetAlpha(0) end
     local general=source.general or {}
     local edge=paint(tt,general.backdropfadecolor or {},setting(db,'colorAlpha'))
     self:ItemBorder(tt,edge,db,general)
@@ -196,10 +228,11 @@ function Tooltip:Style(tt)
         local headerEdge=paint(header,general.backdropcolor or {r=.025,g=.025,b=.025},1)
         headerEdge:SetBackdropBorderColor(0,0,0,1)
     end
-    self:Fonts(tt,db)
+    self:Fonts(tt,db,state)
     local extra=self:HealthBar(tt,db,general)
     local skin=ns.DarkSkin
-    if skin then
+    if skin and state.extra~=extra then
+        state.extra=extra
         local rim=skin:Panel(tt,'tooltip',0)
         skin:FitPanelBorder(rim,tt,skin.styles.tooltip)
         if extra>0 then rim:SetPoint('BOTTOMRIGHT',tt,'BOTTOMRIGHT',skin.styles.tooltip.offset,-skin.styles.tooltip.offset-extra) end
@@ -221,6 +254,7 @@ function Tooltip:Refresh()
     local db=settings();if not db then return end
     if InCombatLockdown() then self.pending=true;return end
     self.pending=nil
+    self.generation=self.generation+1
     if not self.mover then
         self.mover=CreateFrame('Frame','SquanchOnTooltipAnchor',UIParent)
         self.mover:SetSize(quantize(130,UIParent),quantize(20,UIParent));self.mover:EnableMouse(false)
@@ -274,6 +308,14 @@ function Tooltip:Refresh()
     for _,name in ipairs(names) do self:Style(_G[name]) end
     if QuestScrollFrame then self:Style(QuestScrollFrame.StoryTooltip);self:Style(QuestScrollFrame.CampaignTooltip) end
 end
+-- A load-on-demand addon can bring a tooltip the first pass did not see.
+function Tooltip:Discover()
+    if not self.anchorHooked then return self:Refresh() end
+    if InCombatLockdown() then self.pending=true;return end
+    local function adopt(tt) if tt and not self.hooked[tt] then self:Style(tt) end end
+    for _,name in ipairs(names) do adopt(_G[name]) end
+    if QuestScrollFrame then adopt(QuestScrollFrame.StoryTooltip);adopt(QuestScrollFrame.CampaignTooltip) end
+end
 function ns:OpenTooltipOptions()
     if InCombatLockdown() then print('Squanch-On: tooltip settings are available after combat.');return end
     if not settings() then print('Squanch-On: import the complete tooltip profile before editing it.');return end
@@ -315,6 +357,12 @@ function ns:OpenTooltipOptions()
     for _,field in pairs(frame.fields) do field.control:SetText(tostring(field.read() or '')) end
     frame:Show()
 end
+-- Display and UI-scale changes arrive through LayoutEditor's shared relayout pass.
 local events=CreateFrame('Frame')
-for _,event in ipairs({'PLAYER_LOGIN','PLAYER_REGEN_ENABLED','ADDON_LOADED','UI_SCALE_CHANGED','DISPLAY_SIZE_CHANGED'}) do events:RegisterEvent(event) end
-events:SetScript('OnEvent',function() if ns.db then Tooltip:Refresh() end end)
+for _,event in ipairs({'PLAYER_LOGIN','PLAYER_ENTERING_WORLD','PLAYER_REGEN_ENABLED','ADDON_LOADED'}) do events:RegisterEvent(event) end
+events:SetScript('OnEvent',function(_,event)
+    if not ns.db then return end
+    if event=='PLAYER_LOGIN' then Tooltip:Refresh()
+    elseif event=='PLAYER_REGEN_ENABLED' then if Tooltip.pending then Tooltip:Refresh() end
+    else Tooltip:Discover() end
+end)

@@ -714,7 +714,6 @@ function Editor:Open()
     if InCombatLockdown() then print("Squancher: layout editing is available out of combat."); return false end
     self:Build()
     if ns.LayoutTargets then ns.LayoutTargets:Register() end
-    if ns.LayoutUnitFrames then ns.LayoutUnitFrames:Register() end
     if ns.LayoutWindows then ns.LayoutWindows:Register() end
     ns:SetLayoutEditing(true)
     self.active = true; self.root:Show(); self:DrawCanvas(); self:Refresh()
@@ -737,8 +736,59 @@ function Editor:Toggle()
     if self.active then self:Close() else self:Open() end
 end
 
+-- Saved geometry is in physical pixels and is converted with the screen metrics
+-- at the time of each placement, so a new display size, UI scale, graphics
+-- restart or Edit Mode layout needs every owner's placement run again. One pass
+-- on the next frame; each further event queues another, so the last metrics
+-- win. Combat defers the pass to PLAYER_REGEN_ENABLED. Only existing public
+-- entry points are called.
+local function relayout()
+    local skin, frames = ns.DarkSkin, ns.UnitFrames
+    local steps = {
+        function() if ns.NativeActionBars and ns.NativeActionBars.ready then ns.NativeActionBars:Apply() end end,
+        -- Its hooks carry the quest drawer, the meter drawer and the bag window.
+        function() if ns.MinimapPanel and ns.MinimapPanel.frame then ns.MinimapPanel:LayoutStack() end end,
+        function() if skin and skin.started then skin:ApplyChat() end end,
+        function() if ns.AuxiliaryLayout then ns.AuxiliaryLayout:Apply(true) end end,
+        function() if ns.LayoutWindows then ns.LayoutWindows:Register() end end,
+        function() if ns.SocialDrawer and ns.SocialDrawer.initialized then ns.SocialDrawer:Queue() end end,
+        function() if ns.TooltipSkin and ns.db then ns.TooltipSkin:Refresh() end end,
+        function() if skin and skin.RepaintRaised then skin:RepaintRaised() end end,
+        function()
+            if not frames or not frames.Initialized then return end
+            frames:Update_AllFrames()
+            if frames.PlacePlayerBars then frames:PlacePlayerBars() end
+        end,
+    }
+    for _, step in ipairs(steps) do
+        local ok, err = pcall(step)
+        if not ok and geterrorhandler then geterrorhandler()(err) end
+    end
+end
+function Editor:RequestRelayout()
+    if self.relayoutQueued then return end
+    self.relayoutQueued = true
+    C_Timer.After(0, function()
+        self.relayoutQueued = nil
+        if InCombatLockdown() then self.relayoutPending = true; return end
+        self.relayoutPending = nil
+        relayout()
+    end)
+end
+
 local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_REGEN_DISABLED"); events:RegisterEvent("DISPLAY_SIZE_CHANGED")
-events:SetScript("OnEvent", function() if Editor.active then Editor:Close() end end)
+events:RegisterEvent("PLAYER_REGEN_DISABLED"); events:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- GX_RESTARTED follows a graphics restart on clients that have it.
+for _, event in ipairs({ "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "GX_RESTARTED" }) do
+    pcall(events.RegisterEvent, events, event)
+end
+events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_ENABLED" then
+        if Editor.relayoutPending then Editor:RequestRelayout() end
+        return
+    end
+    if Editor.active and (event == "PLAYER_REGEN_DISABLED" or event == "DISPLAY_SIZE_CHANGED") then Editor:Close() end
+    if event ~= "PLAYER_REGEN_DISABLED" and IsLoggedIn() then Editor:RequestRelayout() end
+end)
 SLASH_SQUANCHEREDIT1 = "/sqedit"
 SlashCmdList.SQUANCHEREDIT = function() Editor:Toggle() end

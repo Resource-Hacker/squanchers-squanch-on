@@ -222,6 +222,7 @@ local function styleStaticPopup(skin, frame, border)
     if background.Bottom then skin:StylePanelBackground(background.Bottom, border) end
 end
 
+local fillRefitQueued
 local function applyWindow(frame)
     if InCombatLockdown() then pending = true; return end
     local skin = ns.DarkSkin
@@ -241,6 +242,15 @@ local function applyWindow(frame)
         -- Camelot uses PortraitFrameBaseTemplate, with no root Bg texture.
         -- Its removed pane/race art must reveal one shared translucent underlay.
         ns.NativeParchmentSkins:Fill(frame)
+        -- The first open showed no fill until the sheet was reopened: restate
+        -- its anchors once the frame's first-show layout has resolved.
+        if not fillRefitQueued then
+            fillRefitQueued = true
+            C_Timer.After(0, function()
+                fillRefitQueued = false
+                if frame:IsVisible() and not InCombatLockdown() then ns.NativeParchmentSkins:Fill(frame) end
+            end)
+        end
     end
     -- Any native portrait window gets the same offset square and title plate.
     -- The helper is a no-op for ordinary windows without a portrait header.
@@ -269,6 +279,14 @@ local function registerWindow(frame)
     if not hooked[frame] then
         hooked[frame] = true
         frame:HookScript("OnShow", applyWindow)
+        -- A drawer's rim and fill exist before its first show, so that show
+        -- (under the open motion) only refits regions that already resolved.
+        local drawers = ns.LayoutWindows and ns.LayoutWindows.drawers
+        local skin = ns.DarkSkin
+        if skin and drawers and drawers[frame:GetName() or ""] then
+            skin:Panel(frame, "dialog", 0)
+            if frame == CharacterFrame and ns.NativeParchmentSkins then ns.NativeParchmentSkins:Fill(frame) end
+        end
     end
     if frame:IsVisible() then applyWindow(frame) end
 end

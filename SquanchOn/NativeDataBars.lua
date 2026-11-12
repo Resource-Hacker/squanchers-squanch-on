@@ -36,7 +36,10 @@ function DataBars:UpdateXP(refreshQuests)
     if not holder then return end
     local current, maximum = UnitXP("player"), UnitXPMax("player")
     local capped = UnitLevel("player") >= GameRulesUtil.GetEffectiveMaxLevelForPlayer() or maximum <= 0
-    holder:SetShown(not InCombatLockdown()) -- exact profile hideInCombat=true, hideAtMaxLevel=false
+    -- Exact profile hideInCombat=true, hideAtMaxLevel=false. The quest drawer's
+    -- secure frames anchor to this bar, so it is protected while combat lasts:
+    -- hide on PLAYER_REGEN_DISABLED (lockdown starts after it), show at combat end.
+    if not InCombatLockdown() then holder:SetShown(not self.inCombat) end
     if capped then current, maximum = 1, 1 end
     holder.fill:SetMinMaxValues(0, maximum)
     holder.fill:SetValue(current)
@@ -45,6 +48,7 @@ function DataBars:UpdateXP(refreshQuests)
     holder.rested:SetValue(math.min(current + (rested or 0), maximum))
     holder.rested:SetShown(not capped and rested and rested > 0)
     if refreshQuests then
+        self.questsDirty = nil
         self.questXP = 0
         if not capped and C_QuestLog and GetQuestLogRewardXP then
             for index = 1, C_QuestLog.GetNumQuestLogEntries() do
@@ -116,6 +120,8 @@ function DataBars:Initialize()
     reputation.fill:SetOrientation("VERTICAL")
     reputation:Hide() -- ElvUI reputation.enable defaults false and profile did not override.
     if ns.DarkSkin then ns.DarkSkin:Panel(reputation, "compact", 0) end
+    self.inCombat = InCombatLockdown() and true or nil
+    holder:SetShown(not self.inCombat) -- not anchored to yet: still unprotected
     self:UpdateXP(true)
     self:UpdateReputation()
 end
@@ -124,8 +130,15 @@ local events = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "UPDATE_EXHAUSTION", "QUEST_LOG_UPDATE", "UPDATE_FACTION", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ENABLE_XP_GAIN", "DISABLE_XP_GAIN" }) do events:RegisterEvent(event) end
 events:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then DataBars:Initialize()
+    elseif event == "QUEST_LOG_UPDATE" then
+        -- These arrive in bursts: walk the quest log once, on the next frame.
+        if not DataBars.xp or DataBars.questsDirty then return end
+        DataBars.questsDirty = true
+        C_Timer.After(0, function() if DataBars.questsDirty then DataBars:UpdateXP(true) end end)
     elseif DataBars.xp then
-        DataBars:UpdateXP(event == "QUEST_LOG_UPDATE" or event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LEVEL_UP")
+        if event == "PLAYER_REGEN_DISABLED" then DataBars.inCombat = true
+        elseif event == "PLAYER_REGEN_ENABLED" then DataBars.inCombat = nil end
+        DataBars:UpdateXP(event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LEVEL_UP")
         if event == "UPDATE_FACTION" or event == "PLAYER_ENTERING_WORLD" then DataBars:UpdateReputation() end
     end
 end)

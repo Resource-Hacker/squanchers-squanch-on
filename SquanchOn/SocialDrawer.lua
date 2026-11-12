@@ -158,5 +158,7 @@ end
 local events=CreateFrame('Frame')
 for _,event in ipairs({'PLAYER_LOGIN','ADDON_LOADED','PLAYER_REGEN_ENABLED'}) do events:RegisterEvent(event) end
 events:SetScript('OnEvent',function()
- C_Timer.After(0,function() Drawer:Initialize();if Drawer.initialized then Drawer:Fit() end end)
+ -- Once built, a fit is repeated only when combat deferred one.
+ if Drawer.initialized and not Drawer.pending then return end
+ C_Timer.After(0,function() Drawer:Initialize();if Drawer.initialized and Drawer.pending then Drawer:Fit() end end)
 end)

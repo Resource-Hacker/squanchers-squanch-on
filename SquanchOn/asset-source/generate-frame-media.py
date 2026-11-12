@@ -197,30 +197,30 @@ for name, rows in sorted(ring_rows.items()):
             return grey, grey, grey, clamp(255 * count / RING_SAMPLES ** 2)
         tga(f'ring-{name}-{width}.tga', RING, RING, pixel, RINGS)
 
-# One arc of each ring for the friendly mouseover ring (NameplateHoverRing.lua),
-# which is a radial health bar: SEGMENTS copies of this texture, each turned
-# about the ring centre, lit one by one. The arc runs from the top clockwise
-# over 360 / SEGMENTS degrees and reaches SEGMENT_LAP degrees further at both
-# ends, so neighbours overlap where their edges are fully opaque (no seams).
-SEGMENTS, SEGMENT_LAP = 60, 1.25
+# The left half of each ring for the friendly mouseover ring (NameplateHoverRing.lua),
+# which is a radial health bar: two copies of this texture, each shown through a
+# frame that clips to one half of the ring and turned about the ring centre by
+# the health fraction. The half is cut exactly on the centre column (no
+# anti-aliasing across it), so two halves meet without a seam and the cut is
+# the moving end of the filled arc.
 for name, rows in sorted(ring_rows.items()):
     if name == 'rim':
         continue
     for width in RING_WIDTHS:
         def pixel(x, y, rows=rows, width=width):
             total = count = 0
-            for sy in range(RING_SAMPLES):
-                for sx in range(RING_SAMPLES):
-                    px, py = x + (sx + .5) / RING_SAMPLES - RING / 2, y + (sy + .5) / RING_SAMPLES - RING / 2
-                    t = (RADIUS + width / 2 - math.hypot(px, py)) / width
-                    angle = math.degrees(math.atan2(px, -py))  # clockwise from the top
-                    if 0 <= t < 1 and -SEGMENT_LAP <= angle < 360 / SEGMENTS + SEGMENT_LAP:
-                        total += rows[int(t * H)]
-                        count += 1
+            if x < RING // 2:
+                for sy in range(RING_SAMPLES):
+                    for sx in range(RING_SAMPLES):
+                        px, py = x + (sx + .5) / RING_SAMPLES - RING / 2, y + (sy + .5) / RING_SAMPLES - RING / 2
+                        t = (RADIUS + width / 2 - math.hypot(px, py)) / width
+                        if 0 <= t < 1:
+                            total += rows[int(t * H)]
+                            count += 1
             if not count:
                 t = (RADIUS + width / 2 - math.hypot(x + .5 - RING / 2, y + .5 - RING / 2)) / width
                 grey = rows[0 if t < .5 else H - 1]
             else:
                 grey = clamp(total / count)
             return grey, grey, grey, clamp(255 * count / RING_SAMPLES ** 2)
-        tga(f'segment-{name}-{width}.tga', RING, RING, pixel, RINGS)
+        tga(f'half-{name}-{width}.tga', RING, RING, pixel, RINGS)

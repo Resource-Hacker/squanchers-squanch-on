@@ -65,6 +65,14 @@ local state = {
 }
 
 local pendingLeftDelta
+-- /sqms receipts on|off. Off: the input path records nothing.
+local debugReceipts = false
+
+local MODIFIER_PREFIXES = {"", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-"}
+local BUTTON1_KEYS, BUTTON2_KEYS = {}, {}
+for index, prefix in ipairs(MODIFIER_PREFIXES) do
+  BUTTON1_KEYS[index], BUTTON2_KEYS[index] = prefix .. "BUTTON1", prefix .. "BUTTON2"
+end
 
 local frame = CreateFrame("Frame")
 
@@ -101,6 +109,14 @@ local function setCVar(name, value)
     if not ok then state.errors.cvar = state.errors.cvar + 1 end
     return ok
   end
+end
+
+-- For settings that are not transition triggers: no write, and no CVAR_UPDATE
+-- for every listener in the interface, when the client already holds the value.
+local function setCVarIfChanged(name, value)
+  local current = _G.GetCVar and tonumber(_G.GetCVar(name))
+  if current ~= nil and current == tonumber(value) then return true end
+  return setCVar(name, value)
 end
 
 local function isMouselooking()
@@ -281,10 +297,6 @@ function addon:AnyMovementActionActive()
   return false
 end
 
-function addon:RefreshMovementFromSpeed()
-  return state.speedMoving
-end
-
 function addon:IsAutoMouselookWanted()
   if not self.db then return false end
   if self.db.autoMouselookInCombat and _G.UnitAffectingCombat and _G.UnitAffectingCombat("player") then
@@ -365,8 +377,12 @@ function addon:ApplyNativeLeftClickSetting()
   end
 end
 
+local leftBinding = {}             -- what the eight BUTTON1 bindings were last set to
+local bindingMap = {}              -- the values the client's mouselook map was last refreshed for
 function addon:ApplyMouselookOverrideBindings()
-  if InCombatLockdown() then state.overrideBindingsPending=true;return end
+  -- Waits for PLAYER_REGEN_ENABLED; the update loop does not retry in combat.
+  if InCombatLockdown() then state.overrideBindingsPending=true;state.bindingCombatHold=true;return end
+  state.bindingCombatHold = false
   if not _G.SetMouselookOverrideBinding then return end
   if self:NativeLeftBindingBusy() then
     state.overrideBindingsPending = true
@@ -381,18 +397,20 @@ function addon:ApplyMouselookOverrideBindings()
     end)
     self.mouseoverHoldButton = hold
   end
+  -- The full application always writes the left-button bindings again.
+  leftBinding.command = nil
   if self.db and self.db.useMouselookOverrideBindings then
     self:ApplyNativeLeftBinding(true)
     -- Right-click is a precision gate, including the owner's action modifiers.
-    for _, prefix in ipairs({"", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-"}) do
+    for index = 1, #BUTTON2_KEYS do
       local command = self.db.nativeCenteredMouseover and "CLICK SQMSHoldMouseoverButton:RightButton"
-        or (prefix == "" and (self.db.mouselookButton2Command or "NULL") or nil)
-      safeCall(_G.SetMouselookOverrideBinding, prefix .. "BUTTON2", command)
+        or (index == 1 and (self.db.mouselookButton2Command or "NULL") or nil)
+      safeCall(_G.SetMouselookOverrideBinding, BUTTON2_KEYS[index], command)
     end
   else
     self:ApplyNativeLeftBinding(true)
-    for _, prefix in ipairs({"", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-"}) do
-      safeCall(_G.SetMouselookOverrideBinding, prefix .. "BUTTON2", nil)
+    for index = 1, #BUTTON2_KEYS do
+      safeCall(_G.SetMouselookOverrideBinding, BUTTON2_KEYS[index], nil)
     end
   end
   self:RefreshNativeBindingMap()
@@ -402,32 +420,42 @@ end
 -- Keep the native down/up command paired across the whole physical press.
 -- The right-held path retains the configured command and old helper bindings.
 function addon:ApplyNativeLeftBinding(deferRefresh)
-  if InCombatLockdown() then state.leftBindingUpdatePending=true;return end
+  if InCombatLockdown() then state.leftBindingUpdatePending=true;state.bindingCombatHold=true;return end
+  state.bindingCombatHold = false
   if not self.db or not _G.SetMouselookOverrideBinding then return end
   if self:NativeLeftBindingBusy() then
     state.leftBindingUpdatePending = true
     return
   end
   state.leftBindingUpdatePending = false
-  local enabled = self.db.useMouselookOverrideBindings
-  local chord = enabled and self.db.nativeCombinedClick
-  local leftClick = enabled and self.db.nativeLeftClick and self.db.enabled
-    and self.db.controlMouselookState
+  local db = self.db
+  local enabled = db.useMouselookOverrideBindings and true or false
+  local chord = enabled and db.nativeCombinedClick and true or false
+  local leftClick = enabled and db.nativeLeftClick and db.enabled
+    and db.controlMouselookState and true or false
   local rightHeld = state.rightDown
     or (_G.IsMouseButtonDown and _G.IsMouseButtonDown("RightButton"))
-  local base = self.db.mouselookButton1Command or "TARGETSCANENEMY"
-  local active = chord and state.rightDown and self.db.enabled
-    and self.db.nativeCenteredMouseover and self.db.controlMouselookState and not state.inverted
+  local base = db.mouselookButton1Command or "TARGETSCANENEMY"
+  local active = chord and state.rightDown and db.enabled
+    and db.nativeCenteredMouseover and db.controlMouselookState and not state.inverted
   local command = active and "INTERACTMOUSEOVER"
     or (leftClick and not rightHeld and "CAMERAORSELECTORMOVE" or base)
-  for _, prefix in ipairs({"", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-"}) do
-    safeCall(_G.SetMouselookOverrideBinding, prefix .. "BUTTON1",
-      enabled and ((chord or (leftClick and not rightHeld) or prefix == "") and command or nil) or nil)
+  -- Every modifier carries the command, or only the bare button does.
+  local every = (chord or (leftClick and not rightHeld)) and true or false
+  if leftBinding.enabled ~= enabled or leftBinding.every ~= every or leftBinding.command ~= command then
+    local written = true
+    for index = 1, #BUTTON1_KEYS do
+      local ok = pcall(_G.SetMouselookOverrideBinding, BUTTON1_KEYS[index],
+        enabled and ((every or index == 1) and command or nil) or nil)
+      if not ok then written = false; state.errors.api = state.errors.api + 1 end
+    end
+    leftBinding.enabled, leftBinding.every, leftBinding.command = enabled, every, written and command or nil
   end
-  local signature = table.concat({tostring(enabled), tostring(chord), tostring(leftClick), command,
-    tostring(self.db.nativeCenteredMouseover), self.db.mouselookButton2Command or "NULL"}, ":")
-  if signature ~= state.activeBindingSignature then
-    state.activeBindingSignature = signature
+  local centered, button2 = db.nativeCenteredMouseover and true or false, db.mouselookButton2Command or "NULL"
+  if bindingMap.enabled ~= enabled or bindingMap.chord ~= chord or bindingMap.leftClick ~= leftClick
+    or bindingMap.command ~= command or bindingMap.centered ~= centered or bindingMap.button2 ~= button2 then
+    bindingMap.enabled, bindingMap.chord, bindingMap.leftClick = enabled, chord, leftClick
+    bindingMap.command, bindingMap.centered, bindingMap.button2 = command, centered, button2
     state.bindingRefreshPending = true
   end
   if not deferRefresh then self:RefreshNativeBindingMap() end
@@ -460,29 +488,32 @@ function addon:RefreshNativeBindingMap()
   end)
 end
 
-function addon:RecordNativeReceipt(reason)
-  if not self.db then return end
+-- Diagnostics, off unless /sqms receipts on: one ring of the last 32 input
+-- transitions under nativeReceipts.
+function addon:RecordNativeReceipt(reason, detail)
+  if not debugReceipts or not self.db then return end
   local receipts = self.db.nativeReceipts
   if type(receipts) ~= "table" then
     receipts = {}
     self.db.nativeReceipts = receipts
   end
-  local cvars, bindings = {}, {}
-  for _, name in ipairs({ "CursorFreelookCentering", "CursorStickyCentering", "CursorCenteredYPos" }) do
+  local cvars = {}
+  for _, name in ipairs({ "CursorFreelookCentering", "CursorStickyCentering", "CursorCenteredYPos",
+    "CursorFreelookStartDelta", "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }) do
     cvars[name] = safeCall(_G.GetCVar, name)
   end
-  for _, key in ipairs({ "UP", "CAPSLOCK", "F6", "F7", "F8", "F9", "F10", "F11", "F20", "F21" }) do
-    bindings[key] = safeCall(_G.GetBindingAction, key, true)
-  end
+  local x, y = GetCursorPosition()
   receipts[#receipts + 1] = {
     reason = reason,
+    detail = detail,
     time = safeCall(_G.GetTime),
     mouselooking = isMouselooking() and true or false,
     nativeEnabled = self.db.nativeCenteredMouseover and true or false,
     inverted = state.inverted,
     rightHeld = state.rightDown,
+    combat = InCombatLockdown() and true or false,
+    cursorX = x, cursorY = y,
     cvars = cvars,
-    bindings = bindings,
     errors = { api = state.errors.api, cvar = state.errors.cvar },
   }
   while #receipts > 32 do table.remove(receipts, 1) end
@@ -533,147 +564,105 @@ end
 local cameraReturnNames = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
 local pendingCameraReturn
 
-local function cursorReturnSample()
+-- More than half a pixel from the engine's aim center (or not knowable).
+local function cursorOffCenter()
+  if not _G.GetCursorCenterPosition then return true end
   local x, y = GetCursorPosition()
-  local cx, cy = GetCursorCenterPosition()
-  return {x = x, y = y, centerX = cx, centerY = cy,
-    mouselooking = isMouselooking() and true or false,
-    centering = GetCVar("CursorFreelookCentering"),
-    cursorVisible = _G.IsCursorVisible and _G.IsCursorVisible() or false,
-    facing = _G.GetPlayerFacing and _G.GetPlayerFacing() or nil}
+  local centerX, centerY = GetCursorCenterPosition()
+  return math.abs(x - centerX) > 0.5 or math.abs(y - centerY) > 0.5
 end
 
 function addon:RestoreNativeLeftDelta(reason, force)
   local pending = pendingLeftDelta
   if not pending then return end
-  local receipt = pending.receipt
   local current = safeCall(_G.GetCVar, "CursorFreelookStartDelta")
-  receipt.deltaRestoreReason = reason
   if force or tonumber(current) == 0 then
     setCVar("CursorFreelookStartDelta", pending.previous)
     current = safeCall(_G.GetCVar, "CursorFreelookStartDelta")
-    receipt.deltaRestored = tonumber(current) == tonumber(pending.previous)
-    if receipt.deltaRestored then pendingLeftDelta = nil end
+    if tonumber(current) == tonumber(pending.previous) then pendingLeftDelta = nil end
   else
+    -- Another owner changed it during the press; its newer value stays.
     pendingLeftDelta = nil
-    receipt.deltaConcurrentChange = true
   end
-  receipt.deltaAfterRestore = current
-  receipt.deltaRestoreSample = cursorReturnSample()
+  self:RecordNativeReceipt("left-delta-restore", reason)
 end
 
-function addon:PrepareNativeLeftDelta(receipt)
+function addon:PrepareNativeLeftDelta()
   self:RestoreNativeLeftDelta("superseded-left")
-  if pendingLeftDelta then
-    receipt.deltaStatus = "previous-restore-failed"
-    return
-  end
+  if pendingLeftDelta then return end
   local previous = safeCall(_G.GetCVar, "CursorFreelookStartDelta")
-  receipt.deltaPrevious = previous
-  if not tonumber(previous) or not _G.C_Timer or not _G.C_Timer.After then
-    receipt.deltaStatus = "unavailable"
-    return
-  end
-  local pending = {previous = previous, receipt = receipt}
+  if not tonumber(previous) or not _G.C_Timer or not _G.C_Timer.After then return end
+  -- Already zero: the native down needs no change and there is nothing to restore.
+  if tonumber(previous) == 0 then return end
+  local pending = {previous = previous}
   pendingLeftDelta = pending
   if not setCVar("CursorFreelookStartDelta", 0)
     or tonumber(safeCall(_G.GetCVar, "CursorFreelookStartDelta")) ~= 0 then
-    receipt.deltaStatus = "rejected"
     self:RestoreNativeLeftDelta("delta-rejected", true)
     return
   end
-  receipt.deltaStatus = "armed"
   C_Timer.After(0, function()
     if pendingLeftDelta == pending then addon:RestoreNativeLeftDelta("next-update-fallback") end
   end)
 end
 
 function addon:RestoreNativeCursorReturn(reason, force)
-  local pending = pendingCameraReturn
-  if not pending then return end
+  local values = pendingCameraReturn
+  if not values then return end
   pendingCameraReturn = nil
-  local receipt = pending.receipt
-  receipt.speedRestore = {}
-  receipt.speedsRestored = true
   for _, name in ipairs(cameraReturnNames) do
-    local current = GetCVar(name)
-    if force or tonumber(current) == 0.1 then
-      setCVar(name, pending.values[name])
-      local actual = GetCVar(name)
-      receipt.speedRestore[name] = actual
-      if tonumber(actual) ~= tonumber(pending.values[name]) then
-        receipt.speedsRestored = false
-      end
-    else
-      -- Another settings owner changed this value during the transition.
-      -- Leave its newer value in place instead of restoring stale preferences.
-      receipt.speedRestore[name] = current
-      receipt.concurrentSpeedChange = true
-    end
+    -- A value other than our 0.1 belongs to another settings owner that changed
+    -- it during the transition; leave it instead of restoring stale preferences.
+    if force or tonumber(GetCVar(name)) == 0.1 then setCVar(name, values[name]) end
   end
-  receipt.restoreReason = reason
-  receipt.restoredAt = GetTime()
-  receipt.afterSpeedRestore = cursorReturnSample()
   -- The camera module owns these two speeds outside this transition.
   if addon.Camera then addon.Camera:HoldSpeeds(false) end
+  self:RecordNativeReceipt("cursor-return-restore", reason)
 end
 
+-- This is a single synchronous transition. Do not defer centering until
+-- after Start: that changed mouseover in the failed implementation, not the
+-- pointer position that the engine remembers for the next unlock.
+local function centeredTransition(self)
+  self:ApplyCursorCentering(true)
+  if GetCVar("CursorFreelookCentering") ~= "1"
+    or GetCVar("CursorStickyCentering") ~= "1" then error("centering-rejected") end
+  MouselookStart()
+  MouselookStop()
+end
+
+-- Returns nil when no return is attempted, else its status.
 local function prepareCenteredReturn(self)
   if not self.db.nativeCursorReturn or not _G.C_Timer or not _G.C_Timer.After then return end
   if (_G.SpellIsTargeting and _G.SpellIsTargeting())
     or (_G.GetCurrentKeyBoardFocus and _G.GetCurrentKeyBoardFocus()) then return end
-  local receipt = {method = "native-mouse-lock-transition", status = "preparing",
-    time = GetTime(), before = cursorReturnSample(),
-    combat = InCombatLockdown() and true or false}
-  self.db.lastNativeCursorReturn = receipt
-  local before = receipt.before
-  if not before.mouselooking and math.abs(before.x - before.centerX) <= 0.5
-    and math.abs(before.y - before.centerY) <= 0.5 then
-    receipt.status = "already-centered"
-    return
-  end
+  if not isMouselooking() and not cursorOffCenter() then return "already-centered" end
   local values = {}
   for _, name in ipairs(cameraReturnNames) do
     values[name] = GetCVar(name)
-    if not tonumber(values[name]) then
-      receipt.status = "unreadable-camera-speed"
-      return
-    end
+    if not tonumber(values[name]) then return "unreadable-camera-speed" end
   end
-  pendingCameraReturn = {values = values, receipt = receipt}
+  pendingCameraReturn = values
   if addon.Camera then addon.Camera:HoldSpeeds(true) end
   for _, name in ipairs(cameraReturnNames) do
     if not setCVar(name, 0.1) or tonumber(GetCVar(name)) ~= 0.1 then
-      receipt.status = "camera-speed-rejected"
       self:RestoreNativeCursorReturn("rejected-before-centering", true)
-      return
+      return "camera-speed-rejected"
     end
   end
-  local transition = pendingCameraReturn
   C_Timer.After(0, function()
-    if pendingCameraReturn == transition then
+    if pendingCameraReturn == values then
       addon:RestoreNativeCursorReturn("next-update")
     end
   end)
-  -- This is a single synchronous transition. Do not defer centering until
-  -- after Start: that changed mouseover in the failed implementation, not the
-  -- pointer position that the engine remembers for the next unlock.
-  local ok = pcall(function()
-    self:ApplyCursorCentering(true)
-    if GetCVar("CursorFreelookCentering") ~= "1"
-      or GetCVar("CursorStickyCentering") ~= "1" then error("centering-rejected") end
-    MouselookStart()
-    MouselookStop()
-  end)
+  local ok = pcall(centeredTransition, self)
   self:ApplyCursorCentering(false)
-  receipt.afterTransition = cursorReturnSample()
-  ok = ok and not receipt.afterTransition.mouselooking
-    and receipt.afterTransition.centering == "0"
-  receipt.status = ok and "awaiting-unlock-verification" or "transition-failed"
-  if not ok then
+  if not (ok and not isMouselooking() and GetCVar("CursorFreelookCentering") == "0") then
     state.errors.api = state.errors.api + 1
     self:RestoreNativeCursorReturn("transition-failed")
+    return "transition-failed"
   end
+  return "awaiting-unlock-verification"
 end
 
 function addon:ClearNativeCentering(force)
@@ -687,8 +676,8 @@ end
 
 function addon:StartNativeMouselook()
   self:ClearNativeCentering(true)
-  setCVar("CursorStickyCentering", 1)
-  setCVar("CursorCenteredYPos", tonumber(self.db.cursorCenteredYPos) or defaults.cursorCenteredYPos)
+  setCVarIfChanged("CursorStickyCentering", 1)
+  setCVarIfChanged("CursorCenteredYPos", tonumber(self.db.cursorCenteredYPos) or defaults.cursorCenteredYPos)
   if isMouselooking() then safeCall(_G.MouselookStop) end
   prepareCenteredReturn(self)
   if isMouselooking() or GetCVar("CursorFreelookCentering") ~= "0" then
@@ -698,9 +687,6 @@ function addon:StartNativeMouselook()
     self:ApplyCursorCentering(false)
     safeCall(_G.MouselookStop)
     self:RestoreNativeCursorReturn("incomplete-transition", true)
-    if self.db.lastNativeCursorReturn then
-      self.db.lastNativeCursorReturn.status = "transition-cleanup-required"
-    end
     if isMouselooking() or GetCVar("CursorFreelookCentering") ~= "0" then
       return
     end
@@ -731,23 +717,6 @@ end
 function addon:StopNativeMouselook()
   self:ClearNativeCentering(true)
   safeCall(_G.MouselookStop)
-  local receipt = {time = GetTime(), afterStop = cursorReturnSample()}
-  self.db.lastNativeCursorUnlock = receipt
-  local generation = state.centeringGeneration
-  if _G.C_Timer and _G.C_Timer.After then
-    C_Timer.After(0, function()
-      if state.centeringGeneration ~= generation or isMouselooking() then
-        receipt.interrupted = true
-        return
-      end
-      receipt.nextUpdate = cursorReturnSample()
-      local sample = receipt.nextUpdate
-      receipt.engineCentered = sample.centering == "0"
-        and math.abs(sample.x - sample.centerX) <= 0.5
-        and math.abs(sample.y - sample.centerY) <= 0.5
-      -- A coordinate match is not camera, combat or cross-platform acceptance.
-    end)
-  end
   self:RecordNativeReceipt("native-unlock")
 end
 
@@ -815,18 +784,25 @@ function addon:OnUpdate(elapsed)
     state.turnMouseOwned = false
     self:RequestMouselookRematch()
   end
-  if not self:NativeLeftBindingBusy() then
+  -- Deferred binding work. A write refused by combat lockdown waits for
+  -- PLAYER_REGEN_ENABLED instead of being retried here every frame.
+  local bindingsPending = state.overrideBindingsPending or state.leftBindingUpdatePending
+  if (state.leftClickSettingPending or (bindingsPending and not state.bindingCombatHold)
+    or (not bindingsPending and state.bindingRefreshPending)) and not self:NativeLeftBindingBusy() then
     if state.leftClickSettingPending then self:ApplyNativeLeftClickSetting() end
-    if state.overrideBindingsPending then
-      self:ApplyMouselookOverrideBindings()
-    elseif state.leftBindingUpdatePending then
-      self:ApplyNativeLeftBinding()
+    if bindingsPending then
+      if state.bindingCombatHold then
+        -- still in combat
+      elseif state.overrideBindingsPending then
+        self:ApplyMouselookOverrideBindings()
+      else
+        self:ApplyNativeLeftBinding()
+      end
     elseif state.bindingRefreshPending then
       self:RefreshNativeBindingMap()
     end
   end
 
-  self:RefreshMovementFromSpeed()
   if state.relockTimer then
     state.relockTimer = state.relockTimer - elapsed
     if state.relockTimer <= 0 then
@@ -924,7 +900,6 @@ function addon:InstallMovementHooks()
         addon.TargetCrosshairs:BeginWorldClick()
       end
       if state.nativeLeftPassthrough and pendingLeftDelta then
-        pendingLeftDelta.receipt.nativeCameraStart = cursorReturnSample()
         addon:RestoreNativeLeftDelta("native-camera-start")
       end
     end)
@@ -944,12 +919,7 @@ function addon:InstallMovementHooks()
       end
       -- Map writes wait until the next update; our released press relocks now.
       addon:RequestMouselookRematch()
-      if ownedLeft then
-        addon:RematchMouselook()
-        if addon.db.lastNativeLeftClick then
-          addon.db.lastNativeLeftClick.afterNativeRelease = cursorReturnSample()
-        end
-      end
+      if ownedLeft then addon:RematchMouselook() end
     end)
   end
 end
@@ -1005,7 +975,7 @@ function addon:ApplySafeBindings()
   end
   if _G.SetOverrideBinding then
     if self.db.enabled and self.db.controlMouselookState then
-      for _, prefix in ipairs({"", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-"}) do
+      for _, prefix in ipairs(MODIFIER_PREFIXES) do
         safeCall(_G.SetOverrideBinding, self.bindingOwner, true, prefix .. "CAPSLOCK", "SQMS_INVERTMOUSELOOK")
         safeCall(_G.SetOverrideBinding, self.bindingOwner, true, prefix .. "UP", "SQMS_INVERTMOUSELOOK")
       end
@@ -1054,51 +1024,34 @@ function addon:BeginNativeLeftClick(button)
       if focus ~= WorldFrame then return end
     end
   end
-  local receipt = {time = GetTime(), pendingRelock = pendingRelock and true or false,
-    relockRemaining = state.relockTimer, before = cursorReturnSample()}
-  self.db.lastNativeLeftClick = receipt
   state.nativeLeftPassthrough = true
   state.relockTimer = nil
   -- Stop before preparing a return: another Stop afterward would restore the
   -- temporary camera speeds before the original native CameraStart consumes it.
   self:StopNativeMouselook()
-  receipt.afterStop = cursorReturnSample()
-  receipt.offCenterAfterStop = math.abs(receipt.afterStop.x - receipt.afterStop.centerX) > 0.5
-    or math.abs(receipt.afterStop.y - receipt.afterStop.centerY) > 0.5
-  receipt.preparationRequested = pendingRelock or receipt.offCenterAfterStop
-  if receipt.preparationRequested then
-    setCVar("CursorStickyCentering", 1)
-    setCVar("CursorCenteredYPos", tonumber(self.db.cursorCenteredYPos) or defaults.cursorCenteredYPos)
-    local previous = self.db.lastNativeCursorReturn
-    local ok = pcall(prepareCenteredReturn, self)
-    local prepared = self.db.lastNativeCursorReturn
-    receipt.preparationStatus = prepared ~= previous and prepared.status or "not-started"
-    local preparedOK = receipt.preparationStatus == "already-centered"
-      or receipt.preparationStatus == "awaiting-unlock-verification"
-    if not ok or not preparedOK or isMouselooking() or GetCVar("CursorFreelookCentering") ~= "0" then
+  local status = "released-owned-lock"
+  if pendingRelock or cursorOffCenter() then
+    setCVarIfChanged("CursorStickyCentering", 1)
+    setCVarIfChanged("CursorCenteredYPos", tonumber(self.db.cursorCenteredYPos) or defaults.cursorCenteredYPos)
+    local ok, prepared = pcall(prepareCenteredReturn, self)
+    local preparedOK = ok and (prepared == "already-centered" or prepared == "awaiting-unlock-verification")
+    if not preparedOK or isMouselooking() or GetCVar("CursorFreelookCentering") ~= "0" then
       -- Failed preparation must still leave the original click its free path.
       state.centeringApplied = nil
       self:ApplyCursorCentering(false)
       safeCall(_G.MouselookStop)
       self:RestoreNativeCursorReturn("left-prepare-failed")
-      receipt.status = "fallback-prepare-failed"
+      status = "fallback-prepare-failed"
       if not ok then state.errors.api = state.errors.api + 1 end
     else
-      receipt.status = "left-return-prepared"
+      status = "left-return-prepared"
     end
-  else
-    receipt.status = "released-owned-lock"
   end
   -- Remain unlocked for this physical press; preparation owns its existing
   -- next-update speed restore. No new click or gameplay action is dispatched.
-  receipt.after = cursorReturnSample()
-  receipt.centeredAfter = math.abs(receipt.after.x - receipt.after.centerX) <= 0.5
-    and math.abs(receipt.after.y - receipt.after.centerY) <= 0.5
-  if receipt.preparationRequested and not receipt.centeredAfter and receipt.status == "left-return-prepared" then
-    receipt.status = "fallback-return-incomplete"
-  end
   -- Zero only the original native down threshold, then restore in its posthook.
-  self:PrepareNativeLeftDelta(receipt)
+  self:PrepareNativeLeftDelta()
+  self:RecordNativeReceipt("left-click", status)
 end
 
 function addon:InstallMouseHooks()
@@ -1233,6 +1186,11 @@ function addon:SlashCommand(msg)
   elseif msg == "return on" or msg == "return off" then
     self.db.nativeCursorReturn = msg == "return on"
     print("Squancher native cursor return: " .. (self.db.nativeCursorReturn and "on" or "off"))
+  elseif msg == "receipts on" or msg == "receipts off" then
+    debugReceipts = msg == "receipts on"
+    self.db.debugReceipts = debugReceipts or nil
+    if not debugReceipts then self.db.nativeReceipts = nil end
+    print("Squancher input receipts: " .. (debugReceipts and "on (last 32 transitions are saved)" or "off"))
   elseif msg == "native on" or msg == "native off" then
     self.db.nativeCenteredMouseover = msg == "native on"
     self:ApplyMouselookOverrideBindings()
@@ -1293,7 +1251,7 @@ function addon:SlashCommand(msg)
     end
   else
     self:PrintStatus()
-    print("|cff33ff99/sqms|r status, camera [options], mouseover on/off, nameplates, crosshairs, on, off, reticle on/off, bindings on/off, lock on/off, native on/off, return on/off, left on/off, chord on/off, aim <x> <y>, cursor <0-1>, always on, always off, panic")
+    print("|cff33ff99/sqms|r status, camera [options], mouseover on/off, nameplates, crosshairs, on, off, reticle on/off, bindings on/off, lock on/off, native on/off, return on/off, left on/off, chord on/off, receipts on/off, aim <x> <y>, cursor <0-1>, always on, always off, panic")
   end
 end
 
@@ -1327,6 +1285,7 @@ function addon:OnEvent(event, ...)
       end
     end)
     self.db.loadedVersion = "1.0.0"
+    debugReceipts = self.db.debugReceipts == true
     if not self.db.nativeReturnRevision then
       self.db.nativeCombinedClick = false
       self.db.nativeReturnRevision = 1
@@ -1409,6 +1368,8 @@ function addon:OnEvent(event, ...)
     if state.pendingBindings then
       self:ApplySafeBindings()
     end
+    -- The update loop applies binding writes that combat lockdown deferred.
+    state.bindingCombatHold = false
     self:RequestMouselookRematch()
   elseif event == "PLAYER_REGEN_DISABLED" then
     self:RequestMouselookRematch()
@@ -1422,8 +1383,6 @@ function addon:OnEvent(event, ...)
     self:SetMovementAction("TurnEvent", true)
   elseif event == "PLAYER_STOPPED_TURNING" then
     self:SetMovementAction("TurnEvent", false)
-  elseif event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" then
-    self:UpdateReticle()
   end
 end
 
@@ -1446,5 +1405,3 @@ frame:RegisterEvent("PLAYER_STARTED_MOVING")
 frame:RegisterEvent("PLAYER_STOPPED_MOVING")
 frame:RegisterEvent("PLAYER_STARTED_TURNING")
 frame:RegisterEvent("PLAYER_STOPPED_TURNING")
-frame:RegisterEvent("PLAYER_TARGET_CHANGED")
-frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")

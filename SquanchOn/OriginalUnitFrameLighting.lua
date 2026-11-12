@@ -58,6 +58,50 @@ local function subtract(rect,cut,out)
     if rect[2]<b then out[#out+1]={l,rect[2],r,b} end
     if t<rect[4] then out[#out+1]={l,t,r,rect[4]} end
 end
+local cutKeys={'Health','Portrait','Power'}
+local glowKeys={'TargetGlow','MouseGlow','FocusGlow'}
+local shadeSpecs={
+    {'top','VERTICAL','TOPLEFT','TOPRIGHT',0,.88},
+    {'bottom','VERTICAL','BOTTOMLEFT','BOTTOMRIGHT',.88,0},
+    {'left','HORIZONTAL','TOPLEFT','BOTTOMLEFT',.88,0},
+    {'right','HORIZONTAL','TOPRIGHT','BOTTOMRIGHT',0,.88},
+}
+-- Everything the fit below reads, as plain numbers. An unchanged signature
+-- means a repeat fit would write exactly what is already on screen.
+local probe,probed={},0
+local function push(region,scale)
+    local x,y,w,h=region:GetRect()
+    scale=scale or region:GetEffectiveScale()
+    if not (number(x) and number(y) and number(w) and number(h) and number(scale)) then return false end
+    local count=probed
+    probe[count+1],probe[count+2],probe[count+3],probe[count+4],probe[count+5]=x,y,w,h,scale
+    probed=count+5
+    return true
+end
+local function signature(state)
+    probed=0
+    local frame=state.frame
+    if not push(state.host) or not push(state.classFill,state.host:GetEffectiveScale()) then return nil end
+    for _,key in ipairs(cutKeys) do
+        local bar=frame[key]
+        local included=bar and bar:IsShown() and (key~='Power' or not frame.POWERBAR_DETACHED)
+        probed=probed+1;probe[probed]=included and bar or false
+        if included and not push(bar.backdrop or bar) then return nil end
+    end
+    return probed
+end
+local function unchanged(state,count)
+    local last=state.signature
+    if not count or not last or last.count~=count then return false end
+    for index=1,count do if last[index]~=probe[index] then return false end end
+    return true
+end
+local function remember(state,count)
+    if not count then state.signature=nil;return end
+    local last=state.signature or {};state.signature=last
+    for index=1,count do last[index]=probe[index] end
+    last.count=count
+end
 local function fitPieces(state)
     hidePieces(state)
     local bounds=rectangle(state.classFill,state.host:GetEffectiveScale())
@@ -65,7 +109,7 @@ local function fitPieces(state)
     local origin=rectangle(state.host)
     if not bounds or not origin or not number(scale) or scale<=0 then return end
     local rects={bounds}
-    for _,key in ipairs({'Health','Portrait','Power'}) do
+    for _,key in ipairs(cutKeys) do
         local bar=state.frame[key]
         local included=bar and bar:IsShown() and (key~='Power' or not state.frame.POWERBAR_DETACHED)
         if included then
@@ -83,12 +127,11 @@ local function fitPieces(state)
             piece={class=state.host:CreateTexture(nil,'BACKGROUND',nil,-7)}
             state.pieces[index]=piece
         end
-        for _,texture in ipairs({piece.class}) do
-            texture:ClearAllPoints()
-            texture:SetPoint('BOTTOMLEFT',state.host,'BOTTOMLEFT',
-                (rect[1]-origin[1])/scale,(rect[2]-origin[2])/scale)
-            texture:SetSize((rect[3]-rect[1])/scale,(rect[4]-rect[2])/scale)
-        end
+        local texture=piece.class
+        texture:ClearAllPoints()
+        texture:SetPoint('BOTTOMLEFT',state.host,'BOTTOMLEFT',
+            (rect[1]-origin[1])/scale,(rect[2]-origin[2])/scale)
+        texture:SetSize((rect[3]-rect[1])/scale,(rect[4]-rect[2])/scale)
     end
     state.activePieces=#rects
     paintPieces(state)
@@ -99,12 +142,7 @@ local function fitEdgeShade(state)
     local fill=state.classFill
     local width,height=fill:GetSize()
     local depth=math.max(.5,math.min(9,width*.45,height*.45))
-    for _,spec in ipairs({
-        {'top','VERTICAL','TOPLEFT','TOPRIGHT',0,.88},
-        {'bottom','VERTICAL','BOTTOMLEFT','BOTTOMRIGHT',.88,0},
-        {'left','HORIZONTAL','TOPLEFT','BOTTOMLEFT',.88,0},
-        {'right','HORIZONTAL','TOPRIGHT','BOTTOMRIGHT',0,.88},
-    }) do
+    for _,spec in ipairs(shadeSpecs) do
         local shade=state.edgeShades[spec[1]]
         if not shade then
             shade=state.host:CreateTexture(nil,'BACKGROUND',nil,-6)
@@ -117,21 +155,6 @@ local function fitEdgeShade(state)
         if spec[2]=='VERTICAL' then shade:SetHeight(depth) else shade:SetWidth(depth) end
     end
 end
-local function smoothOffsetShadows(state)
-    local frame=state.frame
-    local offset=not frame.POWERBAR_DETACHED
-        and (frame.USE_MINI_POWERBAR or frame.USE_POWERBAR_OFFSET or frame.USE_INSET_POWERBAR)
-    -- Benik draws separate black shadows around offset health/power rectangles.
-    -- The shared class gradient now owns that space; these two decorative
-    -- shadows must not carve stepped dark patches into it. Semantic glows stay.
-    for _,bar in ipairs({frame.Health,frame.Power}) do
-        local shadow=bar.backdrop and bar.backdrop.shadow
-        if shadow then
-            if state.shadowAlphas[shadow]==nil then state.shadowAlphas[shadow]=shadow:GetAlpha() end
-            shadow:SetAlpha(offset and 0 or state.shadowAlphas[shadow])
-        end
-    end
-end
 -- Same native inverse-rectangle mask used by the installed LibCustomGlow:
 -- empty inside its anchors, opaque outside via CLAMPTOWHITE. Mask only health
 -- artwork behind attached power; native values, dimensions and alpha stay owned
@@ -141,7 +164,9 @@ local function syncHealthOcclusion(state)
     local power=state.frame.Power
     if state.healthMask then
         local active=power and power.backdrop and power:IsShown() and power.backdrop:IsShown()
-            and state.frame.USE_POWERBAR and not state.frame.POWERBAR_DETACHED
+            and state.frame.USE_POWERBAR and not state.frame.POWERBAR_DETACHED and true or false
+        if state.maskActive==active then return end
+        state.maskActive=active
         state.healthMask:SetTexture(active and EMPTY or WHITE,'CLAMPTOWHITE','CLAMPTOWHITE','NEAREST')
     end
 end
@@ -154,7 +179,7 @@ local function fitHealthOcclusion(state)
         state.maskHost:SetIgnoreParentAlpha(true)
         state.healthMask=state.maskHost:CreateMaskTexture()
         state.maskedTextures={}
-        hooksecurefunc(health,'SetStatusBarTexture',function() Lighting:Refit(state) end)
+        hooksecurefunc(health,'SetStatusBarTexture',function() state.signature=nil;Lighting:Refit(state) end)
     end
     state.healthMask:ClearAllPoints()
     state.healthMask:SetAllPoints(power.backdrop)
@@ -176,7 +201,7 @@ local function fitHealthOcclusion(state)
     if health.ClipFrame then includeClip(health.ClipFrame) end
     -- Keep native target/mouse/focus/threat indications around the frame,
     -- but exclude the portions hidden behind the attached resource face.
-    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow'}) do
+    for _,key in ipairs(glowKeys) do
         local glow=state.frame[key]
         if glow then
             includeClip(glow)
@@ -193,25 +218,33 @@ local function fitHealthOcclusion(state)
 end
 local function classColor(state)
     local frame,E=state.frame,ns.UnitFrames and ns.UnitFrames.Engine
-    state.classRGB=nil
-    paintPieces(state)
     local unit=frame.__unit or frame.unit
-    if not E or not public(unit) or type(unit)~='string' then return end
-    local player=UnitIsPlayer(unit)
-    if not public(player) then return end
     local color
-    if player then
-        local _,token=UnitClass(unit)
-        if public(token) and type(token)=='string' then color=E:ClassColor(token) end
-    else
-        local reaction=UnitReaction(unit,'player')
-        if public(reaction) and type(reaction)=='number' then
-            color=frame.colors and frame.colors.reaction[reaction]
+    if E and public(unit) and type(unit)=='string' then
+        local player=UnitIsPlayer(unit)
+        if public(player) then
+            if player then
+                local _,token=UnitClass(unit)
+                if public(token) and type(token)=='string' then color=E:ClassColor(token) end
+            else
+                local reaction=UnitReaction(unit,'player')
+                if public(reaction) and type(reaction)=='number' then
+                    color=frame.colors and frame.colors.reaction[reaction]
+                end
+            end
         end
     end
-    if color and rgb(color.r,color.g,color.b) then
-        state.classRGB={color.r,color.g,color.b}
-    end
+    local r,g,b
+    if color and rgb(color.r,color.g,color.b) then r,g,b=color.r,color.g,color.b end
+    -- Same colour as painted: the pieces already show it.
+    local c=state.classRGB
+    if not r then
+        if not c then return end
+        state.classRGB=nil
+    elseif c then
+        if c[1]==r and c[2]==g and c[3]==b then return end
+        c[1],c[2],c[3]=r,g,b
+    else state.classRGB={r,g,b} end
     paintPieces(state)
 end
 -- All light comes from the health/class region. Resource bars retain their
@@ -228,50 +261,68 @@ local function mutePowerGlow(glow)
     glow:SetAlpha(0)
 end
 local function healthOnlyGlows(frame)
-    for _,key in ipairs({'TargetGlow','MouseGlow','FocusGlow'}) do
+    for _,key in ipairs(glowKeys) do
         local glow=frame[key]
         mutePowerGlow(glow and glow.powerGlow)
     end
     mutePowerGlow(frame.ThreatIndicator and frame.ThreatIndicator.PowerGlow)
 end
-local function refreshColors(state) classColor(state) end
+-- A configure can change what the fit reads without moving anything (bar
+-- texture, new child art): the next Attach fits in full.
+function Lighting:Invalidate(frame)
+    local state=self.states[frame]
+    if state then state.signature=nil end
+end
 function Lighting:Refit(state)
     syncHealthOcclusion(state)
-    -- An existing light is refitted in combat too: its host, textures and mask
-    -- are unprotected children. The borders still get their pass afterwards.
-    if InCombatLockdown() then ns.OriginalUnitFrameBorders.pending=true end
     self:Attach(state.frame,state.panel)
 end
 function Lighting:Attach(frame,panel)
     if not self:IsUnitFrame(frame) or not panel then return end
     local state=self.states[frame]
     if not state then
-        if InCombatLockdown() then ns.OriginalUnitFrameBorders.pending=true;return end
+        if InCombatLockdown() then ns.OriginalUnitFrameBorders.pendingFrames[frame]=true;return end
         local host=CreateFrame('Frame',nil,frame)
         host:EnableMouse(false);host.ignoreInLayout=true;host:SetAllPoints(frame)
-        state={frame=frame,panel=panel,host=host,edgeShades={},shadowAlphas={},pieces={},activePieces=0}
+        state={frame=frame,panel=panel,host=host,edgeShades={},pieces={},activePieces=0}
         state.classFill=host:CreateTexture(nil,'BACKGROUND',nil,-7)
         -- Invisible bounds only: all color lives in the subtracted gap pieces.
         state.classFill:SetAlpha(0)
         self.states[frame]=state
         self.byBar[frame.Health]=state
+        local function refit() Lighting:Refit(state) end
         if frame.Power then
-            frame.Power:HookScript('OnShow',function() Lighting:Refit(state) end)
-            frame.Power:HookScript('OnHide',function() Lighting:Refit(state) end)
+            frame.Power:HookScript('OnShow',refit);frame.Power:HookScript('OnHide',refit)
             if frame.Power.backdrop then
-                frame.Power.backdrop:HookScript('OnShow',function() Lighting:Refit(state) end)
-                frame.Power.backdrop:HookScript('OnHide',function() Lighting:Refit(state) end)
+                frame.Power.backdrop:HookScript('OnShow',refit);frame.Power.backdrop:HookScript('OnHide',refit)
             end
         end
-        frame:HookScript('OnShow',function() Lighting:Refit(state) end)
+        frame:HookScript('OnShow',refit)
         if frame.Portrait and frame.Portrait.HookScript then
-            frame.Portrait:HookScript('OnShow',function() Lighting:Refit(state) end)
-            frame.Portrait:HookScript('OnHide',function() Lighting:Refit(state) end)
+            frame.Portrait:HookScript('OnShow',refit);frame.Portrait:HookScript('OnHide',refit)
         end
     end
-    state.panel=panel
-    state.host:SetFrameLevel(math.max(0,frame:GetFrameLevel()-1))
-    ns.DarkSkin:FitPanelBackground(state.classFill,panel)
+    local level=math.max(0,frame:GetFrameLevel()-1)
+    if state.hostLevel~=level then state.hostLevel=level;state.host:SetFrameLevel(level) end
+    -- The fill follows its panel through anchors; only a new panel, corner
+    -- size or scale ratio needs the inset computed again.
+    local corner,ratio=panel.cornerSize,panel:GetEffectiveScale()/state.host:GetEffectiveScale()
+    if state.panel~=panel or state.fillCorner~=corner or state.fillRatio~=ratio or not state.signature then
+        state.panel,state.fillCorner,state.fillRatio=panel,corner,ratio
+        ns.DarkSkin:FitPanelBackground(state.classFill,panel)
+        state.signature=nil
+    end
+    healthOnlyGlows(frame)
+    -- The frame, its power bar, its backdrop and its portrait all report a
+    -- show or hide, and a configure passes here too: fit once per real change.
+    local count=signature(state)
+    if state.activePieces>0 and unchanged(state,count) then
+        syncHealthOcclusion(state);classColor(state)
+        return
+    end
+    -- An existing light is refitted in combat too: its host, textures and mask
+    -- are unprotected children. The borders get their pass for this frame afterwards.
+    if InCombatLockdown() then ns.OriginalUnitFrameBorders.pendingFrames[frame]=true end
     -- A unit button that has just been shown can report child geometry one
     -- frame late. Retry once instead of leaving the frame without its light.
     local fitted=fitPieces(state)
@@ -282,28 +333,26 @@ function Lighting:Attach(frame,panel)
     if state.activePieces>0 then state.retries=0 end
     fitEdgeShade(state)
     fitHealthOcclusion(state)
-    smoothOffsetShadows(state)
-    healthOnlyGlows(frame)
-    refreshColors(state)
+    classColor(state)
+    remember(state,state.activePieces>0 and count or nil)
     local E=ns.UnitFrames and ns.UnitFrames.Engine
     local UF=E and E:GetModule('UnitFrames',true)
     if UF and not self.hooked then
         self.hooked=true
         -- Posthook the color delivery, never read health/power values or replace
         -- native PostUpdate callbacks. Target swaps follow it; power color never drives the light.
-        hooksecurefunc(UF,'SetStatusBarColor',function(_,bar,r,g,b)
+        hooksecurefunc(UF,'SetStatusBarColor',function(_,bar)
             local owner=Lighting.byBar[bar]
-            if not owner then return end
-            classColor(owner)
-        end)
-        hooksecurefunc(UF,'Configure_Power',function(_,unitFrame)
-            local current=Lighting.states[unitFrame]
-            if current then Lighting:Attach(unitFrame,current.panel) end
+            if owner then classColor(owner) end
         end)
     end
 end
 local events=CreateFrame('Frame')
 events:RegisterEvent('PLAYER_TARGET_CHANGED')
 events:SetScript('OnEvent',function()
-    for _,state in pairs(Lighting.states) do refreshColors(state) end
+    -- Only frames that follow the target can have changed unit.
+    for frame,state in pairs(Lighting.states) do
+        local unit=frame.__unit or frame.unit
+        if not public(unit) or type(unit)~='string' or unit:find('target',1,true) then classColor(state) end
+    end
 end)

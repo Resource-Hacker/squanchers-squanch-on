@@ -31,8 +31,6 @@ end
 for index = 1, 5 do
     local stem = 'SquanchOnUF_PartyHeaderUnitButton' .. index
     add('SquanchOnUF Party' .. index, stem, nil, 'BACKGROUND')
-    add('SquanchOnUF PartyTarget' .. index, stem .. 'Target', nil, 'BACKGROUND')
-    add('SquanchOnUF PartyPet' .. index, stem .. 'Pet', nil, 'BACKGROUND')
     add('SquanchOnUF Boss' .. index, 'SquanchOnUF_Boss' .. index, nil, 'BACKGROUND', mainline)
     add('SquanchOnUF Arena' .. index, 'SquanchOnUF_Arena' .. index, nil, 'BACKGROUND', mainline)
 end
@@ -43,14 +41,6 @@ end)
 add('SquanchOnUF Player.ClassPower', 'SquanchOnUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
     local db = unitDB('player')
     return resolve('SquanchOnUF_PlayerClassIconButton1') and db and db.classbar and db.classbar.enable and db.classbar.detachFromFrame
-end)
-add('SquanchOnUF Player.RunePower', 'SquanchOnUF_Player.ClassBarHolder', nil, 'BACKGROUND', function()
-    local _, class = UnitClass('player')
-    return class == 'DEATHKNIGHT' and resolve('SquanchOnUF_PlayerRuneButton1')
-end)
-add('SquanchOnUF Player.AdditionalPower', 'AdditionalPowerBar.backdrop', nil, 'BACKGROUND', function()
-    local db = unitDB('player')
-    return mainline() and db and db.classbar and db.classbar.enable and db.classbar.detachFromFrame
 end)
 -- Other native unit types are acquired at RefreshFrame below; compact group
 -- cells keep a fitted inner rim so decoration never expands their native spacing.
@@ -92,11 +82,18 @@ end
 local auraHooks = setmetatable({}, {__mode='k'})
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
 local neutralTints=setmetatable({}, {__mode='k'})
+local edgeHosts,edgeKeys={},{'TopLeftCorner','TopRightCorner','BottomLeftCorner','BottomRightCorner','TopEdge','BottomEdge','LeftEdge','RightEdge'}
+-- The unit frame whose pass is running: a fit refused in combat is redone for
+-- that frame alone when combat ends.
+local passFrame
 local function tintNeutralEdge(texture,backdrop,ownerFrame,texturedOnly)
     if not texture or texture.IsForbidden and texture:IsForbidden() then return end
     if neutralTints[texture] then
-        if ownerFrame then neutralTints[texture].ownerFrame=ownerFrame end
-        if backdrop then neutralTints[texture].fitOuter() end
+        local known=neutralTints[texture]
+        if ownerFrame then known.ownerFrame=ownerFrame end
+        if passFrame then known.unitFrame=passFrame end
+        -- Already fitted: the outline is laid again only if its geometry moved.
+        if backdrop then known.fitOuter(true) end
         return
     end
     local E=ns.UnitFrames and ns.UnitFrames.Engine
@@ -104,15 +101,17 @@ local function tintNeutralEdge(texture,backdrop,ownerFrame,texturedOnly)
     local setter=backdrop and 'SetBackdropBorderColor' or 'SetVertexColor'
     local getter=backdrop and 'GetBackdropBorderColor' or 'GetVertexColor'
     if not baseline or not texture[setter] or not texture[getter] or texture.forcedBorderColors then return end
-    local record={ownerFrame=ownerFrame,texturedOnly=texturedOnly,edgeAlpha={}}
+    local record={ownerFrame=ownerFrame,unitFrame=passFrame,texturedOnly=texturedOnly,edgeAlpha={}}
     neutralTints[texture]=record
     local function nativeEdges()
         -- Portraits carry the same single textured line as the bars; a flat
         -- edge left beneath it reads as a bright ring.
         if not (record.ownerFrame or record.texturedOnly) then return end
-        for _,host in ipairs({texture,texture.iborder or false,texture.oborder or false}) do
+        edgeHosts[1],edgeHosts[2],edgeHosts[3]=texture,texture.iborder or false,texture.oborder or false
+        for index=1,3 do
+            local host=edgeHosts[index]
             if host then
-                for _,key in ipairs({'TopLeftCorner','TopRightCorner','BottomLeftCorner','BottomRightCorner','TopEdge','BottomEdge','LeftEdge','RightEdge'}) do
+                for _,key in ipairs(edgeKeys) do
                     local edge=host[key]
                     if edge then
                         if record.edgeAlpha[edge]==nil then
@@ -151,45 +150,57 @@ local function tintNeutralEdge(texture,backdrop,ownerFrame,texturedOnly)
         if w<=0 or h<=0 or scale<=0 then return end
         return l*scale,b*scale,(l+w)*scale,(b+h)*scale
     end
-    function record.fitOuter()
+    local function deferred()
+        local frame=record.unitFrame or record.ownerFrame
+        if frame then Borders.pendingFrames[frame]=true else Borders.pending=true end
+    end
+    -- `lazy`: a repeat pass over an outline that is already fitted. Nothing is
+    -- written unless the outline's size, scale, level or power cut-out changed.
+    function record.fitOuter(lazy)
         if not backdrop then return end
-        if InCombatLockdown() then
-            if record.ownerFrame then Borders.pendingFrames[record.ownerFrame]=true end
-            Borders.pending=true;record.visibility();return
+        local scale=texture:GetEffectiveScale()
+        local width,height=texture:GetSize()
+        local level=texture:GetFrameLevel()+1
+        local e1,e2,e3,e4
+        local owner=record.ownerFrame
+        local power=owner and owner.Power
+        local cut=power and power.backdrop and not owner.POWERBAR_DETACHED and owner.USE_POWERBAR
+        if cut then
+            local l,b=physical(texture)
+            local pl,pb,pr,pt=physical(power.backdrop)
+            if l and pl then e1,e2,e3,e4=(pl-l)/scale,(pb-b)/scale,(pr-l)/scale,(pt-b)/scale end
         end
+        local same=record.outer and record.fitW==width and record.fitH==height and record.fitScale==scale
+            and record.fitLevel==level and record.fit1==e1 and record.fit2==e2 and record.fit3==e3 and record.fit4==e4
+        if lazy and same then return end
+        if InCombatLockdown() then deferred();record.visibility();return end
         if not record.outer then
             -- Texture only the original thin outline; no extra outside pixel,
             -- native fill mutation, icon resize or layout participation.
             record.outer=CreateFrame('Frame',nil,texture)
             record.outer:EnableMouse(false);record.outer.ignoreInLayout=true
+            record.outer:SetAllPoints(texture)
         end
-        record.outer:SetFrameLevel(texture:GetFrameLevel()+1)
-        record.outer:SetAllPoints(texture)
-        local exclusion
-        local owner=record.ownerFrame
-        local power=owner and owner.Power
-        if power and power.backdrop and not owner.POWERBAR_DETACHED and owner.USE_POWERBAR then
-            local l,b,r,t=physical(texture)
-            local pl,pb,pr,pt=physical(power.backdrop)
-            if l and pl then
-                local scale=record.outer:GetEffectiveScale()
-                exclusion={(pl-l)/scale,(pb-b)/scale,(pr-l)/scale,(pt-b)/scale}
-            end
+        if cut then
             for _,host in ipairs({power,power.backdrop}) do
                 if not auraHooks[host] then
                     auraHooks[host]=true
                     local function changed()
-                        if InCombatLockdown() then record.visibility(); Borders.pendingFrames[owner]=true;Borders.pending=true
+                        if InCombatLockdown() then record.visibility();Borders.pendingFrames[owner]=true
                         else record.fitOuter() end
                     end
                     host:HookScript('OnShow',changed);host:HookScript('OnHide',changed)
                 end
             end
         end
-        record.hasExclusion=exclusion~=nil
-        ns.DarkSkin:TexturedUnitOutline(record.outer,1/texture:GetEffectiveScale(),exclusion)
+        record.hasExclusion=e1~=nil
+        if not same then
+            record.outer:SetFrameLevel(level)
+            ns.DarkSkin:TexturedUnitOutline(record.outer,1/scale,e1 and {e1,e2,e3,e4} or nil)
+            record.fitW,record.fitH,record.fitScale,record.fitLevel=width,height,scale,level
+            record.fit1,record.fit2,record.fit3,record.fit4=e1,e2,e3,e4
+        end
         record.visibility()
-        paintOuter()
     end
     local function outerEdge(self,neutral,alpha)
         record.neutral,record.alpha=neutral,alpha
@@ -214,21 +225,11 @@ local function tintNeutralEdge(texture,backdrop,ownerFrame,texturedOnly)
     hooksecurefunc(texture,setter,tint)
     tint(texture,texture[getter](texture))
 end
-local function decorateAura(button)
-    if not button or button.IsForbidden and button:IsForbidden() then return end
-    if button.dispelBorder then
-        local container=button.container
-        if container and not container.isAuraBar and container.isUnitframe then
-            tintNeutralEdge(button.border)
-            tintNeutralEdge(button.dispelBorder)
-        end
-    elseif button.SetBackdropBorderColor then tintNeutralEdge(button,true)
-    end
-end
 function Borders:RefreshIcons(frame)
     if not frame or frame.IsForbidden and frame:IsForbidden() then return end
     -- Keep the native thin bar outline and its semantic updates; only its
     -- neutral black color becomes the same gold line as the icon rims.
+    passFrame=frame
     tintNeutralEdge(frame.Health and frame.Health.backdrop,true,frame)
     tintNeutralEdge(frame.Power and frame.Power.backdrop,true)
     tintNeutralEdge(frame.Castbar and frame.Castbar.backdrop,true)
@@ -236,28 +237,7 @@ function Borders:RefreshIcons(frame)
     tintNeutralEdge(portrait and portrait.backdrop,true,nil,true)
     local portrait3D = frame.Portrait3D
     tintNeutralEdge(portrait3D and portrait3D.backdrop,true,nil,true)
-    local cast = frame.Castbar
-    tintNeutralEdge(cast and cast.ButtonIcon and cast.ButtonIcon.bg,true)
-    local spec = frame.PVPSpecIcon
-    tintNeutralEdge(spec and spec.bg,true)
-    for _, key in ipairs({'Auras','Buffs','Debuffs'}) do
-        local container=frame[key]
-        if container and not (container.IsForbidden and container:IsForbidden()) then
-            if container.PostCreateButton and not auraHooks[container] then
-                auraHooks[container]=true
-                hooksecurefunc(container,'PostCreateButton',function(_,button) decorateAura(button) end)
-            end
-            local count=0
-            for _,button in ipairs(container) do
-                count=count+1; if count>128 then break end
-                decorateAura(button)
-            end
-            for button in pairs(container.buttons or {}) do
-                count=count+1; if count>256 then break end
-                decorateAura(button)
-            end
-        end
-    end
+    passFrame=nil
 end
 
 function Borders:RefreshFrame(frame)
@@ -291,31 +271,24 @@ function Borders:RefreshAll()
     for _, record in ipairs(records) do refresh(record) end
     local E=ns.UnitFrames and ns.UnitFrames.Engine
     for _,frame in ipairs(E and E.oUF and E.oUF.objects or {}) do self:RefreshFrame(frame) end
-    for frame in pairs(self.pendingFrames) do self:RefreshFrame(frame) end
+    self:Flush()
+end
+-- Redo only what combat postponed. Nothing pending, nothing done.
+function Borders:Flush()
+    if self.pending then return self:RefreshAll() end
+    for frame in pairs(self.pendingFrames) do
+        self.pendingFrames[frame]=nil
+        self:RefreshFrame(frame)
+    end
 end
 function Borders:Install()
-    if self.installed and self.configureHooked then return end
+    if self.installed then return end
     local E = ns.UnitFrames and ns.UnitFrames.Engine
     local engine = E and E.oUF
     if not engine or not engine.RegisterInitCallback or not ns.DarkSkin then return end
-    if not self.installed then
-        engine:RegisterInitCallback(function(frame) self:RefreshFrame(frame) end)
-        self.installed = true
-    end
-    local UF = E:GetModule('UnitFrames', true)
-    if UF and UF.ConfigureFrame and not self.configureHooked then
-        hooksecurefunc(UF, 'ConfigureFrame', function(_, frame) self:RefreshFrame(frame) end)
-        self.configureHooked = true
-    end
-    if UF and UF.Configure_Power and not self.powerHooked then
-        hooksecurefunc(UF,'Configure_Power',function(_,frame) self:RefreshFrame(frame) end)
-        self.powerHooked=true
-    end
-    if UF and UF.AuraCreated and not self.modernIconHooked then
-        self.modernIconHooked=true
-        hooksecurefunc(UF,'AuraCreated',function(_,button) decorateAura(button) end)
-    end
-    for _, frame in ipairs(engine.objects or {}) do self:RefreshFrame(frame) end
+    -- Later passes come from UF:ConfigureFrame itself, once per configure.
+    engine:RegisterInitCallback(function(frame) self:RefreshFrame(frame) end)
+    self.installed = true
     self:RefreshAll()
 end
 
@@ -326,8 +299,11 @@ events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent', function(_, event, addon)
     if event == 'ADDON_LOADED' then
         if addon == 'SquanchOn' then Borders:Install() end
-    elseif event == 'PLAYER_LOGIN' then Borders:Install(); if Borders.installed then Borders:RefreshAll() end
-    elseif Borders.installed and event == 'PLAYER_REGEN_ENABLED' then Borders:RefreshAll()
+    elseif event == 'PLAYER_LOGIN' then
+        local installed = Borders.installed
+        Borders:Install()
+        if installed then Borders:RefreshAll() end
+    elseif Borders.installed then Borders:Flush()
     end
 end)
 Borders:Install()

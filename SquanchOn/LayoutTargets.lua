@@ -228,5 +228,7 @@ for _, event in ipairs({ 'PLAYER_LOGIN', 'ADDON_LOADED', 'PLAYER_REGEN_ENABLED' 
 events:SetScript('OnEvent', function(_, event)
     if event == 'ADDON_LOADED' and not Targets.started then return end
     if event == 'PLAYER_LOGIN' then Targets.started = true end
+    -- Combat end repeats the registration only when combat deferred it.
+    if event == 'PLAYER_REGEN_ENABLED' and not Targets.pending then return end
     if Targets.started then C_Timer.After(0, function() Targets:Register() end) end
 end)

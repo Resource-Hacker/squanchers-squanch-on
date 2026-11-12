@@ -120,6 +120,9 @@ end
 function Drawer:RequestLayout()
     if self.layouting then return end
     self.pending=true
+    -- A closed drawer shows nothing: its OnShow hook lays it out when it opens.
+    -- The frame and opener stay anchored to the map stack in the meantime.
+    if self.ready and not self.frame:IsShown() then return end
     if InCombatLockdown() or self.queued then return end
     self.queued=true
     C_Timer.After(0,function()
@@ -378,8 +381,11 @@ events:RegisterEvent('ADDON_LOADED')
 events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent',function(_,event)
     if event=='PLAYER_LOGIN' then Drawer.loggedIn=true end
+    if not Drawer.loggedIn then return end
+    -- Once built, only work that combat deferred is repeated.
+    if Drawer.ready and (event~='PLAYER_REGEN_ENABLED' or not Drawer.pending or not Drawer.frame:IsShown()) then return end
     if event=='PLAYER_REGEN_ENABLED' and Drawer.questEntries then
         Drawer.questEntries:MarkDirty()
     end
-    if Drawer.loggedIn then Drawer:RequestLayout() end
+    Drawer:RequestLayout()
 end)

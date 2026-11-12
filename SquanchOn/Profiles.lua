@@ -6,8 +6,8 @@
 --   schema = 2,
 --   profileKeys = { [character] = profile name },
 --   profiles = { Default = { ...every preference, under the key names modules have always used... } },
---   global = { receipts = { ...one-time records and diagnostics, per account... } },
---   backup = { at, schema = 1, data = <the untouched pre-migration root> },  -- dropped by a later version
+--   global = { receipts = { ...one-time records and diagnostics, per account... }, cleanup = <revision> },
+--   backup = { at, schema = 1, data = <the untouched pre-migration root> },  -- kept until DropMigrationBackup
 -- }
 --
 -- ns.db stays the ACTIVE PROFILE table, so `ns.db.<key>` in every module is
@@ -157,6 +157,24 @@ local function migrate(old)
 end
 Profiles.Migrate = migrate -- offline checks
 
+-- One-time cleanup -------------------------------------------------------------
+-- Development probes, audits and per-click input records that no code reads.
+-- Each revision runs once per account (global.cleanup); add a new revision
+-- instead of editing an old list.
+local CLEANUP = {
+    [1] = { 'drawerCombatProbe', 'questDrawerExtraProbe', 'minimalUIAudit', 'minimapPanelAudit', 'borderDiagnostic',
+        'presentationAudit', 'unitGlowAudit', 'uniformBorderAudit', 'bagAnchorInspection', 'unitLayerInspection',
+        'chatRangeTooltipInspection', 'tooltipInspection', 'chatHitInspection', 'drawerIconAnchorCalls', 'drawerSnapCalls',
+        'nativeReceipts', 'lastNativeLeftClick', 'lastNativeCursorReturn', 'lastNativeCursorUnlock' },
+}
+local function cleanup(global)
+    local done = tonumber(global.cleanup) or 0
+    for revision = done + 1, #CLEANUP do
+        for _, key in ipairs(CLEANUP[revision]) do global.receipts[key] = nil end
+        global.cleanup = revision
+    end
+end
+
 -- Activation --------------------------------------------------------------------
 local profileMeta = {}
 local rootMeta = {
@@ -191,6 +209,7 @@ function Profiles:Bootstrap(prepare)
         end
         if type(root.global.receipts) ~= 'table' then root.global.receipts = {} end
         if type(root.profiles[DEFAULT]) ~= 'table' then root.profiles[DEFAULT] = fresh() end
+        cleanup(root.global)
         local receipts = root.global.receipts
         profileMeta.__index = receipts
         profileMeta.__newindex = function(profile, key, value)
@@ -221,6 +240,14 @@ function Profiles:Receipts(name)
     local receipts = self.root.global.receipts
     if type(receipts[name]) ~= 'table' then receipts[name] = {} end
     return receipts[name]
+end
+-- The pre-migration root kept whole by migrate(). Nothing reads it; it is only
+-- a way back to schema 1 by hand. Returns ok, message.
+function Profiles:HasMigrationBackup() return self.root ~= nil and type(rawget(self.root, 'backup')) == 'table' end
+function Profiles:DropMigrationBackup()
+    if not self:HasMigrationBackup() then return false, 'There is no migration backup to remove.' end
+    rawset(self.root, 'backup', nil)
+    return true, 'The pre-migration backup is removed; the saved file shrinks at the next reload or logout.'
 end
 -- fn(reason, name): 'select', 'create', 'delete', 'rename', 'reset', 'import'.
 function Profiles:OnChanged(fn) self.listeners[#self.listeners + 1] = fn end

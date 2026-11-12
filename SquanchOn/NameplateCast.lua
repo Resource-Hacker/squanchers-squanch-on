@@ -131,7 +131,7 @@ local function clock(self, elapsed)
   if self.elapsed < 0.1 then return end
   self.elapsed = 0
   local cast = self:GetParent()
-  if not cast.Time:IsShown() or not (cast.casting or cast.channeling) then return end
+  if not (cast.casting or cast.channeling) then return end
   local duration = cast.GetTimerDuration and cast:GetTimerDuration()
   if not duration then return end
   local ok, left = pcall(duration.GetRemainingDuration, duration)
@@ -171,7 +171,8 @@ function Cast:Build(frame)
   cast.Time:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 8, 'OUTLINE')
   -- Its own clock frame: oUF replaces the bar's OnUpdate when it enables the
   -- element. A child only ticks while the cast bar is on screen.
-  CreateFrame('Frame', nil, cast):SetScript('OnUpdate', clock)
+  cast.Clock = CreateFrame('Frame', nil, cast)
+  cast.Clock:SetScript('OnUpdate', clock)
   cast.PostCastStart = started
   cast.PostCastInterruptible = interruptible
   cast.PostCastFail, cast.PostCastInterrupted = failed, failed
@@ -224,6 +225,13 @@ function Cast:Layout(frame, config, width, height)
   cast.Shield:ClearAllPoints()
   cast.Shield:SetPoint('CENTER', cast.Icon, 'CENTER', 0, 0)
   cast.Shield:SetSize(size * 1.6, size * 1.6)
+end
+
+-- Fonts and text anchors: they follow the settings and the plate's kind, not
+-- its state (NameplateStyle.lua runs this with the rest of the settings part).
+function Cast:Dress(frame, config)
+  local cast, settings = frame.Castbar, NP:Settings().cast
+  if not cast then return end
   cast.Spark:SetSize(settings.sparkWidth or 17, config.cast[2] * 2.6)
   NP:Font(cast.Text, config.spell.font, config.spell.size, 'OUTLINE', settings.textShadow)
   cast.Text:ClearAllPoints()
@@ -234,8 +242,6 @@ function Cast:Layout(frame, config, width, height)
   cast.Time:ClearAllPoints()
   cast.Time:SetPoint(side[1], cast, side[2], time.x or 0, time.y or 0)
   cast.Time:SetShown(time.show ~= false)
-  if cast:IsShown() and settings.hideNameWhileCasting then
-    frame.Name:Hide()
-    if frame.Subtitle then frame.Subtitle:Hide() end
-  end
+  -- No remaining-time text, no clock.
+  cast.Clock:SetShown(time.show ~= false)
 end

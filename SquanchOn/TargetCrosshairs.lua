@@ -4,7 +4,7 @@ local addonName, suite = ...
 
 local baseline = {
   enabled = true, showLines = false, size = 64, alpha = 0.65,
-  lineAlpha = 0.55, rotationSeconds = 5, healthColor = true,
+  rotationSeconds = 5, healthColor = true,
   showKillShotPulse = true, killShotThreshold = 0.20,
   -- Friendly icon ring: share of the geometric fit, extra screen pixels of
   -- width, extra pixels of line thickness, and whether it hugs the icon at all.
@@ -156,14 +156,12 @@ local function targetRangeMode()
 end
 
 local function plainFraction()
-  local ok, fraction = pcall(function()
-    local hp, maximum = UnitHealth("target"), UnitHealthMax("target")
-    if issecretvalue and (issecretvalue(hp) or issecretvalue(maximum)) then return end
-    if type(hp) == "number" and type(maximum) == "number" and maximum > 0 then
-      return math.min(1, math.max(0, hp / maximum))
-    end
-  end)
-  if ok then return fraction end
+  local ok, hp = pcall(UnitHealth, "target")
+  local fine, maximum = pcall(UnitHealthMax, "target")
+  if not (ok and fine) or (issecretvalue and (issecretvalue(hp) or issecretvalue(maximum))) then return end
+  if type(hp) == "number" and type(maximum) == "number" and maximum > 0 then
+    return math.min(1, math.max(0, hp / maximum))
+  end
 end
 
 -- Full health shows the given colour (white unless told otherwise).
@@ -233,14 +231,31 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- scale and alpha stay its own.
   local anchored, fitted, baseSize, bound
   local nestedIn
+  -- The client's enlargement of the selected plate. Read once and kept: the
+  -- CVar is re-read after a target change and the events that can change it.
+  local grownScale
+  local function selectedScale()
+    if not grownScale then grownScale = tonumber(GetCVar and GetCVar("nameplateSelectedScale")) or 1 end
+    return grownScale
+  end
+  marker.SelectedScale = selectedScale
+  function marker:ScaleChanged() grownScale = nil end
   -- The configured ring size is in screen terms; inside a plate it is restated
   -- in the plate's units, before the client's enlargement of the selected plate.
   local function plainSize()
     if not nestedIn then return baseSize end
     local world, ui = WorldFrame:GetEffectiveScale(), UIParent:GetEffectiveScale()
-    local grown = tonumber(GetCVar and GetCVar("nameplateSelectedScale")) or 1
+    local grown = selectedScale()
     if not (world and ui and ui > 0 and grown > 0) then return baseSize end
     return baseSize * world / ui / grown
+  end
+  local function sink(level, fixed, ...)
+    for index = 1, select("#", ...) do
+      local frame = select(index, ...)
+      if frame.SetFixedFrameLevel then frame:SetFixedFrameLevel(fixed) end
+      frame:SetFrameLevel(level)
+      sink(level, fixed, frame:GetChildren())
+    end
   end
   local function nest(unitFrame)
     local host = available(unitFrame) and unitFrame.isNameplate and unitFrame.Health and unitFrame or nil
@@ -249,13 +264,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local shown = display:IsShown()
     display:SetParent(host or WorldFrame)
     display:SetFrameStrata(host and host:GetFrameStrata() or "BACKGROUND")
-    local level = host and math.max(0, host:GetFrameLevel() - 2) or 1
-    local function sink(frame)
-      if frame.SetFixedFrameLevel then frame:SetFixedFrameLevel(host ~= nil) end
-      frame:SetFrameLevel(level)
-      for _, child in ipairs({ frame:GetChildren() }) do sink(child) end
-    end
-    sink(display)
+    sink(host and math.max(0, host:GetFrameLevel() - 2) or 1, host ~= nil, display)
     if display.SetIgnoreParentAlpha then display:SetIgnoreParentAlpha(host ~= nil) end
     -- Inside a plate the marker takes the plate's scale, so it grows and
     -- shrinks with the icon it hugs and never has to be measured on screen
@@ -317,119 +326,151 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     guides[index] = guide
   end
 
-  -- Both friendly and hostile targets use the same range-driven dashed ring.
-  -- Native regions share the marker's existing visibility and health colors.
+  -- Friendly and hostile targets share one ring: a solid line whose range
+  -- marks (arrows, rectangles) are separate regions of the marker.
   local ringFrame = CreateFrame("Frame", nil, display)
   ringFrame:SetAllPoints(display)
   ringFrame:EnableMouse(false)
-  -- One texture makes the entire dashed circle orbit its common center.
-  -- Rotating separate Line regions rotates their individual local axes.
-  -- Owner: every target ring is one solid line (the dashed art is retired).
-  local ring = image(ringFrame, "circle", "OVERLAY")
+  -- The plate bar is translucent, so a ring behind it would show through.
+  -- Each ring texture is therefore drawn as two cropped pieces, the texture
+  -- above the bar and its twin below, leaving the band behind the bar empty.
+  -- Texture, blend, layer, opacity and visibility are set on both through the
+  -- setters below, which skip a value the pair already has; colours can be
+  -- secret, so `tint` always writes and is never compared.
+  local pieces = {}
+  local function piece(file, sublevel)
+    local texture, twin = image(ringFrame, file, "OVERLAY"), image(ringFrame, file, "OVERLAY")
+    for _, region in ipairs({ texture, twin }) do
+      if sublevel then region:SetDrawLayer("OVERLAY", sublevel) end
+      -- Moved with the icon it hugs: neither is snapped to whole pixels, so both
+      -- take the same sub-pixel position while the plate moves.
+      if region.SetSnapToPixelGrid then region:SetSnapToPixelGrid(false); region:SetTexelSnappingBias(0) end
+    end
+    twin:Hide()
+    texture.twin, texture.file, texture.blend, texture.layer, texture.shown, texture.low = twin, file, "ADD", "OVERLAY", true, false
+    pieces[#pieces + 1] = texture
+    return texture
+  end
+  local ringSize, cutOn, cutY, cutHeight, bandHealth = nil, false, 0, 0, nil
+  local function layoutPiece(texture)
+    local size, d = ringSize, texture.inflate or 0
+    local active = cutOn and size and size > 0 or false
+    local y, band = active and cutY, active and cutHeight
+    if texture.laidSize == size and texture.laidInflate == d and texture.laidY == y and texture.laidBand == band then return end
+    texture.laidSize, texture.laidInflate, texture.laidY, texture.laidBand = size, d, y, band
+    local twin = texture.twin
+    texture:ClearAllPoints()
+    if active then
+      local full = size + 2 * d
+      local top = math.max(0, math.min(full, size / 2 + d - (y + band / 2)))
+      local bottom = math.max(0, math.min(full, y - band / 2 + size / 2 + d))
+      texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
+      texture:SetPoint("TOPRIGHT", ringFrame, "TOPRIGHT", d, d)
+      texture:SetHeight(math.max(top, 0.001))
+      texture:SetTexCoord(0, 1, 0, top / full)
+      twin:ClearAllPoints()
+      twin:SetPoint("BOTTOMLEFT", ringFrame, "BOTTOMLEFT", -d, -d)
+      twin:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+      twin:SetHeight(math.max(bottom, 0.001))
+      twin:SetTexCoord(0, 1, 1 - bottom / full, 1)
+      texture.low = bottom > 0
+    else
+      texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
+      texture:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
+      texture:SetTexCoord(0, 1, 0, 1)
+      texture.low = false
+    end
+    twin:SetShown(texture.shown and texture.low)
+  end
+  -- One pass over the shown pieces; a piece whose size, inflation and cut are
+  -- unchanged is left alone, and a hidden one is laid out when it is shown.
+  local function layoutPieces()
+    for index = 1, #pieces do
+      if pieces[index].shown then layoutPiece(pieces[index]) end
+    end
+  end
+  local function setShown(texture, shown)
+    if texture.shown == shown then return end
+    texture.shown = shown
+    texture:SetShown(shown)
+    if shown then layoutPiece(texture) end
+    texture.twin:SetShown(shown and texture.low)
+  end
+  local function setFile(texture, file)
+    if texture.file == file then return end
+    texture.file = file
+    texture:SetTexture(artwork .. file .. ".tga"); texture.twin:SetTexture(artwork .. file .. ".tga")
+  end
+  local function setBlend(texture, mode)
+    if texture.blend == mode then return end
+    texture.blend = mode
+    texture:SetBlendMode(mode); texture.twin:SetBlendMode(mode)
+  end
+  local function setLayer(texture, layer)
+    if texture.layer == layer then return end
+    texture.layer = layer
+    texture:SetDrawLayer(layer); texture.twin:SetDrawLayer(layer)
+  end
+  local function setFade(texture, opacity)
+    if texture.fade == opacity then return end
+    texture.fade = opacity
+    texture:SetAlpha(opacity); texture.twin:SetAlpha(opacity)
+  end
+  local function tint(texture, red, green, blue)
+    texture.tintRed = nil
+    texture:SetVertexColor(red, green, blue); texture.twin:SetVertexColor(red, green, blue)
+  end
+  -- A colour from the settings (public numbers).
+  local function setTint(texture, red, green, blue)
+    if texture.tintRed == red and texture.tintGreen == green and texture.tintBlue == blue then return end
+    tint(texture, red, green, blue)
+    texture.tintRed, texture.tintGreen, texture.tintBlue = red, green, blue
+  end
+  -- Owner: every target ring is one solid line.
+  local ring = piece("circle")
   -- Owner: the friendly ring is a couple of pixels thicker at the same radius. Two copies sit one
   -- physical pixel outside and inside the main line, so the mean radius holds
   -- at every ring size (a thicker texture would scale with the ring instead).
   local ringEdges = {}
   for index, direction in ipairs({ 1, -1 }) do
-    local edge = image(ringFrame, "circle", "OVERLAY")
+    local edge = piece("circle")
     edge.direction = direction
-    edge:Hide() -- friendly icon ring only
+    setShown(edge, false) -- friendly icon ring only
     ringEdges[index] = edge
   end
   -- The selected plate's bar wears an additive gloss (the target overlay); the
   -- bar-look ring wears the same gloss at the same strength so the two match.
-  local ringGloss = image(ringFrame, "ring-gloss-5", "OVERLAY")
-  ringGloss:SetDrawLayer("OVERLAY", 2)
-  ringGloss:Hide()
+  local ringGloss = piece("ring-gloss-5", 2)
+  setShown(ringGloss, false)
   -- The plate border is drawn inside the bar, over its top and bottom rows; the
   -- same tint covers the same share of the ring at its outer and inner edge.
-  local ringRim = image(ringFrame, "ring-rim-5", "OVERLAY")
-  ringRim:SetBlendMode("BLEND")
-  ringRim:SetDrawLayer("OVERLAY", 3)
-  ringRim:Hide()
-  local barLook, ringArt, shownRed, shownGreen, shownBlue = false, "circle"
-  -- The plate bar is translucent, so a ring behind it would show through.
-  -- Each ring texture is therefore drawn as two cropped pieces, one above and
-  -- one below the bar, leaving the band behind the bar empty.
+  local ringRim = piece("ring-rim-5", 3)
+  setBlend(ringRim, "BLEND")
+  setShown(ringRim, false)
+  local barLook, ringArt, ringWidth, shownRed, shownGreen, shownBlue = false, "circle"
   -- Mouseover glow: soft additive copies of the plain line stepping outward
   -- from the ring, in the ring's colour (as the reticle's in-range glow does).
-  local ringGlows = {}
+  local ringGlows, glowLit = {}, false
   for index, strength in ipairs({ 0.35, 0.22, 0.14, 0.07 }) do
-    local glow = image(ringFrame, "circle", "OVERLAY")
-    glow:SetDrawLayer("OVERLAY", -1)
+    local glow = piece("circle", -1)
     glow.strength, glow.step = strength, index
-    glow:Hide()
+    setShown(glow, false)
     ringGlows[index] = glow
-  end
-  local pieces = { ring, ringGloss, ringRim, ringEdges[1], ringEdges[2], ringGlows[1], ringGlows[2], ringGlows[3], ringGlows[4] }
-  local twins = {}
-  for index, texture in ipairs(pieces) do
-    twins[index] = ringFrame:CreateTexture(nil, "OVERLAY")
-    -- Moved with the icon it hugs: neither is snapped to whole pixels, so both
-    -- take the same sub-pixel position while the plate moves.
-    for _, region in ipairs({ texture, twins[index] }) do
-      if region.SetSnapToPixelGrid then region:SetSnapToPixelGrid(false); region:SetTexelSnappingBias(0) end
-    end
-    twins[index]:Hide()
-  end
-  local cut, bandHealth
-  local function layoutPieces()
-    local size = ringFrame:GetHeight()
-    local active = cut and size and size > 0
-    if active and ring.spin then ring.spin:Stop() end
-    for index, texture in ipairs(pieces) do
-      local twin, d = twins[index], texture.inflate or 0
-      texture:ClearAllPoints()
-      if active then
-        local full = size + 2 * d
-        local top = math.max(0, math.min(full, size / 2 + d - (cut.y + cut.band / 2)))
-        local bottom = math.max(0, math.min(full, cut.y - cut.band / 2 + size / 2 + d))
-        texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
-        texture:SetPoint("TOPRIGHT", ringFrame, "TOPRIGHT", d, d)
-        texture:SetHeight(math.max(top, 0.001))
-        texture:SetTexCoord(0, 1, 0, top / full)
-        twin:ClearAllPoints()
-        twin:SetPoint("BOTTOMLEFT", ringFrame, "BOTTOMLEFT", -d, -d)
-        twin:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
-        twin:SetHeight(math.max(bottom, 0.001))
-        twin:SetTexCoord(0, 1, 1 - bottom / full, 1)
-        twin:SetTexture(texture:GetTexture())
-        twin:SetBlendMode(texture:GetBlendMode())
-        twin:SetDrawLayer(texture:GetDrawLayer())
-        twin:SetVertexColor(texture:GetVertexColor())
-        twin:SetAlpha(texture:GetAlpha())
-        twin:SetShown(texture:IsShown() and bottom > 0)
-      else
-        texture:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", -d, d)
-        texture:SetPoint("BOTTOMRIGHT", ringFrame, "BOTTOMRIGHT", d, -d)
-        texture:SetTexCoord(0, 1, 0, 1)
-        twin:Hide()
-      end
-    end
   end
   -- The cut is computed from the layout alone: the bar's height, and where
   -- the ring's anchor (the icon, or the bar itself) sits relative to the bar.
   local cutAnchor, cutDY
-  local function measureBand()
-    local health = bandHealth
-    cut = nil
+  local function cutBand(health)
+    bandHealth, cutOn = health, false
     local host = nestedIn
     if host and available(health) and health:IsShown() then
       -- Layout numbers the plate recorded when it placed its bar and icon.
       local height = tonumber(host.npBarHeight)
       local offset = 0                         -- the ring centre above the bar centre
       if cutAnchor and cutAnchor ~= health then offset = tonumber(host.npIconRise) end
-      if height and offset then cut = { y = -(offset + (cutDY or 0)), band = height } end
+      if height and offset then cutOn, cutY, cutHeight = true, -(offset + (cutDY or 0)), height end
     end
     layoutPieces()
-  end
-  local function cutBand(health)
-    bandHealth = health
-    measureBand()
-    if cut then
-      local alpha = health:GetEffectiveAlpha()
-      if barLook and type(alpha) == "number" and not (issecretvalue and issecretvalue(alpha)) then ringFrame:SetAlpha(alpha) end
-    end
   end
   -- Bar look: which units take it, the ring face of the bar texture in use, and
   -- the colour the selected plate's health bar shows right now.
@@ -443,18 +484,31 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if publicQuery(UnitIsPlayer, "target") == true then return settings.hostilePlayerBarLook ~= false end
     return settings.hostileNpcBarLook == true
   end
+  local faceOf = {}
   local function barFace()
     -- Plater and unknown textures take the flat ring.
     local plates, media = not Plater and suite.Nameplates, suite.Media
     local health = plates and plates.Settings and plates:Settings().health
     local path = media and type(health) == "table" and media:Resolve("statusbar", health.texture)
     if type(path) ~= "string" then return "flat" end
-    path = path:lower()
-    -- The client's own bar texture, the plates' default.
-    if path:find("targetingframe[\\/]ui%-statusbar") then return "default" end
-    return RING_FACES[path:match("bar%-(%a+)%.tga$") or ""] or "flat"
+    local face = faceOf[path]
+    if not face then
+      local lower = path:lower()
+      -- The client's own bar texture, the plates' default.
+      face = lower:find("targetingframe[\\/]ui%-statusbar") and "default" or RING_FACES[lower:match("bar%-(%a+)%.tga$") or ""] or "flat"
+      faceOf[path] = face
+    end
+    return face
   end
   marker.BarFace = barFace
+  -- File names of the generated art, built once per face and width.
+  local artFiles = {}
+  local function artFile(face, width)
+    local list = artFiles[face]
+    if not list then list = {}; artFiles[face] = list end
+    if not list[width] then list[width] = "ring-" .. face .. "-" .. width end
+    return list[width]
+  end
   -- The generated line width nearest the wanted one, for a ring `pixels` wide on screen.
   local function lineWidth(pixels, fitted)
     local wanted = 2.5 + (fitted and pixels > 0 and (limit(settings.friendlyThickness, 1, 0, 12) + limit(settings.barLookThickness, 1, 0, 12)) * 128 / pixels or 0)
@@ -494,17 +548,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     for _, glow in ipairs(ringGlows) do
       glow.inflate = (ringEdges[1].border or 0) + pixel * 1.5 * glow.step
     end
-    layoutPieces()
   end
-  fitRingEdges()
-  ringFrame:HookScript("OnSizeChanged", fitRingEdges)
-  local ringSpin = ring:CreateAnimationGroup()
-  ring.spin = ringSpin
-  local ringTurn = ringSpin:CreateAnimation("Rotation")
-  ringTurn:SetDegrees(-360)
-  ringSpin:SetLooping("REPEAT")
 
-  -- Pause the child texture's orbit while its parent pulses the whole ring.
+  -- Click feedback pulses the whole ring.
   -- Native scale animations accumulate, so the return multiplies by 1 / 0.75.
   local clickAnimation = ringFrame:CreateAnimationGroup()
   for order, scale in ipairs({0.75, 1 / 0.75}) do
@@ -527,10 +573,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     clearClick()
     marker:RefreshRange()
   end)
-  display:HookScript("OnHide", function()
-    clearClick()
-    ringSpin:Stop()
-  end)
+  display:HookScript("OnHide", clearClick)
 
   local function worldGUID(worldPressValidated)
     if not settings.enabled or publicQuery(SpellIsTargeting)
@@ -540,8 +583,9 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- The native passthrough already checked world focus before dispatch; a
     -- vendor/gossip window opened by that click must not veto its feedback.
     if not worldPressValidated then
-      for _, focus in ipairs(GetMouseFoci and GetMouseFoci() or {}) do
-        if focus ~= WorldFrame then return end
+      local foci = GetMouseFoci and GetMouseFoci()
+      for index = 1, foci and #foci or 0 do
+        if foci[index] ~= WorldFrame then return end
       end
     end
     -- A click on empty ground must never pulse the previously selected unit.
@@ -572,7 +616,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       clearClick()
       clickGUID = guid
       self.clickFeedbackActive = true
-      ringSpin:Pause()
       clickAnimation:Play()
       self.lastClickFeedbackSource = source
       self.clickFeedbackCount = (self.clickFeedbackCount or 0) + 1
@@ -610,7 +653,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- these textures, so record which one it assigned to each plate. Squanch-On's
   -- own plates (Nameplates.lua) publish their emblem in the same
   -- plate.IconIndicators list, which the fallback in iconFit reads.
-  -- circle-dashed.tga paints radii 87.5..96.5 of its 128px half-width.
   local RING_INNER, ICON_CLEARANCE = 0.684, 1.5
   local plateIcons = setmetatable({}, { __mode = "k" })
   local iconHooks, refitQueued = false, false
@@ -656,30 +698,30 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     return limit(2 * (radius + ICON_CLEARANCE) * scale / own / RING_INNER * limit(settings.friendlyTighten, 0.75, 0.3, 2) + grow, baseSize, 1, 2048), dx, dy
   end
   marker.FitIcon = fitSize
+  local function measured(kind, icon)
+    local width = publicQuery(icon.GetWidth, icon)
+    local height = publicQuery(icon.GetHeight, icon)
+    local scale = publicQuery(icon.GetEffectiveScale, icon)
+    local own = publicQuery(display.GetEffectiveScale, display)
+    if not (width and height and scale and own) or width <= 0 or height <= 0
+      or scale <= 0 or own <= 0 then return end
+    return icon, fitSize(kind, width, height, scale, own, nestedIn)
+  end
   local function iconFit(plate)
     if not marker.friendly or publicQuery(UnitCanAttack, "player", "target") ~= false then return end
     if settings.friendlyFit == false then return end
     local icons = plateIcons[plate]
-    if not (icons and (icons.class or icons.faction)) then
+    local class, faction = icons and icons.class, icons and icons.faction
+    if not (class or faction) then
       -- The hook can miss an indicator created before it was installed or
       -- reused without a new call; fall back to the plate's first shown icon.
-      for _, texture in ipairs(plate.IconIndicators or {}) do
-        if available(texture) and texture:IsShown() then icons = { faction = texture }; break end
+      local list = plate.IconIndicators
+      for index = 1, list and #list or 0 do
+        if available(list[index]) and list[index]:IsShown() then faction = list[index]; break end
       end
     end
-    if not icons then return end
-    for _, kind in ipairs({"class", "faction"}) do
-      local icon = icons[kind]
-      if available(icon) and icon:IsVisible() then
-        local width = publicQuery(icon.GetWidth, icon)
-        local height = publicQuery(icon.GetHeight, icon)
-        local scale = publicQuery(icon.GetEffectiveScale, icon)
-        local own = publicQuery(display.GetEffectiveScale, display)
-        if not (width and height and scale and own) or width <= 0 or height <= 0
-          or scale <= 0 or own <= 0 then return end
-        return icon, fitSize(kind, width, height, scale, own, nestedIn)
-      end
-    end
+    if available(class) and class:IsVisible() then return measured("class", class) end
+    if available(faction) and faction:IsVisible() then return measured("faction", faction) end
   end
   -- Hostile player in bar look: the full-health colour its health shift starts
   -- from (class, else the plate bar, else white) and a cache key for its curve.
@@ -692,34 +734,42 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local function playerShift()
     if not (barLook and settings.healthColor and settings.hostilePlayerHealthShift ~= false)
       or marker.friendly or publicQuery(UnitIsPlayer, "target") ~= true then return end
-    local class = publicQuery(function() return (select(2, UnitClass("target"))) end)
-    local color = type(class) == "string" and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+    local ok, _, class = pcall(UnitClass, "target")
+    local color = ok and not (issecretvalue and issecretvalue(class)) and type(class) == "string" and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
     if color then return class, color.r, color.g, color.b end
     local found, red, green, blue, secret = barColor(boundPlate)
     if found and not secret then return ("%.3f,%.3f,%.3f"):format(red, green, blue), red, green, blue end
     return "white", 1, 1, 1
   end
+  -- Colour-only: the ring, and the lines that share its colour while they show.
+  -- (A glow or edge that appears later is painted by the pass that shows it.)
   local function ringColor(red, green, blue, secret)
     -- Secret colours pass straight to the region and are never compared.
     if secret then shownRed = nil else shownRed, shownGreen, shownBlue = red, green, blue end
-    ring:SetVertexColor(red, green, blue)
-    for _, glow in ipairs(ringGlows) do glow:SetVertexColor(red, green, blue) end
-    for _, edge in ipairs(ringEdges) do if not edge.border then edge:SetVertexColor(red, green, blue) end end
-    if cut then layoutPieces() end
+    tint(ring, red, green, blue)
+    if glowLit then for index = 1, #ringGlows do tint(ringGlows[index], red, green, blue) end end
+    for index = 1, #ringEdges do
+      local edge = ringEdges[index]
+      if edge.shown and not edge.border then tint(edge, red, green, blue) end
+    end
   end
   local watched = setmetatable({}, { __mode = "k" })
   local deferred = false
   local healthMode = "unknown"
+  local paintHealth
+  local function rangeOpacity()
+    local melee = marker.rangeMode == "melee"
+    for index = 1, #rectangles do rectangles[index]:SetAlpha(melee and alpha or 0) end
+    orbit:SetAlpha(marker.inRange and alpha or 0)
+  end
   local function applyRange(mode)
     marker.rangeMode = mode
     marker.inRange = mode ~= nil
     pointers:SetShown(mode == "ranged" or mode == "healing")
-    for _, rectangle in ipairs(rectangles) do
-      rectangle:SetShown(mode == "melee")
-      rectangle:SetAlpha(mode == "melee" and alpha or 0)
-    end
-    orbit:SetAlpha(marker.inRange and alpha or 0)
-    if not mode and not marker.clickFeedbackActive then ringSpin:Stop() end
+    for index = 1, #rectangles do rectangles[index]:SetShown(mode == "melee") end
+    rangeOpacity()
+    -- The marks are coloured only while they show.
+    if mode and paintHealth and display:IsShown() then paintHealth() end
   end
   function marker:RefreshRange()
     if not display:IsVisible() then return end
@@ -745,26 +795,24 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       mode = targetRangeMode()
     end
     if self.rangeMode ~= mode then applyRange(mode) end
-    if not self.clickFeedbackActive then
-      if mode then
-        if not cut and not ringSpin:IsPlaying() then ringSpin:Play() end
-      else
-        ringSpin:Stop()
-      end
-    end
   end
 
+  local warned = false
   local function warningState(show, opacity)
     if not show or marker.friendly then
+      if not warned then return end
+      warned = false
       pulse:Stop()
       visibility:Hide()
       return
     end
+    warned = true
     visibility:SetAlpha(opacity)
     visibility:Show()
     if not pulse:IsPlaying() then pulse:Play() end
   end
 
+  local guidesShown = false
   local function applyColor(red, green, blue, opacity, shifted, shiftRed, shiftGreen, shiftBlue)
     -- Owner: on a friendly player the ring takes the player's class colour.
     local ringRed, ringGreen, ringBlue = red, green, blue
@@ -785,44 +833,43 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- Health colours can be secret as well; the observer repaints once a bar answers.
       ringColor(ringRed, ringGreen, ringBlue, true)
     end
-    pointers:SetVertexColor(red, green, blue)
-    for _, rectangle in ipairs(rectangles) do
-      rectangle:SetVertexColor(red, green, blue)
-      rectangle:SetAlpha(marker.rangeMode == "melee" and alpha or 0)
+    -- Range marks and guide lines are painted while they show (applyRange and
+    -- the refit repaint when they appear).
+    local mode = marker.rangeMode
+    if mode == "melee" then
+      for index = 1, #rectangles do rectangles[index]:SetVertexColor(red, green, blue) end
+    elseif mode == "ranged" or mode == "healing" then
+      pointers:SetVertexColor(red, green, blue)
     end
-    orbit:SetAlpha(marker.inRange and alpha or 0)
-    for _, guide in ipairs(guides) do
-      guide:SetVertexColor(red, green, blue)
-      guide:SetAlpha(opacity)
+    if guidesShown then
+      for index = 1, #guides do
+        guides[index]:SetVertexColor(red, green, blue)
+        guides[index]:SetAlpha(opacity)
+      end
     end
   end
 
-  local function paintHealth()
-    local key, startRed, startGreen, startBlue = playerShift()
-    if maps then
-      local ok = pcall(function()
-        local shiftRed, shiftGreen, shiftBlue
-        if key then
-          shiftRed, shiftGreen, shiftBlue = UnitHealthPercent("target", true, shiftCurve(key, startRed, startGreen, startBlue)):GetRGB()
-        end
-        local color
-        if settings.healthColor then
-          color = UnitHealthPercent("target", true, maps.color)
-        else
-          color = CreateColor(1, 1, 1, 1)
-        end
-        local opacity = UnitHealthPercent("target", true, maps.guides)
-        local red, green, blue = color:GetRGB()
-        -- Keep secret colors and alpha out of Lua comparisons and arithmetic.
-        applyColor(red, green, blue, opacity, key ~= nil, shiftRed, shiftGreen, shiftBlue)
-        if settings.showKillShotPulse then
-          warningState(true, UnitHealthPercent("target", true, maps.execute))
-        else
-          warningState(false)
-        end
-      end)
-      if ok then healthMode = "client curves"; return end
+  -- The client evaluates the health curves; secret results go straight to the regions.
+  local function curvePaint(key, startRed, startGreen, startBlue)
+    local shiftRed, shiftGreen, shiftBlue
+    if key then
+      shiftRed, shiftGreen, shiftBlue = UnitHealthPercent("target", true, shiftCurve(key, startRed, startGreen, startBlue)):GetRGB()
     end
+    local red, green, blue = 1, 1, 1
+    if settings.healthColor then red, green, blue = UnitHealthPercent("target", true, maps.color):GetRGB() end
+    local opacity = UnitHealthPercent("target", true, maps.guides)
+    -- Keep secret colors and alpha out of Lua comparisons and arithmetic.
+    applyColor(red, green, blue, opacity, key ~= nil, shiftRed, shiftGreen, shiftBlue)
+    if settings.showKillShotPulse then
+      warningState(true, UnitHealthPercent("target", true, maps.execute))
+    else
+      warningState(false)
+    end
+  end
+  -- Colour-only pass: what a health event of the target needs.
+  paintHealth = function()
+    local key, startRed, startGreen, startBlue = playerShift()
+    if maps and pcall(curvePaint, key, startRed, startGreen, startBlue) then healthMode = "client curves"; return end
     local fraction = plainFraction()
     if fraction == nil then
       applyColor(1, 1, 1, 0)
@@ -844,12 +891,47 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     healthMode = "public health"
   end
 
+  -- Mouseover on the selected plate brightens the ring (not the bar): the gloss
+  -- goes to full strength and the glow lines show.
+  local function applyGlow()
+    local plates = not Plater and suite.Nameplates
+    local target = plates and plates.Settings and plates:Settings().target
+    local gloss = barLook and type(target) == "table" and tonumber(target.overlayAlpha) or 0
+    glowLit = gloss > 0 and marker.hovered and settings.hoverGlow ~= false or false
+    if glowLit then gloss = 1 end
+    local power = limit(settings.hoverGlowStrength, 1, 0, 2)
+    for index = 1, #ringGlows do
+      local glow = ringGlows[index]
+      setFade(glow, math.min(1, glow.strength * power))
+      setShown(glow, glowLit)
+    end
+    if gloss > 0 then
+      setFile(ringGloss, artFile("gloss", ringWidth or 5))
+      setFade(ringGloss, gloss)
+    end
+    setShown(ringGloss, gloss > 0)
+  end
+  -- As opaque as the bar it copies; the plain ring keeps the ring opacity.
+  local function syncOpacity()
+    local health = nestedIn and nestedIn.Health
+    local opacity = barLook and available(health) and health:IsShown() and health:GetEffectiveAlpha()
+    if type(opacity) ~= "number" or (issecretvalue and issecretvalue(opacity)) then opacity = barLook and 1 or alpha end
+    ringFrame:SetAlpha(opacity)
+  end
+
+  -- Mouseover changes only switch the glow and the gloss: no refit.
   function marker:SetHovered(frame, shown)
+    local was = self.hovered
     if shown and nestedIn and frame == nestedIn then self.hovered = true
     elseif frame == nestedIn or not shown then self.hovered = nil end
-    if display:IsShown() then self:RefreshTarget() end
+    if self.hovered == was or not display:IsShown() then return end
+    applyGlow()
+    if glowLit then paintHealth() end
   end
+  local idle = false
   function marker:HideTarget()
+    if idle then return end
+    idle = true
     bound = nil
     boundPlate = nil
     anchored = nil
@@ -875,14 +957,24 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     end)
   end
 
+  -- Structural refit: which plate, which icon, size, art, anchors and the cut.
+  -- Runs when the target, its plate, the plate's layout or the settings change;
+  -- health events only repaint (paintHealth) and mouseover only switches the
+  -- glow (SetHovered). Every write below is skipped when its value is unchanged.
+  local paintedScale
   function marker:RefreshTarget()
     self:SyncTargetFade()
     if not settings.enabled then self:HideTarget(); return end
     if clickGUID and publicQuery(UnitGUID, "target") ~= clickGUID then clearClick() end
     self.friendly = publicQuery(UnitIsFriend, "player", "target") == true
-    for _, guide in ipairs(guides) do guide:SetShown(settings.showLines and not self.friendly) end
+    local lines = settings.showLines and not self.friendly or false
+    if lines ~= guidesShown then
+      guidesShown = lines
+      for index = 1, #guides do guides[index]:SetShown(lines) end
+    end
     local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit("target")
     if not available(plate) then self:HideTarget(); return end
+    idle = false
     if boundPlate ~= plate then bound, anchored = nil, nil end
     boundPlate = plate
     watchVisibility(plate)
@@ -901,88 +993,71 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- Owner: the icon ring keeps the size it has before the client enlarges
     -- the selected plate, so it sits closer around the enlarged icon.
     if icon and size and nestedIn then
-      local grown = tonumber(GetCVar and GetCVar("nameplateSelectedScale")) or 1
+      local grown = selectedScale()
       if grown > 1 then size = size / grown end
     end
+    size = size or plainSize()
     barLook = barLookWanted()
     marker.barLookActive = barLook
-    local art = "circle"
+    local scale = publicQuery(display.GetEffectiveScale, display)
+    paintedScale = scale
+    local art
+    art, ringWidth = "circle", nil
     if barLook then
       -- Same line as the plain ring (2.5 of 128) plus the friendly extra screen
       -- pixels, drawn by the nearest generated width at the same mean radius.
-      local scale = publicQuery(display.GetEffectiveScale, display)
-      local pixels = (size or plainSize()) * (scale or 0) / PixelUtil.GetPixelToUIUnitFactor()
-      art = "ring-" .. barFace() .. "-" .. lineWidth(pixels, icon)
+      ringWidth = lineWidth(size * (scale or 0) / PixelUtil.GetPixelToUIUnitFactor(), icon)
+      art = artFile(barFace(), ringWidth)
     end
     if art ~= ringArt then
       ringArt = art
-      ring:SetTexture(artwork .. art .. ".tga")
+      setFile(ring, art)
       -- The bar look blends like the bar it copies; the plain ring stays additive.
-      ring:SetBlendMode(barLook and "BLEND" or "ADD")
+      setBlend(ring, barLook and "BLEND" or "ADD")
     end
-    do
-      local plates = not Plater and suite.Nameplates
-      local target = plates and plates.Settings and plates:Settings().target
-      local gloss = barLook and type(target) == "table" and tonumber(target.overlayAlpha) or 0
-      -- Mouseover on the selected plate brightens the ring (not the bar): the
-      -- plate's hover strength is added to the ring's gloss.
-      local lit = gloss > 0 and marker.hovered and settings.hoverGlow ~= false
-      if lit then gloss = 1 end
-      local power = limit(settings.hoverGlowStrength, 1, 0, 2)
-      for _, glow in ipairs(ringGlows) do
-        glow:SetAlpha(math.min(1, glow.strength * power))
-        glow:SetShown(lit and true or false)
-      end
-      if gloss > 0 then
-        ringGloss:SetTexture(artwork .. "ring-gloss-" .. (art:match("%-(%d+)$") or "5") .. ".tga")
-        ringGloss:SetAlpha(gloss)
-        ringGloss:Show()
-      else
-        ringGloss:Hide()
-      end
-      -- As opaque as the bar it copies; the plain ring keeps the ring opacity.
-      local health = nestedIn and nestedIn.Health
-      local opacity = barLook and available(health) and health:IsShown() and health:GetEffectiveAlpha()
-      if type(opacity) ~= "number" or (issecretvalue and issecretvalue(opacity)) then opacity = barLook and 1 or alpha end
-      ringFrame:SetAlpha(opacity)
-    end
+    applyGlow()
+    syncOpacity()
     do
       local plates = not Plater and suite.Nameplates
       local border = barLook and plates and plates.Settings and plates:Settings().border
       local color = type(border) == "table" and border.color
-      local width = tonumber(art:match("%-(%d+)$"))
-      local rimmed = barLook and width and type(color) == "table" and (tonumber(border.thickness) or 0) > 0
+      local width = ringWidth
+      local rimmed = barLook and width and type(color) == "table" and (tonumber(border.thickness) or 0) > 0 or false
       if rimmed then
-        ringRim:SetTexture(artwork .. "ring-rim-" .. width .. ".tga")
-        ringRim:SetVertexColor(color[1] or 0, color[2] or 0, color[3] or 0)
-        ringRim:SetAlpha(tonumber(color[4]) or 1)
+        setFile(ringRim, artFile("rim", width))
+        setTint(ringRim, color[1] or 0, color[2] or 0, color[3] or 0)
+        setFade(ringRim, tonumber(color[4]) or 1)
       end
-      ringRim:SetShown(rimmed and true or false)
-      for _, edge in ipairs(ringEdges) do
+      for index = 1, #ringEdges do
+        local edge = ringEdges[index]
         if rimmed then
           -- The line art (2.5 wide at radius 46 of 128, like the ring) moves by
           -- 46/64 of its inflation: half the ring's width plus half a line out.
-          edge.border = (size or plainSize()) * (width / 2 + 1.25) / 92
-          edge:SetBlendMode("BLEND")
-          edge:SetDrawLayer("ARTWORK")
-          edge:SetVertexColor(color[1] or 0, color[2] or 0, color[3] or 0)
-          edge:SetAlpha(math.max(0.6, tonumber(color[4]) or 1))
-          edge:Show()
-        else
-          if edge.border then edge.border = nil; edge:SetBlendMode("ADD"); edge:SetDrawLayer("OVERLAY"); edge:SetAlpha(1) end
-          edge:SetShown(icon ~= nil and not barLook and (tonumber(settings.friendlyThickness) or 1) > 0)
+          edge.border = size * (width / 2 + 1.25) / 92
+          setBlend(edge, "BLEND")
+          setLayer(edge, "ARTWORK")
+          setTint(edge, color[1] or 0, color[2] or 0, color[3] or 0)
+          setFade(edge, math.max(0.6, tonumber(color[4]) or 1))
+        elseif edge.border then
+          edge.border = nil
+          setBlend(edge, "ADD"); setLayer(edge, "OVERLAY"); setFade(edge, 1)
         end
       end
+      -- Sizes and inflations first, so a piece is laid out once when it shows.
+      if size ~= fitted then
+        display:SetSize(size, size)
+        fitted = size
+      end
+      ringSize = size
       fitRingEdges()
+      setShown(ringRim, rimmed)
+      for index = 1, #ringEdges do
+        setShown(ringEdges[index], rimmed or (icon ~= nil and not barLook and (tonumber(settings.friendlyThickness) or 1) > 0))
+      end
     end
     -- Friendly and hostile rings share the configured ring opacity in range;
     -- out of range both fade with the target unit frame through the parent alpha.
     local anchor = icon or destination
-    size = size or plainSize()
-    if size ~= fitted then
-      display:SetSize(size, size)
-      fitted = size
-    end
     if destination ~= bound or anchor ~= anchored then
       display:ClearAllPoints()
       local ok = pcall(display.SetPoint, display, "CENTER", anchor, "CENTER", dx or 0, dy or 0)
@@ -995,12 +1070,33 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       display:Hide()
       return
     end
-    paintHealth()
     display:Show()
+    paintHealth()
     self:RefreshRange()
-    -- Cut the ring around the bar on every refit (it was only done on a style change).
+    -- Cut the ring around the bar: one layout pass, of the pieces whose
+    -- size, inflation or cut changed.
     cutAnchor, cutDY = anchor, icon and dy or 0
     cutBand(nestedIn and nestedIn.Health)
+  end
+
+  -- One refit on the next frame, however many callers ask (the plate's own
+  -- layout, an event whose order against the plate's handler is unknown).
+  local function settle()
+    deferred = false
+    marker:RefreshTarget()
+  end
+  function marker:QueueRefresh()
+    if deferred or not (C_Timer and C_Timer.After) then return end
+    deferred = true
+    C_Timer.After(0, settle)
+  end
+  -- Health event of the target: colours only, unless the plate was rescaled
+  -- since the last refit (line widths and pixel offsets follow the scale).
+  function marker:RefreshHealth()
+    if not display:IsShown() then return end
+    if publicQuery(display.GetEffectiveScale, display) ~= paintedScale then return self:RefreshTarget() end
+    if barLook then syncOpacity() end
+    paintHealth()
   end
 
   function marker:ApplyStyle()
@@ -1010,7 +1106,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     cutoff = limit(settings.killShotThreshold, 0.20, 0, 1)
     maps = healthMaps(cutoff)
     display:SetSize(size, size)
-    baseSize, fitted = size, size
+    baseSize, fitted, ringSize = size, size, size
     fitRingEdges()
     for index, rectangle in ipairs(rectangles) do
       local horizontal = index < 3
@@ -1022,17 +1118,17 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       rectangle:SetSize(size * (horizontal and 13 or 6) / 128,
         size * (horizontal and 6 or 13) / 128)
     end
+    rangeOpacity()
     visibility:SetSize(size * 1.22, size * 1.22)
     local _, height = GetPhysicalScreenSize()
     local thickness = height and height > 0 and 1536 / height or 1
     -- The bar look is as opaque as the bar it copies.
     ringFrame:SetAlpha(barLook and 1 or alpha)
     cutBand(nestedIn and nestedIn.Health)
-    ringSpin:Stop()
-    ringTurn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
+    guidesShown = settings.showLines and true or false
     for index, guide in ipairs(guides) do
       guide:SetSize(index < 3 and 4000 or thickness, index < 3 and thickness or 4000)
-      guide:SetShown(settings.showLines)
+      guide:SetShown(guidesShown)
     end
     spin:Stop()
     turn:SetDuration(limit(settings.rotationSeconds, 5, 0.01, 3600))
@@ -1069,11 +1165,36 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     SlashCmdList.SQMSTARGETCROSSHAIRS = function(message) marker:SlashCommand(message) end
   end
 
+  local function targetPlate() return C_NamePlate and C_NamePlate.GetNamePlateForUnit("target") end
+  local function plateOf(unit) return type(unit) == "string" and publicQuery(C_NamePlate.GetNamePlateForUnit, unit) or nil end
+  local checking = false
+  local function checkBound()
+    checking = false
+    if boundPlate and targetPlate() ~= boundPlate then marker:RefreshTarget() end
+  end
   local events = CreateFrame("Frame")
   events:SetScript("OnEvent", function(_, event, unit)
-    if event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED"
-      or event == "UPDATE_SHAPESHIFT_FORM" then learnedRanges = nil end
-    if event == "MERCHANT_SHOW" then
+    if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
+      -- Registered for the target only.
+      marker:RefreshHealth()
+    elseif event == "NAME_PLATE_UNIT_ADDED" then
+      -- Another unit's plate changes nothing for the ring.
+      local plate = targetPlate()
+      if plate and (plate ~= boundPlate or plateOf(unit) == plate) then
+        marker:RefreshTarget()
+        marker:QueueRefresh()
+      end
+    elseif event == "NAME_PLATE_UNIT_REMOVED" then
+      -- The plate's own OnHide hides the ring; next frame, let go of a plate
+      -- that no longer belongs to the target.
+      if boundPlate and not checking and C_Timer and C_Timer.After then
+        checking = true
+        C_Timer.After(0, checkBound)
+      end
+    elseif event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED"
+      or event == "UPDATE_SHAPESHIFT_FORM" then
+      learnedRanges = nil -- the range observer asks again within its next pass
+    elseif event == "MERCHANT_SHOW" then
       -- The merchant UI can already own mouse focus when native click hooks
       -- run. The opened shop's own unit token is authoritative for this cue.
       local guid = publicQuery(UnitGUID, "npc")
@@ -1087,26 +1208,34 @@ function suite:InitializeTargetCrosshairs(database, legacy)
         marker:BeginWorldClick()
         marker:ObserveWorldClick()
       end
-    elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-      if unit == "target" then marker:RefreshTarget() end
+    elseif event == "CVAR_UPDATE" then
+      if unit == "nameplateSelectedScale" then
+        grownScale = nil
+        if display:IsShown() then marker:QueueRefresh() end
+      end
     elseif event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED"
       or event == "PLAYER_LOGIN" then
+      grownScale = nil
       -- Install before Plater builds its first indicators, or a plate already
       -- carrying its icon keeps the unfitted ring until it is rebuilt.
       hookIcons()
       marker:ApplyStyle()
     else
+      -- Target or world change, or the target's (or the player's) faction flag.
+      grownScale = nil
       marker:RefreshTarget()
-      if not deferred and C_Timer and C_Timer.After then
-        deferred = true
-        C_Timer.After(0, function() deferred = false; marker:RefreshTarget() end)
-      end
+      marker:QueueRefresh()
     end
   end)
   for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED",
-    "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UNIT_HEALTH", "UNIT_MAXHEALTH",
-    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "UNIT_FACTION", "GLOBAL_MOUSE_DOWN", "MERCHANT_SHOW",
+    "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
+    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "GLOBAL_MOUSE_DOWN", "MERCHANT_SHOW",
     "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED", "UPDATE_SHAPESHIFT_FORM"}) do events:RegisterEvent(event) end
+  pcall(events.RegisterEvent, events, "CVAR_UPDATE")
+  -- Unit events are heard for the units that matter, not for every unit in the world.
+  events:RegisterUnitEvent("UNIT_HEALTH", "target")
+  events:RegisterUnitEvent("UNIT_MAXHEALTH", "target")
+  events:RegisterUnitEvent("UNIT_FACTION", "target", "player")
   applyRange(nil)
   marker:ApplyStyle()
   return marker

@@ -14,8 +14,8 @@ Options:Category({ id = 'targetring', parent = 'nameplates', title = 'Target rin
     hidden = function() return not marker() end })
 
 local function style() marker():ApplyStyle() end
--- Friendly-fit values are read at the next target refresh.
-local function refit() local ring = marker(); ring:ApplyStyle(); ring:RefreshTarget() end
+-- Friendly-fit values are read by the refit that ends ApplyStyle.
+local refit = style
 -- The mouseover ring and its preview plate follow at once.
 local function hover()
     if ns.NameplateHoverRing then ns.NameplateHoverRing:Refresh() end
@@ -43,7 +43,7 @@ Options:Add('targetring', {
         keywords = 'crosshairs ring opacity alpha transparency', path = 'alpha', min = 0, max = 1, step = 0.01,
         format = '%.0f%%', scale = 100, default = 0.65, drag = true }),
     row({ id = 'targetring.rotation', type = 'slider', label = 'Rotation period', section = 'Ring', order = 40,
-        desc = 'Seconds the ring and its range marks take for one full turn.',
+        desc = 'Seconds the range arrows around the ring take for one full turn.',
         keywords = 'crosshairs rotation spin speed seconds', path = 'rotationSeconds', min = 0.01, max = 3600, softMin = 1, softMax = 20,
         step = 0.5, format = '%.1f s', default = 5 }),
 

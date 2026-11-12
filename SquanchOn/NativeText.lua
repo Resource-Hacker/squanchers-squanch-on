@@ -189,7 +189,15 @@ function Text:ScaledRoot(frame)
             end
         end)
     end
-    hooksecurefunc(frame, 'SetScale', queue)
+    -- The drawer motion restates the same scale to settle anchors; only a
+    -- real change re-sizes text.
+    local last = frame:GetScale()
+    hooksecurefunc(frame, 'SetScale', function()
+        local scale = frame:GetScale()
+        if math.abs(scale - last) < .001 then return end
+        last = scale
+        queue()
+    end)
     queue()
 end
 local function queueCharacterRefresh()
@@ -259,7 +267,11 @@ function Text:Frame(frame)
     if type(header) == 'table' or type(header) == 'userdata' then
         self:Header(header); self:Header(header.Text); self:Header(header.Title)
     end
-    for _, name in ipairs(titleNames) do self:Header(_G[name]) end
+    -- Shared quest titles are global: register each once, not per visited frame.
+    for _, name in ipairs(titleNames) do
+        local region = _G[name]
+        if region and not self.records[region] then self:Header(region) end
+    end
     for _, poolName in ipairs({'spellHeaderPool'}) do
         local pool = frame[poolName]
         if pool and pool.EnumerateActive then

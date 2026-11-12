@@ -240,19 +240,25 @@ end
 local function dotChevron(unit, style)
   return (unit == "target" or unit == "mouseover") and style and style.followMouseoverDot == true
 end
+local dotUnits = {"target", "mouseover"}
+-- Called from the reticle's render: nothing is written while the opacity holds.
 function module:SetMouseoverDotOpacity(opacity)
-  local wasVisible = (self.mouseoverDotOpacity or 0) > 0
+  local previous = self.mouseoverDotOpacity
+  if previous == opacity then return end
   self.mouseoverDotOpacity = opacity
-  if wasVisible ~= (opacity > 0) then self:Refresh() end
-  for _, unit in ipairs({"target", "mouseover"}) do
+  if ((previous or 0) > 0) ~= (opacity > 0) then self:Refresh() end
+  for index = 1, #dotUnits do
+    local unit = dotUnits[index]
     local frame = self.frames[unit]
     if frame and dotChevron(unit, frame.config) then frame:SetAlpha(opacity) end
   end
 end
 
+local claimed = {}
+local shownStatus = { self = "shown self", friendly = "shown friendly", hostile = "shown hostile" }
 function module:Refresh(force)
   if not self.profile then return end
-  local claimed = {}
+  for plate in pairs(claimed) do claimed[plate] = nil end
   for _, unit in ipairs(units) do
     local frame = self.frames[unit]
     local config = self.profile[unit]
@@ -289,7 +295,7 @@ function module:Refresh(force)
       end
       frame:SetAlpha(followsDot and (self.mouseoverDotOpacity or 0) or 1)
       frame:Show()
-      self.status[unit] = "shown " .. reaction
+      self.status[unit] = shownStatus[reaction]
     else
       self:HideIndicator(frame)
       self.status[unit] = reason or (lowerPriority and "lower priority" or "reaction disabled")
@@ -390,15 +396,18 @@ function module:Slash(message)
 end
 
 local controller = CreateFrame("Frame")
+-- An event burst re-resolves the six units; an indicator is re-anchored and
+-- repainted only when its plate or style changed (settings edits force it).
+local function refreshQueued(self)
+  self:SetScript("OnUpdate", nil)
+  module.refreshQueued = nil
+  module:Refresh()
+end
 function module:QueueRefresh()
   if self.refreshQueued then return end
   self.refreshQueued = true
   -- Only one next-frame callback per burst; no callback remains while idle.
-  controller:SetScript("OnUpdate", function(self)
-    self:SetScript("OnUpdate", nil)
-    module.refreshQueued = nil
-    module:Refresh(true)
-  end)
+  controller:SetScript("OnUpdate", refreshQueued)
 end
 
 controller:RegisterEvent("ADDON_LOADED")
@@ -414,7 +423,7 @@ controller:SetScript("OnEvent", function(_, event, arg)
     controller:UnregisterEvent("ADDON_LOADED")
     module.unsupportedEvents = {}
     for _, name in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
-      "PLAYER_FOCUS_CHANGED", "UNIT_TARGET", "UNIT_FACTION", "UNIT_FLAGS",
+      "PLAYER_FOCUS_CHANGED", "UNIT_FACTION", "UNIT_FLAGS",
       "UNIT_CONNECTION", "UNIT_PET", "GROUP_ROSTER_UPDATE", "PLAYER_FLAGS_CHANGED",
       "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
       "PLAYER_SOFT_ENEMY_CHANGED", "PLAYER_SOFT_FRIEND_CHANGED" }) do
@@ -422,6 +431,10 @@ controller:SetScript("OnEvent", function(_, event, arg)
       -- registration must not prevent supported indicators from initializing.
       local ok = pcall(controller.RegisterEvent, controller, name)
       if not ok then module.unsupportedEvents[name] = true end
+    end
+    -- Only the target's own target matters (the targettarget indicator).
+    if not pcall(controller.RegisterUnitEvent, controller, "UNIT_TARGET", "target") then
+      pcall(controller.RegisterEvent, controller, "UNIT_TARGET")
     end
     if hasSecrets then pcall(controller.RegisterEvent, controller, "ADDON_RESTRICTION_STATE_CHANGED") end
     module:QueueRefresh()

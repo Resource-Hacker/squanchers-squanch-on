@@ -40,12 +40,18 @@ local function defensive(unit, aura)
   return passes(unit, aura, 'HELPFUL|BIG_DEFENSIVE') == true or passes(unit, aura, 'HELPFUL|EXTERNAL_DEFENSIVE') == true
 end
 
-local countdownFont
+-- One font object for every countdown number: set again only when its size changes.
+local auraEvent
+local countdownFont, countdownSize
 local function countdown(size)
   if not CreateFont then return end
-  countdownFont = countdownFont or CreateFont('SquanchOnNameplateCountdown')
-  countdownFont:SetFont(ns.Media and ns.Media:Resolve('font', 'Expressway') or STANDARD_TEXT_FONT, size or 8, 'OUTLINE')
-  countdownFont:SetShadowColor(0, 0, 0, 1); countdownFont:SetShadowOffset(1, -1)
+  size = size or 8
+  if not countdownFont or countdownSize ~= size then
+    countdownFont = countdownFont or CreateFont('SquanchOnNameplateCountdown')
+    countdownSize = size
+    countdownFont:SetFont(ns.Media and ns.Media:Resolve('font', 'Expressway') or STANDARD_TEXT_FONT, size, 'OUTLINE')
+    countdownFont:SetShadowColor(0, 0, 0, 1); countdownFont:SetShadowOffset(1, -1)
+  end
   return 'SquanchOnNameplateCountdown'
 end
 -- Hovering shows the tooltip; clicks always fall through to the world.
@@ -53,6 +59,45 @@ local function mouse(button, enabled)
   button.sqMouse = enabled
   button:EnableMouse(enabled)
   if enabled and button.SetMouseClickEnabled then button:SetMouseClickEnabled(false) end
+end
+
+-- Whether an aura event can change the row. A full update and a new aura can;
+-- a change or removal only when it concerns an icon the row shows. Without
+-- update details (or with unreadable ones) the answer is yes.
+local function listed(row, ids)
+  if type(ids) ~= 'table' then return ids ~= nil end
+  for index = 1, #ids do
+    local id = ids[index]
+    if not public(id) or row.shownIDs[id] then return true end
+  end
+  return false
+end
+local function concerns(row, info)
+  if type(info) ~= 'table' or not public(info.isFullUpdate) or info.isFullUpdate then return true end
+  local added = info.addedAuras
+  if added ~= nil and (type(added) ~= 'table' or #added > 0) then return true end
+  return listed(row, info.updatedAuraInstanceIDs) or listed(row, info.removedAuraInstanceIDs)
+end
+-- Several aura events in one frame repaint the row once.
+local queue, queued = {}, false
+local function flush()
+  queued = false
+  for index = 1, #queue do
+    local frame = queue[index]
+    queue[index] = nil
+    frame.npAuraQueued = nil
+    if NP.active[frame] then Auras:Refresh(frame) end
+  end
+end
+auraEvent = function(self, _, _, info)
+  local row = self.AuraRow
+  if self.npAuraQueued or not row then return end
+  -- A plate that shows its name only has no row to change.
+  if not self.Health:IsShown() and (self.npAuras or 0) == 0 then return end
+  if not concerns(row, info) then return end
+  self.npAuraQueued = true
+  queue[#queue + 1] = self
+  if not queued then queued = true; C_Timer.After(0, flush) end
 end
 
 function Auras:Build(frame)
@@ -63,12 +108,8 @@ function Auras:Build(frame)
   row.disableMouse = true
   row:Hide()
   frame.AuraRow = row
-  -- Several aura events in one frame repaint the row once.
-  pcall(frame.RegisterEvent, frame, 'UNIT_AURA', function(self)
-    if self.npAuraQueued then return end
-    self.npAuraQueued = true
-    C_Timer.After(0, function() self.npAuraQueued = nil; if NP.active[self] then Auras:Refresh(self) end end)
-  end)
+  row.shownIDs = {}
+  pcall(frame.RegisterEvent, frame, 'UNIT_AURA', auraEvent)
 end
 
 function Auras:Layout(frame, config)
@@ -88,22 +129,29 @@ function Auras:Layout(frame, config)
   end
 end
 
+-- The row being filled (one at a time).
+local fillRow, fillFrame, fillUnit, fillUsed, fillSettings
+local function show(aura, key)
+  fillUsed = fillUsed + 1
+  local row = fillRow
+  local button = row[fillUsed]
+  if not button then
+    button = UF.NewAuraIcon(row, fillFrame); row[fillUsed] = button
+    local font = countdown(fillSettings.timerSize)
+    if font and button.Cooldown.SetCountdownFont then button.Cooldown:SetCountdownFont(font) end
+  end
+  button.sqAura, button.sqRank = aura, 0
+  local id = aura.auraInstanceID
+  if id ~= nil and public(id) then row.shownIDs[id] = true end
+  UF.PaintAuraIcon(button, row, fillFrame, fillUnit, aura, key)
+  if button.sqMouse and button.SetMouseClickEnabled then button:SetMouseClickEnabled(false) end
+end
 function Auras:Refresh(frame)
   local row, unit = frame.AuraRow, frame.unit
   if not row then return end
-  local settings, kind, used = NP:Settings().auras, frame.npKind, 0
-  local function show(aura, key)
-    used = used + 1
-    local button = row[used]
-    if not button then
-      button = UF.NewAuraIcon(row, frame); row[used] = button
-      local font = countdown(settings.timerSize)
-      if font and button.Cooldown.SetCountdownFont then button.Cooldown:SetCountdownFont(font) end
-    end
-    button.sqAura, button.sqRank = aura, 0
-    UF.PaintAuraIcon(button, row, frame, unit, aura, key)
-    if button.sqMouse and button.SetMouseClickEnabled then button:SetMouseClickEnabled(false) end
-  end
+  local settings, kind = NP:Settings().auras, frame.npKind
+  fillRow, fillFrame, fillUnit, fillUsed, fillSettings = row, frame, unit, 0, settings
+  for id in pairs(row.shownIDs) do row.shownIDs[id] = nil end
   -- The row belongs to the bar: a plate that shows its name only has none.
   if settings.enabled and unit and kind ~= 'self' and frame.Health:IsShown() and UF and UF.db and UF.NewAuraIcon
     and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
@@ -129,6 +177,8 @@ function Auras:Refresh(frame)
       end
     end
   end
+  local used = fillUsed
+  fillRow, fillFrame, fillUnit, fillSettings = nil, nil, nil, nil
   for index = used + 1, #row do row[index]:Hide(); row[index].sqAura = nil end
   row.createdButtons, row.visibleButtons, frame.npAuras = #row, used, used
   row:SetShown(used > 0)
@@ -163,13 +213,16 @@ end
 --   an enemy NPC outside the fight while the player is in combat: notInCombat
 -- Bar, cast bar and icon row are children of the plate frame, so their alphas
 -- multiply with the plate's. Range costs item and spell checks and is asked
--- only when the two outcomes differ. Called from the shared ticker and on
--- target, cast and combat edges; plates with icons re-assert the plate alpha
--- so the icon rims, which ignore parent alpha, follow the game's own fade.
+-- only when the two outcomes differ, and then only when `probe` says it is
+-- this plate's turn (NP:Tick) or its last answer is missing or older than
+-- RANGE_KEEP seconds; otherwise the last answer stands. Called from the shared
+-- ticker and on target, cast and combat edges; plates with icons re-assert the
+-- plate alpha so the icon rims, which ignore parent alpha, follow the game's own fade.
+local RANGE_KEEP = 1.5
 local function apply(frame, key, widget, value, force)
   if widget and (force or frame[key] ~= value) then frame[key] = value; widget:SetAlpha(value) end
 end
-function Auras:Alpha(frame, force)
+function Auras:Alpha(frame, force, probe)
   local unit = frame.unit
   if not unit or frame.npKind == 'self' then return end
   local all = NP:Settings()
@@ -191,7 +244,15 @@ function Auras:Alpha(frame, force)
       or (inCast ~= outCast and cast and cast:IsShown())
     local inRange
     if fake then inRange = fake.inRange ~= false
-    else inRange = not differs or (ns.Range and ns.Range:Within(unit, settings.rangeYards or 40) == true) end
+    elseif not differs then inRange = true
+    else
+      local now = GetTime()
+      if probe or not frame.npRangeAt or now - frame.npRangeAt > RANGE_KEEP then
+        frame.npRangeAt = now
+        frame.npInRange = ns.Range and ns.Range:Within(unit, settings.rangeYards or 40) == true or false
+      end
+      inRange = frame.npInRange
+    end
     if inRange then plate, bar, casting, icons = inPlate, inBar, inCast, inIcons
     else plate, bar, casting, icons = outPlate, outBar, outCast, outIcons end
   end

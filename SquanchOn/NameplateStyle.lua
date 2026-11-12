@@ -100,11 +100,14 @@ end
 -- Quest units ------------------------------------------------------------------
 -- A unit counts while its tooltip lists one of the player's quests with an
 -- unfinished objective (or no countable objective at all).
+-- The tooltip scan's answer is kept per unit GUID until the quest log changes.
 local questTitles, questDirty = {}, true
+local questCache, questCached = {}, 0
 local function titles()
   if not questDirty then return questTitles end
   questDirty = false
   for key in pairs(questTitles) do questTitles[key] = nil end
+  if questCached > 0 then questCache, questCached = {}, 0 end
   local log = C_QuestLog
   local count = log and log.GetNumQuestLogEntries and ask(log.GetNumQuestLogEntries) or 0
   for index = 1, type(count) == 'number' and count or 0 do
@@ -118,16 +121,11 @@ local function titles()
   end
   return questTitles
 end
-function Style:Quest(unit)
-  if NP.fake[unit] then return NP.fake[unit].quest or false end
-  local colors = NP:Settings().colors
-  if not colors.quest or not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return false end
-  if IsInInstance and ask(IsInInstance) == true then return false end
-  local guid = ask(UnitGUID, unit)
-  if type(guid) ~= 'string' then return false end
+local function scanQuest(guid)
   local ok, data = pcall(C_TooltipInfo.GetHyperlink, 'unit:' .. guid)
-  if not ok or type(data) ~= 'table' or type(data.lines) ~= 'table' then return false end
-  local known, listed, counted = titles(), false, false
+  -- No tooltip yet: no answer, and nothing to keep.
+  if not ok or type(data) ~= 'table' or type(data.lines) ~= 'table' or #data.lines == 0 then return nil end
+  local known, listed, counted = questTitles, false, false
   for _, line in ipairs(data.lines) do
     local text = line.leftText
     if not public(text) then return false end
@@ -148,6 +146,23 @@ function Style:Quest(unit)
     end
   end
   return listed and not counted
+end
+function Style:Quest(unit)
+  if NP.fake[unit] then return NP.fake[unit].quest or false end
+  local colors = NP:Settings().colors
+  if not colors.quest or not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return false end
+  if IsInInstance and ask(IsInInstance) == true then return false end
+  local guid = ask(UnitGUID, unit)
+  if type(guid) ~= 'string' then return false end
+  titles()
+  local state = questCache[guid]
+  if state == nil then
+    state = scanQuest(guid)
+    if state == nil then return false end
+    if questCached >= 500 then questCache, questCached = {}, 0 end
+    questCache[guid], questCached = state, questCached + 1
+  end
+  return state
 end
 local questQueued
 function Style:QuestsChanged()
@@ -317,6 +332,13 @@ local function updateColor(frame)
   if wasDimmed ~= frame.npNoCombat and ns.NameplateAuras then ns.NameplateAuras:Alpha(frame, true) end
 end
 function Style:Color(frame) updateColor(frame) end
+-- oUF's colour pass (frame, event, unit). It also follows every health event,
+-- which changes no colour here; a forced update follows Style:Refresh, and the
+-- faction event has its own handler below: both have just coloured the bar.
+local function pathColor(frame, event)
+  if event == 'UNIT_HEALTH' or event == 'UNIT_MAXHEALTH' or event == 'ForceUpdate' or event == 'UNIT_FACTION' then return end
+  updateColor(frame)
+end
 
 -- Texts -----------------------------------------------------------------------
 local function percentText(element, unit, current, maximum)
@@ -371,19 +393,30 @@ local function latin(name)
   return (name:gsub('[\208\209][\128-\191]', LATIN))
 end
 -- An NPC's profession or title: the second tooltip line unless that is its level.
+-- A title never changes: one tooltip scan per unit GUID (false = none).
+local titleCache, titleCached, levelPattern = {}, 0, nil
+local function scanTitle(guid)
+  local ok, data = pcall(C_TooltipInfo.GetHyperlink, 'unit:' .. guid)
+  local line = ok and type(data) == 'table' and type(data.lines) == 'table' and data.lines[2 + (tonumber(ask(GetCVar, 'colorblindMode')) or 0)]
+  local text = type(line) == 'table' and line.leftText
+  if not public(text) or type(text) ~= 'string' or text == '' then return false end
+  levelPattern = levelPattern or type(UNIT_LEVEL_TEMPLATE) == 'string' and (UNIT_LEVEL_TEMPLATE:lower():gsub('%%d', '.*')) or 'level .*'
+  local fine, found = pcall(string.match, text:lower(), levelPattern)
+  if not fine or found then return false end
+  return text
+end
 local function title(frame, unit)
   if frame.npFake then return frame.npFake.title end
   if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return end
   local guid = ask(UnitGUID, unit)
   if type(guid) ~= 'string' then return end
-  local ok, data = pcall(C_TooltipInfo.GetHyperlink, 'unit:' .. guid)
-  local line = ok and type(data) == 'table' and type(data.lines) == 'table' and data.lines[2 + (tonumber(ask(GetCVar, 'colorblindMode')) or 0)]
-  local text = type(line) == 'table' and line.leftText
-  if not public(text) or type(text) ~= 'string' or text == '' then return end
-  local level = type(UNIT_LEVEL_TEMPLATE) == 'string' and (UNIT_LEVEL_TEMPLATE:lower():gsub('%%d', '.*')) or 'level .*'
-  local fine, found = pcall(string.match, text:lower(), level)
-  if not fine or found then return end
-  return text
+  local text = titleCache[guid]
+  if text == nil then
+    if titleCached >= 1000 then titleCache, titleCached = {}, 0 end
+    text = scanTitle(guid)
+    titleCache[guid], titleCached = text, titleCached + 1
+  end
+  return text or nil
 end
 local function updateName(frame)
   local unit, settings = frame.unit, NP:Settings()
@@ -442,6 +475,22 @@ local function updateLabel(frame)
   local r, g, b = classRGB(target)
   label:SetTextColor(r or 1, g or 1, b or 1)
 end
+-- Where the first icon's centre sits above the bar's centre (for the target ring).
+local function iconRise(frame, indicators)
+  return (frame.npBarHeight or 0) / 2 + (indicators.y or 0) + (indicators.size or 0) / 2
+end
+local function seat(frame, icon, shown, previous, indicators)
+  shown = shown and true or false
+  icon:SetShown(shown)
+  if not shown then return previous end
+  icon:ClearAllPoints()
+  if previous then icon:SetPoint('LEFT', previous, 'RIGHT', 1.5, 0)
+  else
+    icon:SetPoint('BOTTOM', frame.Health, 'TOP', indicators.x or 0, indicators.y or 0)
+    frame.npIconRise = iconRise(frame, indicators)
+  end
+  return icon
+end
 local function updateIndicators(frame)
   local settings = NP:Settings()
   local indicators, kind = settings.indicators, frame.npKind
@@ -463,28 +512,14 @@ local function updateIndicators(frame)
     emblem:SetIgnoreParentAlpha(solid)
     emblem:SetAlpha(1)
   end
-  emblem:SetShown(wanted and true or false)
   local rare = indicators.rare and frame.npRare and bar and not wanted and true or false
   -- A rare elite carries a gold star before the grey one; a friendly NPC that
   -- is an objective of one of the player's quests carries the quest badge.
   -- The first icon takes the anchor, the next ones follow to its right.
-  local previous
-  for _, entry in ipairs({ { emblem, wanted }, { frame.Elite, rare and frame.npRareElite }, { frame.Rare, rare },
-    { frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar } }) do
-    local icon, shown = entry[1], entry[2] and true or false
-    icon:SetShown(shown)
-    if shown then
-      icon:ClearAllPoints()
-      if previous then icon:SetPoint('LEFT', previous, 'RIGHT', 1.5, 0)
-      else
-        icon:SetPoint('BOTTOM', frame.Health, 'TOP', indicators.x or 0, indicators.y or 0)
-        -- Where the first icon's centre sits above the bar's centre (for the target ring).
-        frame.npIconRise = (frame.npBarHeight or 0) / 2 + (indicators.y or 0) + (indicators.size or 0) / 2
-        frame.npIconSize = indicators.size
-      end
-      previous = icon
-    end
-  end
+  local previous = seat(frame, emblem, wanted, nil, indicators)
+  previous = seat(frame, frame.Elite, rare and frame.npRareElite, previous, indicators)
+  previous = seat(frame, frame.Rare, rare, previous, indicators)
+  seat(frame, frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar, previous, indicators)
 end
 function Style:Indicators(frame) updateIndicators(frame) end
 
@@ -498,83 +533,52 @@ function Style:SetHover(frame, shown)
 end
 
 -- Layout ----------------------------------------------------------------------
-local function place(text, spec, bar)
-  NP:Font(text, spec.font, spec.size, spec.outline)
-  local side = SIDES[spec.side] or SIDES.CENTER
+-- Three parts, each run only when its inputs changed:
+--   dress    what follows the settings and the plate's kind: fonts, textures,
+--            colours and fixed anchors
+--   arrange  what follows the plate's state: bar size (in and out of combat,
+--            size class), bar shown, the target's strips and ornaments, cast
+--            bar geometry
+--   the rest follows the unit and is cheap: raid mark, name while casting.
+-- Style:Layout runs them in that order; Style:Arrange skips the first.
+local function font(text, spec) NP:Font(text, spec.font, spec.size, spec.outline) end
+local function side(text, spec, bar)
+  local points = SIDES[spec.side] or SIDES.CENTER
   text:ClearAllPoints()
-  text:SetPoint(side[1], bar, side[2], spec.x or 0, spec.y or 0)
-  text:SetShown(spec.show ~= false)
+  text:SetPoint(points[1], bar, points[2], spec.x or 0, spec.y or 0)
 end
-function Style:Layout(frame)
-  local settings = NP:Settings()
-  local config = settings.types[frame.npKind]
-  if not config then return end
+-- Without a bar the name sits ten units above the plate's centre; under the
+-- mouseover ring it keeps the place it has above a bar, clear of the emblem.
+local function seatName(frame, bar, config)
+  frame.Name:ClearAllPoints()
+  if bar or frame.npHoverRing then frame.Name:SetPoint('BOTTOM', frame.Health, 'TOP', 0, config.name.y or 0)
+  else frame.Name:SetPoint('CENTER', frame, 'CENTER', 0, 10) end
+end
+local function dress(frame, settings, config)
   local health = frame.Health
-  local size = NP:Fighting(frame) and config.healthCombat or config.health
-  local factor = frame.npSize and settings.sizeScale[frame.npSize]
-  local width, height = size[1] * (factor and factor[1] or 1), size[2] * (factor and factor[2] or 1)
-  -- Sizes are UIParent units, as they were with Plater; a real plate hangs
-  -- under WorldFrame, so it takes UIParent's scale explicitly. The client
-  -- scales the selected plate itself (nameplateSelectedScale).
-  frame.npBase = (tonumber(settings.scale) or 1) * (frame.npFake and (frame.npFake.target and frame.npFake.selectedScale or 1)
-    or UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
-  if not frame.npScaleGroup then frame:SetScale(frame.npBase) end
-  health:SetSize(width, height)
-  -- Recorded for the target ring: nameplate regions cannot be measured.
-  frame.npBarWidth, frame.npBarHeight = width, height
   health:SetStatusBarTexture(texture(settings.health.texture))
   health.bg:SetColorTexture(rgb(settings.health.background))
-  local bar = barShown(frame, settings, config)
-  health:SetShown(bar)
-
-  -- Rim inside the bar, never thicker than leaves a visible fill.
-  local unit = pixel(health)
-  local lines = math.max(0, math.min(tonumber(settings.border.thickness) or 0, math.floor((height / unit - 1) / 2)))
   local r, g, b, a = rgb(settings.border.color)
   if settings.border.theme and ns.DarkSkin and ns.DarkSkin.lineColor then r, g, b = unpack(ns.DarkSkin.lineColor) end
-  for index, rim in ipairs(health.rim) do
-    rim:SetShown(lines > 0)
-    rim:SetColorTexture(r, g, b, a)
-    if index < 3 then rim:SetHeight(lines * unit) else rim:SetWidth(lines * unit) end
-  end
+  for _, rim in ipairs(health.rim) do rim:SetColorTexture(r, g, b, a) end
 
-  local nameFont = frame.npKind == 'enemynpc' and not bar and settings.bigName or config.name
-  place(frame.Name, { font = nameFont.font, size = nameFont.size, outline = nameFont.outline }, health)
-  frame.Name:ClearAllPoints()
-  -- Without a bar the name sits ten units above the plate's centre; under the
-  -- mouseover ring it keeps the place it has above a bar, clear of the emblem.
-  if bar or frame.npHoverRing then frame.Name:SetPoint('BOTTOM', health, 'TOP', 0, config.name.y or 0)
-  else frame.Name:SetPoint('CENTER', frame, 'CENTER', 0, 10) end
-  place(frame.Level, config.level, health)
-  place(frame.Percent, config.percent, health)
+  font(frame.Level, config.level); side(frame.Level, config.level, health)
+  font(frame.Percent, config.percent); side(frame.Percent, config.percent, health)
   frame.Percent:SetAlpha(config.percent.alpha or 1)
-  if not bar then frame.Level:Hide(); frame.Percent:Hide() end
-  local sub = settings.subtitle
-  NP:Font(frame.Subtitle, sub.font, sub.size, sub.outline)
+  font(frame.Subtitle, settings.subtitle)
   frame.Subtitle:ClearAllPoints()
   frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2)
   local label = settings.target.label
-  NP:Font(frame.TargetName, label.font, label.size, label.outline)
+  font(frame.TargetName, label)
   frame.TargetName:ClearAllPoints()
   frame.TargetName:SetPoint('TOPRIGHT', health, 'BOTTOMRIGHT', label.x or 0, label.y or 0)
   frame.TargetName:SetAlpha(label.alpha or 1)
-  frame.TargetName:SetShown(label.show and bar and frame.npKind ~= 'friendlyplayer' or false)
 
   local indicators = settings.indicators
-  for _, icon in ipairs({ frame.Faction, frame.Rare, frame.Elite }) do icon:SetSize(indicators.size, indicators.size) end
+  frame.Faction:SetSize(indicators.size, indicators.size)
+  frame.Rare:SetSize(indicators.size, indicators.size)
+  frame.Elite:SetSize(indicators.size, indicators.size)
   frame.QuestIcon:SetSize(indicators.size * 5 / 6, indicators.size * 5 / 6)
-  -- Shown only while the unit carries a mark: the element decides, never the
-  -- layout (an unmarked icon shows the whole sheet of eight marks).
-  do
-    local mark = frame.RaidTargetIndicator
-    mark:Hide()
-    if indicators.raidMark and frame.unit then
-      local ok, index = pcall(GetRaidTargetIndex, frame.unit)
-      if ok and index ~= nil then
-        if pcall(SetRaidTargetIconTexture, mark, index) then mark:Show() end
-      end
-    end
-  end
   frame.RaidTargetIndicator:SetSize(indicators.size, indicators.size)
 
   local power = frame.Power
@@ -583,42 +587,139 @@ function Style:Layout(frame)
   power:SetPoint('BOTTOMRIGHT', health, 'BOTTOMRIGHT', 0, settings.power.y or 0)
   power:SetHeight(settings.power.height or 1.5)
   power:SetStatusBarTexture(texture(settings.health.texture))
-  power:SetShown(config.power and bar and true or false)
   NP:Font(power.Text, settings.power.textFont, settings.power.textSize, 'OUTLINE')
   power.Text:SetShown(settings.power.text and true or false)
 
-  local target = NP:IsTarget(frame) and bar
-  -- Highlight strips above and below the bar: attackable enemies only.
-  local enemy = (frame.npKind == 'enemynpc' or frame.npKind == 'enemyplayer') and frame.npAttackable ~= false
+  -- Highlight strips above and below the bar: solid at the bar, fading away from it.
   local hr, hg, hb, ha = rgb(settings.target.highlight)
+  local near, far = CreateColor and CreateColor(hr, hg, hb, ha), CreateColor and CreateColor(hr, hg, hb, 0)
   for index, strip in ipairs(frame.Highlight) do
-    strip:SetShown(target and enemy)
     strip:SetHeight(settings.target.highlightHeight or 11)
-    -- Solid at the bar, fading away from it.
-    local near, far = CreateColor and CreateColor(hr, hg, hb, ha), CreateColor and CreateColor(hr, hg, hb, 0)
     if not (near and strip.SetGradient and pcall(strip.SetGradient, strip, 'VERTICAL', index == 1 and near or far, index == 1 and far or near)) then
       strip:SetColorTexture(hr, hg, hb, ha)
     end
   end
+  local orr, org, orb, ora = rgb(settings.target.ornamentColor)
+  for _, ornament in ipairs(frame.Ornament) do
+    ornament:SetVertexColor(orr, org, orb)
+    ornament:SetAlpha(ora)
+  end
+  health.overlay:SetAlpha(settings.target.overlayAlpha or 0)
+  frame.Hover:SetAlpha(settings.target.hoverAlpha or 0.5)
+
+  if ns.NameplateCast then ns.NameplateCast:Dress(frame, config) end
+  if ns.NameplateAuras then ns.NameplateAuras:Layout(frame, config) end
+end
+-- True when anything moved.
+local function arrange(frame, settings, config, fresh)
+  local health, kind = frame.Health, frame.npKind
+  local size = NP:Fighting(frame) and config.healthCombat or config.health
+  local factor = frame.npSize and settings.sizeScale[frame.npSize]
+  local width, height = size[1] * (factor and factor[1] or 1), size[2] * (factor and factor[2] or 1)
+  -- Sizes are UIParent units, as they were with Plater; a real plate hangs
+  -- under WorldFrame, so it takes UIParent's scale explicitly. The client
+  -- scales the selected plate itself (nameplateSelectedScale).
+  local base = (tonumber(settings.scale) or 1) * (frame.npFake and (frame.npFake.target and frame.npFake.selectedScale or 1)
+    or UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
+  frame.npBase = base
+  if not frame.npScaleGroup then frame:SetScale(base) end
+  local bar = barShown(frame, settings, config)
+  local unit = pixel(health)
+  local target = NP:IsTarget(frame) and bar
+  local enemy = (kind == 'enemynpc' or kind == 'enemyplayer') and frame.npAttackable ~= false
+  local nameFont = kind == 'enemynpc' and not bar and settings.bigName or config.name
+  local hover = frame.npHoverRing or false
+  if not fresh and frame.npBarWidth == width and frame.npBarHeight == height and frame.npBarShown == bar and frame.npPixel == unit
+    and frame.npTargeted == target and frame.npEnemy == enemy and frame.npNameFont == nameFont and frame.npNameHover == hover
+    and frame.npBaseSet == base then return false end
+  frame.npBarShown, frame.npPixel, frame.npTargeted, frame.npEnemy, frame.npNameHover, frame.npBaseSet = bar, unit, target, enemy, hover, base
+
+  health:SetSize(width, height)
+  -- Recorded for the target ring: nameplate regions cannot be measured.
+  frame.npBarWidth, frame.npBarHeight = width, height
+  if frame.npIconRise then frame.npIconRise = iconRise(frame, settings.indicators) end
+  health:SetShown(bar)
+  -- Rim inside the bar, never thicker than leaves a visible fill.
+  local lines = math.max(0, math.min(tonumber(settings.border.thickness) or 0, math.floor((height / unit - 1) / 2)))
+  for index, rim in ipairs(health.rim) do
+    rim:SetShown(lines > 0)
+    if index < 3 then rim:SetHeight(lines * unit) else rim:SetWidth(lines * unit) end
+  end
+
+  if fresh or frame.npNameFont ~= nameFont then frame.npNameFont = nameFont; font(frame.Name, nameFont) end
+  seatName(frame, bar, config)
+  frame.Level:SetShown(bar and config.level.show ~= false)
+  frame.Percent:SetShown(bar and config.percent.show ~= false)
+  frame.TargetName:SetShown(settings.target.label.show and bar and kind ~= 'friendlyplayer' or false)
+  frame.Power:SetShown(config.power and bar and true or false)
+
+  -- Highlight strips: attackable enemies only.
+  for _, strip in ipairs(frame.Highlight) do strip:SetShown(target and enemy) end
   -- Two mirrored ornaments at the bar ends, scaled with the bar; none on a
   -- bar thinner than four units.
   local ornament = target and settings.target.ornament and height >= 4
   local scale = height / 12
-  local orr, org, orb, ora = rgb(settings.target.ornamentColor)
-  for _, side in ipairs(frame.Ornament) do
-    side:SetShown(ornament)
-    side:SetSize(8 * scale, 12 * scale * 1.2)
-    side:SetVertexColor(orr, org, orb)
-    side:SetAlpha(ora)
+  for _, mark in ipairs(frame.Ornament) do
+    mark:SetShown(ornament)
+    mark:SetSize(8 * scale, 12 * scale * 1.2)
   end
   health.overlay:SetShown(target and (settings.target.overlayAlpha or 0) > 0)
-  health.overlay:SetAlpha(settings.target.overlayAlpha or 0)
-  frame.Hover:SetAlpha(settings.target.hoverAlpha or 0.5)
   if not bar then frame.Hover:Hide() end
 
   if ns.NameplateCast then ns.NameplateCast:Layout(frame, config, width, height) end
-  if ns.NameplateAuras then ns.NameplateAuras:Layout(frame, config) end
-  if ns.NameplateEnhance then ns.NameplateEnhance:Apply(frame, width, height) end
+  -- The target ring is cut around this bar and hugs this plate's emblem.
+  local ring = ns.TargetCrosshairs
+  if ring and ring.QueueRefresh and NP.targetFrame == frame then ring:QueueRefresh() end
+  return true
+end
+local function finish(frame, settings)
+  -- The raid mark is shown only while the unit carries a mark: the element
+  -- decides, never the layout (an unmarked icon shows the whole sheet of eight marks).
+  local mark = frame.RaidTargetIndicator
+  mark:Hide()
+  if settings.indicators.raidMark and frame.unit then
+    local ok, index = pcall(GetRaidTargetIndex, frame.unit)
+    if ok and index ~= nil then
+      if pcall(SetRaidTargetIconTexture, mark, index) then mark:Show() end
+    end
+  end
+  local cast = frame.Castbar
+  local casting = cast and cast:IsShown() and settings.cast.hideNameWhileCasting and true or false
+  frame.Name:SetShown(not casting)
+  if casting then frame.Subtitle:Hide() end
+  if ns.NameplateEnhance then ns.NameplateEnhance:Apply(frame, frame.npBarWidth, frame.npBarHeight) end
+end
+-- force: after a settings edit. Otherwise the settings part runs when the
+-- settings table, NP.generation or the plate's kind differ from last time.
+function Style:Layout(frame, force)
+  local settings = NP:Settings()
+  local config = settings.types[frame.npKind]
+  if not config then return end
+  local fresh = force or frame.npDressed ~= settings or frame.npGeneration ~= NP.generation or frame.npDressKind ~= frame.npKind
+  if fresh then
+    frame.npDressed, frame.npGeneration, frame.npDressKind = settings, NP.generation, frame.npKind
+    dress(frame, settings, config)
+  end
+  arrange(frame, settings, config, fresh)
+  finish(frame, settings)
+end
+-- A state change only (combat edge, target change): no fonts, no textures.
+function Style:Arrange(frame)
+  local settings = NP:Settings()
+  local config = settings.types[frame.npKind]
+  if not config then return end
+  if frame.npDressed ~= settings or frame.npGeneration ~= NP.generation or frame.npDressKind ~= frame.npKind then return self:Layout(frame) end
+  return arrange(frame, settings, config, false)
+end
+-- The mouseover ring took or left this plate (frame.npHoverRing): the name
+-- moves and the emblem shows or hides. Nothing else of the layout depends on it.
+function Style:HoverRing(frame)
+  local settings = NP:Settings()
+  local config = settings.types[frame.npKind]
+  if not config then return end
+  frame.npNameHover = frame.npHoverRing or false
+  seatName(frame, barShown(frame, settings, config), config)
+  updateIndicators(frame)
 end
 
 -- Everything that follows the unit rather than the layout.
@@ -641,7 +742,7 @@ local handlers = {
   UNIT_LEVEL = updateLevel,
   UNIT_TARGET = updateLabel,
   UNIT_THREAT_SITUATION_UPDATE = updateColor,
-  UNIT_THREAT_LIST_UPDATE = updateColor,
+  -- UNIT_THREAT_LIST_UPDATE reaches the colour pass through oUF (health.colorThreat).
   UNIT_FLAGS = updateColor,
   UNIT_CLASSIFICATION_CHANGED = function(frame)
     if not frame.unit then return end -- a plate off screen still hears its old token
@@ -683,7 +784,7 @@ function Style:Build(frame)
   health.overlay:Hide()
   -- These flags only make oUF listen for the events the colour pass needs.
   health.colorTapping, health.colorReaction, health.colorThreat = true, true, true
-  health.UpdateColor = updateColor
+  health.UpdateColor = pathColor
   health.PostUpdate = percentText
   frame.Health, frame.healthBar = health, health -- healthBar: the ring and icon anchors
 

@@ -29,6 +29,13 @@ end
 local function session(key)
     return function() return ui[key] or '' end, function(_, value) ui[key] = value or '' end
 end
+-- The backup and its removal belong to Profiles and may not exist in every
+-- build. The raw read is the fallback: the saved root forwards other keys.
+local function hasBackup()
+    if type(Profiles.DropMigrationBackup) ~= 'function' then return false end
+    if type(Profiles.HasMigrationBackup) == 'function' then return Profiles:HasMigrationBackup() and true or false end
+    return type(SquanchOnDB) == 'table' and rawget(SquanchOnDB, 'backup') ~= nil
+end
 local getName, setName = session('name')
 local getImport, setImport = session('import')
 
@@ -119,5 +126,19 @@ Options:Add('profiles', {
             if not ok then return false, message end
             ui.import = ''
             return message
+        end },
+
+    { id = 'profiles.dropBackup', type = 'action', label = 'Remove the pre-profile migration backup', button = 'Remove backup',
+        section = 'Maintenance', order = 10, combatSafe = true,
+        desc = 'Deletes the copy of your settings that was kept when profiles were introduced. Its size cannot be shown here. Removing it only frees space in the saved settings file; no current setting changes.',
+        keywords = 'backup migration remove space saved settings file size',
+        confirm = 'This deletes the pre-profile backup of your settings. It cannot be undone.',
+        hidden = function() return not hasBackup() end,
+        func = function()
+            settle()
+            if not hasBackup() then return false, 'There is no migration backup.' end
+            local ok, message = Profiles:DropMigrationBackup()
+            if ok == false then return false, message end
+            return type(message) == 'string' and message or 'The migration backup was removed. It leaves the settings file at the next logout or reload.'
         end },
 })

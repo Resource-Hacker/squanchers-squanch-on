@@ -89,6 +89,9 @@ end
 -- All 12 native buttons remain in actionButtons with their original IDs/parents.
 -- Slots 10-12 are transparent/noninteractive; native visibility and count fields
 -- remain untouched, so later protected native show/hide branches keep their owner.
+local barTargets = { MainActionBar = "actions_right", MultiBarBottomRight = "actions_right",
+    MultiBarRight = "actions_left", MultiBarLeft = "actions_left", PetActionBar = "pet_bar",
+    StanceBar = "stance_bar", PossessActionBar = "possess_bar" }
 function Bars:LayoutActionBar(frame, config)
     if InCombatLockdown() then self.pending = true; return end
     if self.layingOut then return end
@@ -114,6 +117,7 @@ function Bars:LayoutActionBar(frame, config)
     end
     point(frame, config.point, _G[config.relative] or UIParent, config.relativePoint or "BOTTOM", config.x, config.y)
     local pad, width, height = config.pad, 0, 0
+    local rect = ns.LayoutTargets and barTargets[config.name] and ns.LayoutEditor:Read(barTargets[config.name])
     for index, button in ipairs(frame.actionButtons) do
         local container = button.container
         -- Native edit-mode icon size scales the container independently of the
@@ -135,7 +139,9 @@ function Bars:LayoutActionBar(frame, config)
             container:SetAlpha(1)
             button:EnableMouse(true)
             if button.Name then button.Name:SetAlpha(0) end
-            skin(button, config.pet and "pet" or nil, frame)
+            -- With a saved rectangle the bar's scale is still to change: the
+            -- cells are skinned once, after it applies (below).
+            if not rect then skin(button, config.pet and "pet" or nil, frame) end
             observeHover(button)
         else
             -- Keep native lifetime/action registration and key dispatch intact.
@@ -146,25 +152,18 @@ function Bars:LayoutActionBar(frame, config)
         end
     end
     frame:SetSize(math.max(1, width - config.spacing + 2 * pad), math.max(1, height + 2 * pad))
-    if ns.LayoutTargets then
-        local ids = { MainActionBar = "actions_right", MultiBarBottomRight = "actions_right",
-            MultiBarRight = "actions_left", MultiBarLeft = "actions_left", PetActionBar = "pet_bar",
-            StanceBar = "stance_bar", PossessActionBar = "possess_bar" }
-        local id = ids[config.name]
-        local rect = id and ns.LayoutEditor:Read(id)
-        if rect then
-            ns.LayoutEditor:ScaleToWidth(frame, rect.w)
-            if holder then
-                -- Preserve the editor's effective scale while returning the
-                -- native bar to the local scale its secure manager will use.
-                holder:SetScale(holder:GetScale() * frame:GetScale())
-                scale(frame, 1)
-            end
-            if not config.relative then ns.LayoutEditor:Place(frame, rect) end
-            -- Refit physical-pixel artwork after the saved bar scale applies.
-            for index, button in ipairs(frame.actionButtons) do
-                if index <= count then skin(button, config.pet and "pet" or "action", frame) end
-            end
+    if rect then
+        ns.LayoutEditor:ScaleToWidth(frame, rect.w)
+        if holder then
+            -- Preserve the editor's effective scale while returning the
+            -- native bar to the local scale its secure manager will use.
+            holder:SetScale(holder:GetScale() * frame:GetScale())
+            scale(frame, 1)
+        end
+        if not config.relative then ns.LayoutEditor:Place(frame, rect) end
+        -- Refit physical-pixel artwork after the saved bar scale applies.
+        for index, button in ipairs(frame.actionButtons) do
+            if index <= count then skin(button, config.pet and "pet" or "action", frame) end
         end
     end
     for _, key in ipairs({ "EndCaps", "BorderArt", "Background", "ActionBarPageNumber" }) do

@@ -358,7 +358,7 @@ local cfg                         -- SquanchOnDB.camera
 local errors = 0
 local restricted, deferred = {}, {}
 local events = CreateFrame("Frame")
-local speedsHeld
+local speedsHeld, awaitingRegen
 
 local function setCVar(name, value)
   -- Core.lua borrows the two turn speeds for one frame during cursor return.
@@ -372,10 +372,12 @@ local function setCVar(name, value)
     if not combat then errors = errors + 1; return false end
     -- Refused in combat: remember the CVar and write it when combat ends.
     restricted[name] = true
-    if cfg then cfg.combatDeferred = cfg.combatDeferred or {}; cfg.combatDeferred[name] = true end
   end
   deferred[name] = text
-  events:RegisterEvent("PLAYER_REGEN_ENABLED")
+  if not awaitingRegen then
+    awaitingRegen = true
+    events:RegisterEvent("PLAYER_REGEN_ENABLED")
+  end
   return false
 end
 
@@ -544,6 +546,11 @@ local function stepEase(zoom)
   if e.fix then return stepFix(e, zoom) end
   -- The first step runs one frame after the request: take the start here.
   local now = GetTime()
+  e.began = e.began or now
+  -- A camera that cannot move (locked view, a limit below the requested
+  -- distance) is rebased to the start of the curve on every step and would
+  -- never finish: give up well after any real ease has ended.
+  if now - e.began > e.dur * 4 + 2 then stopEase(); return false end
   e.start = e.start or now
   e.from = e.from or zoom
   e.change = e.change or (e.to - e.from)
@@ -743,7 +750,9 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   if stepTransition(zoom) then busy = true end
   if stepTurns(elapsed) then busy = true end
   if stepFade() then busy = true end
-  if zoom ~= lastZoom then
+  -- Changes below a two-thousandth of a yard do not keep the driver awake; the
+  -- forced pass before sleeping lands on the exact values.
+  if not lastZoom or abs(zoom - lastZoom) > 0.0005 then
     lastZoom, Camera.quiet = zoom, 0
     applyZoom(zoom)
   elseif busy then Camera.quiet = 0
@@ -933,13 +942,14 @@ local function evaluate()
   if top ~= current then change(current, top) end
   entered = true
 end
+local function runEvaluate()
+  queued = false
+  if Camera.active then evaluate() end
+end
 queueEvaluate = function()
   if queued then return end
   queued = true
-  C_Timer.After(0, function()
-    queued = false
-    if Camera.active then evaluate() end
-  end)
+  C_Timer.After(0, runEvaluate)
 end
 sitEvents:SetScript("OnEvent", queueEvaluate)
 
@@ -1076,6 +1086,7 @@ end
 events:SetScript("OnEvent", function(self, event)
   if event == "PLAYER_REGEN_ENABLED" then
     self:UnregisterEvent(event)
+    awaitingRegen = nil
     for name, text in pairs(deferred) do deferred[name] = nil; setCVar(name, text) end
     return
   end
@@ -1104,6 +1115,7 @@ function Camera:Disable(restore)
     current = nil
     driver:Hide()
     events:UnregisterAllEvents(); sitEvents:UnregisterAllEvents()
+    awaitingRegen = nil
     clear(deferred)
     if ticker then ticker:Cancel(); ticker = nil end
     if CameraZoomIn == zoomInHook then CameraZoomIn = nativeZoomIn end
@@ -1122,7 +1134,8 @@ end
 function Camera:HoldSpeeds(held)
   speedsHeld = held and true or false
   if not speedsHeld and self.active then
-    for _, name in ipairs({YAW, PITCH}) do
+    for index = 1, 2 do
+      local name = index == 1 and YAW or PITCH
       if not trans[name] then
         local value = resolve(name, 0)
         if value ~= nil then setCVar(name, value) end
@@ -1152,6 +1165,7 @@ function addon:InitializeCamera()
     end
   end
   cfg = db.camera
+  cfg.combatDeferred = nil           -- a record earlier versions wrote and nothing read
   -- The retired DynamicCam profile helper's record: kept, no longer acted on.
   if db.cameraFraming then cfg.legacyFraming, db.cameraFraming = db.cameraFraming, nil end
   db.cameraFramingRequested, db.cameraFramingError = nil, nil

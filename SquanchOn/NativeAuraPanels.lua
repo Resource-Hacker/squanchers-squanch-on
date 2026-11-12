@@ -1,6 +1,10 @@
 -- SPDX-License-Identifier: MIT
 -- Original Squanch-On aura/cooldown presentation. No external aura engine.
 local _, ns = ...
+-- Retired: every panel below is switched off (auras live on the unit frames and
+-- the buff/debuff bars), so the file creates nothing and listens for nothing.
+-- It can be dropped from the TOC; the code is kept for reference only.
+if true then return end
 local M = { panels = {} }
 ns.NativeAuraPanels = M
 local events = CreateFrame("Frame")

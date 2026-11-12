@@ -12,7 +12,6 @@
 
 libs/LibStub/LibStub.lua
 libs/LibDispel/LibDispel.lua
-libs/LibRangeCheck-3.0/LibRangeCheck-3.0.lua
 libs/LibSerialize/LibSerialize.lua
 libs/LibDeflate/LibDeflate.lua
 libs/oUF/oUF_Forever.xml
@@ -71,7 +70,6 @@ OriginalUnitFrameBorders.lua
 MinimapPanel.lua
 NativeActionBars.lua
 NativeDataBars.lua
-NativeAuraPanels.lua
 NativeMinimapButtons.lua
 PlaterIconSkins.lua
 AuxiliaryLayout.lua

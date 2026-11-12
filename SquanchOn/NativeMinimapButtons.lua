@@ -91,6 +91,7 @@ function M:Layout()
             if button.SquanchOnStripBorder then button.SquanchOnStripBorder:Hide() end
         end
         self.bar:Hide()
+        self.laidOut = #self.order
         self.layingOut = false
         return
     end
@@ -124,10 +125,11 @@ function M:Layout()
     self.bar:SetSize(math.max(1, math.min(columns, shown) * (size + gap) - gap),
         math.max(1, math.ceil(shown / columns) * (size + gap) - gap))
     self.bar:SetShown(shown > 0 and not self.petBattle)
+    self.laidOut = #self.order
     self.layingOut = false
     hover()
 end
-function M:Discover()
+function M:Discover(force)
     if not ns.db then return end
     if not self.bar then
         self.bar = CreateFrame("Frame", "SquanchOnMinimapButtons", UIParent)
@@ -167,9 +169,11 @@ function M:Discover()
             end)
         end
     end
-    self:Layout()
+    -- Discovery runs on every addon load; lay out only when it found a new
+    -- launcher or a layout is still owed.
+    if #self.order ~= self.laidOut or self.pending or force then self:Layout() end
 end
-M.Refresh = M.Discover
+function M:Refresh() self:Discover(true) end
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ADDON_LOADED")
@@ -182,8 +186,10 @@ events:SetScript("OnEvent", function(_, event)
         if M.bar then M.bar:Hide() end
     else
         if event == "PET_BATTLE_CLOSE" then M.petBattle = nil end
+        if event == "PLAYER_REGEN_ENABLED" and not M.pending then return end
         if M.discoveryQueued then return end
         M.discoveryQueued = true
-        C_Timer.After(0, function() M.discoveryQueued = false; M:Discover() end)
+        local force = event ~= "ADDON_LOADED"
+        C_Timer.After(0, function() M.discoveryQueued = false; M:Discover(force) end)
     end
 end)

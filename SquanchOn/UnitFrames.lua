@@ -65,7 +65,6 @@ function UF:SetStatusBarColor(bar,r,g,b,a)
         if bar.bg then bar.bg:SetVertexColor(br,bg,bb,ba) end
     end
 end
-function UF:AuraCreated(button) end
 function UF:ApplyFont(object,path,size,outline)
     local style=outline or self.db.fontOutline or ''
     if style=='NONE' then style='' end
@@ -252,9 +251,19 @@ local function installTags()
         end
         return ''
     end
+    -- Each tag listens only for what it reads, so a health tick rebuilds the
+    -- health texts and nothing else. A unit swap refreshes every tag through
+    -- oUF's own frame update. Tags not listed keep the full list.
+    local own={
+        ['sqon:name']='UNIT_NAME_UPDATE',['sqon:shortname']='UNIT_NAME_UPDATE',
+        ['sqon:classcolor']='UNIT_NAME_UPDATE',['sqon:classicon']='UNIT_NAME_UPDATE',
+        ['sqon:namecolor']='UNIT_NAME_UPDATE UNIT_FACTION UNIT_FLAGS',
+        ['sqon:factionicon']='UNIT_NAME_UPDATE UNIT_FACTION',
+        ['sqon:classification']='UNIT_NAME_UPDATE UNIT_CLASSIFICATION_CHANGED',
+        ['sqon:difficultycolor']='UNIT_LEVEL PLAYER_LEVEL_UP',['sqon:smartlevel']='UNIT_LEVEL PLAYER_LEVEL_UP'}
     for key in pairs(methods) do
         if type(key)=='string' and key:match('^sqon:') then
-            events[key]='UNIT_NAME_UPDATE UNIT_FACTION UNIT_FLAGS UNIT_HEALTH UNIT_MAXHEALTH UNIT_CONNECTION UNIT_LEVEL'
+            events[key]=own[key] or 'UNIT_NAME_UPDATE UNIT_FACTION UNIT_FLAGS UNIT_HEALTH UNIT_MAXHEALTH UNIT_CONNECTION UNIT_LEVEL'
         end
     end
 end
@@ -302,17 +311,9 @@ end
 local function tooltipLeave() if not GameTooltip:IsForbidden() then GameTooltip:Hide() end end
 
 local function newAura(frame,key)
-    local container=CreateFrame('Frame',frame:GetName()..key,frame)
-    container.PostCreateButton=function(self,button)
-        button.Icon:SetTexCoord(.07,.93,.07,.93)
-        UF:ApplyFont(button.Count,UF.db.font,8,UF.db.fontOutline)
-        UF:ApplyFont(button.Text,UF.db.font,8,UF.db.fontOutline)
-        button.Cooldown:SetDrawEdge(false)
-        if ns.DarkSkin then ns.DarkSkin:Panel(button,'inner',0) end
-        if UF.SoftShadow then button.softShadow=UF:SoftShadow(button,button) end
-        if UF.AuraCreated then UF:AuraCreated(button) end
-    end
-    return container
+    -- Icons are created and painted by UnitFrameAuras.lua (the embedded oUF
+    -- registers no aura element on this client).
+    return CreateFrame('Frame',frame:GetName()..key,frame)
 end
 -- Aura settings (SquanchOnDB.auras). The defaults are the layout that was fixed
 -- in code before these settings existed.
@@ -378,7 +379,7 @@ local function configureAura(frame,key,config)
     local gap=size==0 and 0 or config.spacing or 1
     if size==0 then size=math.max(8,frame:GetWidth()/(c.cellsAcross or perRow)) end
     local rows=numeric(config.numrows,1,1,8)
-    c.size=size;c.spacing=gap;c.num=enabled(config) and 255 or 0
+    c.size=size;c.spacing=gap
     c.visibleLimit=math.floor(perRow*rows);c.config=config
     -- Placement rule of the layout being reproduced: the row hangs off the
     -- chosen frame corner and grows away from it, it does not sit inside it.
@@ -422,44 +423,7 @@ local function configureAura(frame,key,config)
         frame.ClassPower[1]:HookScript('OnShow',place);frame.ClassPower[1]:HookScript('OnHide',place)
     end
     c.disableMouse=config.clickThrough or false
-    c.showType=key=='Debuffs';c.showStealableBuffs=key=='Buffs'
-    c.onlyShowPlayer=config.onlyShowPlayer or false
     c.filter=key=='Buffs' and 'HELPFUL' or 'HARMFUL'
-    c.PostUpdate=function(self) if UF.SortAuraButtons then UF:SortAuraButtons(self) end end
-    c.CustomFilter=function(owner,element,unit,button,aura)
-        if not aura then return false end
-        if UF.FilterAura then return UF:FilterAura(config,unit,aura,button) end
-        local duration=aura.duration
-        if public(duration) and type(duration)=='number' then
-            if (config.minDuration or 0)>0 and duration<config.minDuration then return false end
-            if (config.maxDuration or 0)>0 and duration>config.maxDuration then return false end
-        end
-        local priority=config.priority or ''
-        if priority=='' then return true end
-        local id=aura.spellId
-        local personal=public(button.isPlayer) and button.isPlayer
-        for token in priority:gmatch('[^,]+') do
-            local filter=UF.db.auraFilters and UF.db.auraFilters[token]
-            if filter and public(id) and id then
-                local entry=filter.spells and filter.spells[id]
-                local active=entry==true or type(entry)=='table' and entry.enable~=false
-                if active then return filter.type~='Blacklist' end
-            end
-            local name=token:lower()
-            if name=='blocknoduration' and public(duration) and duration==0 then return false end
-            if name=='personal' and personal then return true end
-            if name=='nonpersonal' and public(button.isPlayer) and not button.isPlayer then return true end
-            if name=='dispellable' then
-                local dispel=aura.dispelName
-                if public(dispel) and dispel then
-                    local library=LibStub('LibDispel-1.0')
-                    if library:IsDispellableByMe(dispel) then return true end
-                end
-            end
-        end
-        -- Unknown/restricted classification is kept visible rather than guessed.
-        return not public(button.isPlayer) or not public(duration)
-    end
     if enabled(config) then c:Show() else c:Hide() end
 end
 -- Live re-layout after an aura setting changes. Rows are unprotected children,
@@ -811,6 +775,8 @@ function UF:ConfigureFrame(frame)
     if self.ConfigureState then self:ConfigureState(frame) end
     if not frame.squancherBuilding then
         if frame.UpdateAllElements then frame:UpdateAllElements('SquanchOnConfigure') end
+        -- The one border and light pass of a configure; it fits in full.
+        if ns.UnitFrameLighting then ns.UnitFrameLighting:Invalidate(frame) end
         if ns.OriginalUnitFrameBorders then ns.OriginalUnitFrameBorders:RefreshFrame(frame) end
     end
 end
@@ -861,11 +827,34 @@ function UF:PrepareProfile()
     for _,frame in ipairs(self.objects) do frame.colors=self.palette end
 end
 
+-- oUF recolours the health bar after every value update. The colour reads the
+-- unit's connection, tap, reaction and selection state, never its health
+-- (unless colour-by-value is on), so a value tick with those unchanged keeps
+-- the painted colour and the light behind it.
+local healthValueEvents={UNIT_HEALTH=true,UNIT_MAXHEALTH=true,UNIT_HEALTH_FREQUENT=true,UNIT_MAX_HEALTH_MODIFIERS_CHANGED=true}
+local function healthColor(frame,event,unit)
+    if not unit or frame.__unit~=unit then return end
+    local element=frame.Health
+    local connected,tapped,reaction=UnitIsConnected(unit),UnitIsTapDenied(unit),UnitReaction(unit,'player')
+    local selection=UnitSelectionType and UnitSelectionType(unit,true)
+    local readable=public(connected) and public(tapped) and public(reaction) and public(selection)
+    if readable and healthValueEvents[event] and not element.colorSmooth and element.sqColorKnown
+        and element.sqConnected==connected and element.sqTapped==tapped and element.sqReaction==reaction
+        and element.sqSelection==selection then return end
+    element.sqColorKnown=readable
+    element.sqConnected,element.sqTapped,element.sqReaction,element.sqSelection=connected,tapped,reaction,selection
+    -- oUF exposes its colour pass only through the element's forced update,
+    -- which repeats the (cheap) value update; step aside for that one call.
+    if not element.ForceUpdate then element.UpdateColor=nil;return end
+    element.UpdateColor=nil
+    element:ForceUpdate()
+    element.UpdateColor=healthColor
+end
+
 local function style(frame,unit,key)
     frame.squancherKey=key;frame.unitframeType=key:gsub("_target$","target")
     frame.squancherBuilding=true
     frame.squancherConfig=UF.db.units[key]
-    local health=UF.db.colors.health or {r=.1,g=.1,b=.1}
     frame.colors=UF.palette
     frame:HookScript('OnEnter',tooltipEnter);frame:HookScript('OnLeave',tooltipLeave)
     frame.RaisedElementParent=raised(frame,100)
@@ -873,6 +862,7 @@ local function style(frame,unit,key)
     frame.Health.PostUpdateColor=function(bar,unit,color)
         if color then UF:SetStatusBarColor(bar,color:GetRGB()) end
     end
+    frame.Health.UpdateColor=healthColor
     frame.Power=bar(frame,frame:GetName()..'_PowerBar');frame.Power.__ownerKey=key
     frame.Power.PostUpdateColor=function(self,unit,c,r,g,b)
         if c then r,g,b=c:GetRGB() end
@@ -1286,16 +1276,6 @@ function UF:RangeState(unit)
     return range:Reach(unit)
 end
 
-function UF.GetProfile() return UF.db and {unitframe=UF.db,movers=UF.db.movers} end
-function UF:RequestReload()
-    if InCombatLockdown() then self.reloadAfterCombat=true;return false,'Combat' end
-    ReloadUI();return true
-end
-function UF.RefreshStatus()
-    UF.status.initialized=UF.Initialized;UF.status.originalEngine=false
-    UF.status.profile=UF.state and UF.state.profile;UF.status.frameCount=#UF.objects
-    return UF.status
-end
 local function initialize()
     if UF.Initialized then return end
     if not oUF then UF.status.error='SquanchOnUF engine did not load (check X-oUF and load order)';return end
@@ -1315,17 +1295,13 @@ local function initialize()
     end
     UF.db=config;UF.state=state;UF:PrepareProfile();installTags()
     -- A local adapter for Squancher's existing decoration code, never _G.ElvUI.
-    local engine={db={unitframe=config,movers=config.movers},oUF=oUF,Initialized=true,mult=1,
+    local engine={db={unitframe=config,movers=config.movers},oUF=oUF,
         -- Bars are created with the profile's neutral black edge; the border
         -- adapter recognises exactly that colour and replaces it with the gold line.
-        media={bordercolor={r=0,g=0,b=0},unitframeBorderColor={r=0,g=0,b=0}},
-        data={GetCurrentProfile=function() return UF.state.profile end}}
+        media={bordercolor={r=0,g=0,b=0},unitframeBorderColor={r=0,g=0,b=0}}}
     function engine:GetModule(name) if name=='UnitFrames' then return UF end end
     function engine:ClassColor(class) return RAID_CLASS_COLORS[class] end
-    function engine:Scale(value) return UF:Scale(value) end
-    function engine:LoadMovers() UF:RegisterLayoutTargets() end
-    function engine:UpdateAll() return UF:Update_AllFrames() end
-    engine.mult=UF.pixelMult;UF.Engine=engine;UF.Original=UF;UF.units=UF.frames
+    UF.Engine=engine
     for _,key in ipairs(Import.units) do
         local unit=key
         oUF:RegisterStyle('SquanchOn_'..unit,function(frame,token) style(frame,token,unit) end)
@@ -1335,7 +1311,7 @@ local function initialize()
     oUF:RegisterInitCallback(function(frame)
         if frame.squancherKey then UF:ConfigureFrame(frame) end
     end)
-    UF:Update_AllFrames();UF.RefreshStatus()
+    UF:Update_AllFrames()
 
 end
 UF.optionCapabilities={['customTexts.*']=true}
@@ -1354,7 +1330,6 @@ events:RegisterEvent('SPELLS_CHANGED');events:RegisterEvent('PLAYER_SPECIALIZATI
 events:SetScript('OnEvent',function(_,event,loaded)
     if event=='SPELLS_CHANGED' or event=='PLAYER_SPECIALIZATION_CHANGED' then UF.rangeCache=nil;return end
     if event=='ADDON_LOADED' and (loaded~=addonName or not IsLoggedIn()) then return end
-    if event=='PLAYER_REGEN_ENABLED' and UF.reloadAfterCombat then ReloadUI();return end
     if not UF.Initialized then initialize()
     elseif UF.pending then UF:Update_AllFrames() end
 end)

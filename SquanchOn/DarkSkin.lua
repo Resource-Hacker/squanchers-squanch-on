@@ -186,13 +186,19 @@ function Skin:FitPanelBackground(texture, border)
     texture:SetPoint("BOTTOMRIGHT", border, "BOTTOMRIGHT", -inset, inset)
 end
 
+-- The atlas never changes in a session: one lookup serves every rim slice.
+local atlasFile, atlasLeft, atlasTop, atlasDX, atlasDY
 local function atlasSlice(texture, x1, y1, x2, y2)
-    local info = C_Texture.GetAtlasInfo(BORDER_ATLAS)
-    if not info then return end
-    texture:SetTexture(info.file)
-    local left, top = info.leftTexCoord, info.topTexCoord
-    local dx = (info.rightTexCoord - left) / 55
-    local dy = (info.bottomTexCoord - top) / 55
+    if not atlasFile then
+        local info = C_Texture.GetAtlasInfo(BORDER_ATLAS)
+        if not info then return end
+        atlasLeft, atlasTop = info.leftTexCoord, info.topTexCoord
+        atlasDX = (info.rightTexCoord - atlasLeft) / 55
+        atlasDY = (info.bottomTexCoord - atlasTop) / 55
+        atlasFile = info.file
+    end
+    texture:SetTexture(atlasFile)
+    local left, top, dx, dy = atlasLeft, atlasTop, atlasDX, atlasDY
     texture:SetTexCoord(left + x1 * dx, left + x2 * dx, top + y1 * dy, top + y2 * dy)
     Skin:TintChrome(texture)
 end
@@ -455,21 +461,39 @@ function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
     border:SetSize(frame:GetWidth()*55/43,frame:GetHeight()*55/43)
     border:SetFrameLevel(math.max(0,frame:GetFrameLevel()-1))
     local width,height=border:GetSize()
-    for _,view in ipairs(border.rawViews) do
-        local r=view.rect
-        view.texture:ClearAllPoints()
-        view.texture:SetPoint("TOPLEFT",border,"TOPLEFT",width*r[1]/55,-height*r[2]/55)
-        view.texture:SetSize(width*(r[3]-r[1])/55,height*(r[4]-r[2])/55)
+    -- The views are placed relative to the rim; only its size moves them.
+    if border.viewWidth~=width or border.viewHeight~=height then
+        border.viewWidth,border.viewHeight=width,height
+        for _,view in ipairs(border.rawViews) do
+            local r=view.rect
+            view.texture:ClearAllPoints()
+            view.texture:SetPoint("TOPLEFT",border,"TOPLEFT",width*r[1]/55,-height*r[2]/55)
+            view.texture:SetSize(width*(r[3]-r[1])/55,height*(r[4]-r[2])/55)
+        end
+        border.slotFill:SetPoint("CENTER",border,"CENTER")
+        border.slotFill:SetSize(width*37/55,height*37/55)
     end
-    border.slotFill:SetPoint("CENTER",border,"CENTER")
-    border.slotFill:SetSize(width*37/55,height*37/55)
     border.slotFill:SetFrameLevel(math.max(0,border:GetFrameLevel()-1))
     controlAlpha(border)
     return border
 end
 
+-- A whole-interface fade visits only rims on screen; a hidden one is brought
+-- up to date when it next shows.
+local function showControl(border)
+    if border.alphaStale then border.alphaStale = nil; controlAlpha(border) end
+end
 hooksecurefunc(UIParent, "SetAlpha", function()
-    for border in pairs(controlBorders) do controlAlpha(border) end
+    for border in pairs(controlBorders) do
+        if border:IsVisible() then controlAlpha(border)
+        elseif not border.alphaStale then
+            border.alphaStale = true
+            if not border.alphaShowHooked then
+                border.alphaShowHooked = true
+                border:HookScript("OnShow", showControl)
+            end
+        end
+    end
 end)
 
 -- The background is a region on the control itself, BELOW its art and children.
@@ -1038,6 +1062,7 @@ local function nativeTabStyle(tab, selected, joinedLeft)
     end
 end
 
+local chatStyleRequested = setmetatable({}, { __mode = "k" })
 -- Native dynamic tabs use an extra -1 offset and resize after the color hook.
 -- Keep native widths/order/scrolling, then align the whole row and its labels.
 function Skin:AlignChatTabs(dock)
@@ -1062,6 +1087,14 @@ function Skin:AlignChatTabs(dock)
     local selected = FCFDock_GetSelectedWindow(dock)
     for _, chat in ipairs(dock.DOCKED_CHAT_FRAMES or {}) do
         local tab = _G[chat:GetName().."Tab"]
+        -- A window docked after login is styled once, when it first appears here.
+        if not chat.squancherChatStyled and not chatStyleRequested[chat] and chat:GetID() <= (NUM_CHAT_WINDOWS or 10) then
+            chatStyleRequested[chat] = true
+            C_Timer.After(0, function()
+                if InCombatLockdown() then Skin.pending = true; return end
+                Skin:Chat(); Skin:LayoutChat()
+            end)
+        end
         if tab then
             local joined
             if chat.isStaticDocked then
@@ -1477,6 +1510,10 @@ function Skin:Chat()
     if not self.chatTabAlphaHooked and FCFTab_UpdateAlpha then
         self.chatTabAlphaHooked=true;hooksecurefunc("FCFTab_UpdateAlpha",nativeTabAlpha)
     end
+    if not self.chatAnchorHooked and ChatFrame1.ApplySystemAnchor then
+        self.chatAnchorHooked=true
+        hooksecurefunc(ChatFrame1,"ApplySystemAnchor",function() Skin:QueueChatLayout() end)
+    end
     if not self.chatTabAlignHooked and FCFDock_UpdateTabs then
         self.chatTabAlignHooked=true
         hooksecurefunc("FCFDock_UpdateTabs",function(owner) Skin:AlignChatTabs(owner) end)
@@ -1500,6 +1537,16 @@ function Skin:LayoutChat()
     end
     self:FitPanelBackground(self.chatBackground,self.byFrame[panel].compact)
     if self.chatTabDivider then self.chatTabDivider:SetHeight(chatBorderWidth(panel)) end
+    -- The client's own chat-window update re-anchors the dock to ChatFrame1
+    -- (FCFDock_SetPrimary); restate the panel anchors placed by Chat().
+    local dock = GeneralDockManager
+    if dock and self.chatDockPlaced then
+        if dock:GetParent() ~= panel then dock:SetParent(panel) end
+        local inset = chatInnerInset()
+        dock:ClearAllPoints()
+        dock:SetPoint("TOPLEFT", panel, "TOPLEFT", inset, -2)
+        dock:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -inset, -2)
+    end
     local width, height = panel:GetSize()
     -- The message area gives up exactly what a taller tab row takes (0 at 22).
     local extra = self:ChatSetting("tabHeight") - 22
@@ -1514,6 +1561,26 @@ function Skin:LayoutChat()
                 chat:SetSize(340, (i == 2 and 119 or 143) - extra)
             end
         end
+    end
+end
+
+-- One coalesced geometry pass after the client re-ran its own chat-window or
+-- Edit Mode placement. Combat defers it through Skin.pending.
+function Skin:QueueChatLayout()
+    if self.chatLayoutQueued or not self.started or not self.chatPanel then return end
+    self.chatLayoutQueued = true
+    C_Timer.After(0, function()
+        self.chatLayoutQueued = nil
+        if InCombatLockdown() then self.pending = true; return end
+        self:LayoutChat()
+        self:AlignChatTabs(GeneralDockManager)
+    end)
+end
+
+-- Pixel-thick bevels follow the screen pixel; repaint them after a display change.
+function Skin:RepaintRaised()
+    for _, border in ipairs(self.panels) do
+        if border.raisedRepaint then border.raisedRepaint() end
     end
 end
 
@@ -1599,7 +1666,6 @@ function Skin:Interface()
     self:LayoutChat()
     self:Tracker()
     self:Menu()
-    self:Tooltips()
     -- Native visibility controls hide/show attached decorative borders.
     -- BNToastFrame is fitted and rimmed by FitChatToasts.
     self:FitChatToasts()
@@ -1614,14 +1680,34 @@ function Skin:Start()
     self:Interface()
 end
 
+-- Parts of the interface a load-on-demand addon can add after login. The full
+-- pass stays with login, world entry and work deferred by combat.
+function Skin:AddonLoaded(name)
+    if InCombatLockdown() then self.pending = true; return end
+    self:Minimap()
+    self:Menu()
+    if name == "Blizzard_ObjectiveTracker" or (ObjectiveTrackerFrame and not self.trackerFitHooked) then self:Tracker() end
+    local friends, speech = QuickJoinToastButton, TextToSpeechButton
+    if (friends and not friends.squancherPinHooked) or (speech and not speech.squancherPinned) or not self.chatPlaced then
+        self:Chat()
+        self:LayoutChat()
+    end
+    self:FitChatToasts()
+    for _, popup in ipairs({ "StaticPopup1", "StaticPopup2", "QueueStatusFrame" }) do
+        local frame = _G[popup]
+        if frame then self:Panel(frame, "dialog", 0) end
+    end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ADDON_LOADED")
-events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:RegisterEvent("UPDATE_CHAT_WINDOWS")
+events:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
 local themeLoaded
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", function(_, event, name)
     if not themeLoaded and (ns.db or SquanchOnDB) then
         themeLoaded = true
         local db = ns.db or SquanchOnDB
@@ -1631,15 +1717,18 @@ events:SetScript("OnEvent", function(_, event)
         Skin.themePending = nil
         applyRimAlpha()
     end
-    if event == "ADDON_LOADED" then
-        if not Skin.started then return end
-    elseif event == "PLAYER_LOGIN" then
-        Skin.started = true
-    elseif event == "PLAYER_REGEN_DISABLED" then
-        -- Combat must not replace the configured translucent fills or border alpha.
+    if event == "UPDATE_CHAT_WINDOWS" or event == "UPDATE_FLOATING_CHAT_WINDOWS" then
+        Skin:QueueChatLayout()
         return
     end
-    if Skin.started then Skin:Interface() end
+    if event == "PLAYER_LOGIN" then Skin.started = true end
+    if not Skin.started then return end
+    if event == "ADDON_LOADED" then
+        Skin:AddonLoaded(name)
+    elseif event ~= "PLAYER_REGEN_ENABLED" or Skin.pending then
+        -- Combat end repeats the pass only when combat deferred part of it.
+        Skin:Interface()
+    end
 end)
 
 -- The heading look, literally the unselected chat tab's label: tab font and

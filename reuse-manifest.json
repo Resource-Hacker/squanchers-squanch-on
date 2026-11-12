@@ -27,7 +27,7 @@
       "files": [
         {
           "path": "SquanchOn/NameplateIndicators.lua",
-          "sha256": "6b21ca15e5ce48b7d6a631e4851a1260fa4e15c6525c3fb89bd05daeaed2b472"
+          "sha256": "8ef4a389990a6e92156dd530eb05aca8c1ee7000f13d130ce979212352f448c9"
         },
         {
           "path": "SquanchOn/LICENSES/TargetNameplateIndicator-LICENSE.txt",
@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "SquanchOn/Camera.lua",
-          "sha256": "57522a6f0ce79eb74561df7590ee5641b624980c867f7214d1848314dcc95438"
+          "sha256": "fc514dff5b69f64c7cb2cd38253753597132a87470b9e2e216b41ef753bb99b9"
         },
         {
           "path": "SquanchOn/LICENSES/DynamicCam-MIT.txt",
@@ -370,7 +370,7 @@
       "files": [
         {
           "path": "SquanchOn/HordeReticle.lua",
-          "sha256": "5a3cf3b687578040507a35689dc52bfab4405186995b10728ccee77327e028c3"
+          "sha256": "507fbc7127885279996d6b019bc2d7e0cab4c88146fa4d7df1f6d90000b739fc"
         },
         {
           "path": "SquanchOn/HordeReticleData.lua",
@@ -574,7 +574,7 @@
       "files": [
         {
           "path": "SquanchOn/asset-source/generate-frame-media.py",
-          "sha256": "8ec2fb2192d131e52764acaf44a8677d49d5dba7fd3edd362ce9b068af1b4cec"
+          "sha256": "0c665f6a0bc9efbf323fd6f62c2fd5054ccb15ffc4b7b014de1229b6fe6ef39e"
         },
         {
           "path": "SquanchOn/media/textures/bar-smooth.tga",
@@ -599,11 +599,171 @@
       ]
     },
     {
-      "name": "Selectable status-bar and border textures, bar-look target rings and mouseover ring segments",
+      "name": "Selectable status-bar and border textures, bar-look target rings and mouseover half rings",
       "license": "MIT",
       "source": "This repository",
       "modifications": "Generated numerically by asset-source/generate-frame-media.py (hash under Unit-frame media) from original formulas. No image is read or copied; the ring-default-* profile uses eight grey levels measured from the client's standard status-bar texture (Interface\\TargetingFrame\\UI-StatusBar), written as numbers in the generator.",
       "files": [
+        {
+          "path": "SquanchOn/media/Crosshairs/half-bevel-12.tga",
+          "sha256": "b928af09e57aeda480c8d2d63d455ace729296706c2b1b3c2da056fcbcd2f052"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-bevel-3.tga",
+          "sha256": "b9ca0cdf048035b8af3ddd17a969b6c374bbd5f1f53287aa8e9f5a949c4e289d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-bevel-5.tga",
+          "sha256": "fedae8deca164fa45aea2e35844d7f8318e5af5634e7376340c001dcebb7687f"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-bevel-8.tga",
+          "sha256": "09bb9a8f3b94bd9d3882534d0712f764ed60cd34b9319b794b3a03b8d6ccdb52"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-deep-12.tga",
+          "sha256": "a2f039e94942bab04a6073ed5eaa827b4024045c100ecd43a7f4ca6adb1f6bac"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-deep-3.tga",
+          "sha256": "db90ae2dfe415e59e20861748b96c223bfa456739cac38f60965f8760448b8b2"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-deep-5.tga",
+          "sha256": "1200c52037fc28943b07e871eef133fe69a5f3f7159c8f071ec051ce79ae87ab"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-deep-8.tga",
+          "sha256": "6ce2d25bc56e0bc79f155802c836f3c9e48be576034411654cf4c4c08f6bfa80"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-default-12.tga",
+          "sha256": "1b6f16cf110730e99850da926cfac96a1517a78fcdec674f4294019150218968"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-default-3.tga",
+          "sha256": "b5a308f7b26f0f20c53ad91e2f5ef386fb083f6b31600beeae8eb9983026fbb6"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-default-5.tga",
+          "sha256": "36f4d4c8fbaee0e4893e3452188d9fb6fe3fda8106af26a97ea29e96ce527f9c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-default-8.tga",
+          "sha256": "023f22198c1468aa8ee3c0ad15a124faec80b1fcaa785eda095051490394207c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-flat-12.tga",
+          "sha256": "898f90c10bb3861c6cdd7f54e803e62b4eff662ba05f3adafc9fefa0eae41147"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-flat-3.tga",
+          "sha256": "39ddb1a8b9bea9fd138cb49b942aaac04f73bb13edd2980a4c5d8b31d945be32"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-flat-5.tga",
+          "sha256": "545aebd2e08918eedb440dd7e3b8ef711de9bf9714b800a63a01170d2c996f85"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-flat-8.tga",
+          "sha256": "5f46cb81deb769674f260901cf55a47589e4bbd20a4feaeb1e18c98ef70d6766"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-glass-12.tga",
+          "sha256": "facd270103603d51171ff1cdb1de4b6822874c42d638042aaae582144ea979a2"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-glass-3.tga",
+          "sha256": "954e74727ad3166aefdc61638bb196453c8004a22198720ddaf7b35a7f33ae4f"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-glass-5.tga",
+          "sha256": "b8916cfa956a69f3ee359d62f19f034e963e176c2163d6908d807051bfd216f2"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-glass-8.tga",
+          "sha256": "0cf1c96127a49d38a63994403393cce05d9451a05e539295af17795c679bf988"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-gloss-12.tga",
+          "sha256": "6823f6f2db4d9c91724b68b92464e0557dd8cd7e34fb3fb7756a0f9b4a37230a"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-gloss-3.tga",
+          "sha256": "e154add297d125fcabd46a4a9d1b207af5c7266d0b2375c00bf2c23667e36271"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-gloss-5.tga",
+          "sha256": "03be7443ce063cb34b225eb9be6d54af44e0421eed85589774cac52c6fde9457"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-gloss-8.tga",
+          "sha256": "6f1851c5b14ce9f0c4d7ce437b7882cf8174dd9bc5b83acdbec12b6929653169"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-groove-12.tga",
+          "sha256": "fa0bafd38945e6189492965e9aed17731f28408da55a7148f3141dce35237852"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-groove-3.tga",
+          "sha256": "24aa1611549caaa5f8769cf838573f23c256972c2c28147daec9b5ce1e9d1639"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-groove-5.tga",
+          "sha256": "e4871cd2a35751167842a9436c7dc0987e4a4e6913442efe777f03a0bb27d799"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-groove-8.tga",
+          "sha256": "2cd2cb5aa9f925bdbbdc7016556329a2f2504e2cb9fbb4b449d46b50e8ed21c5"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-round-12.tga",
+          "sha256": "ba19aa2fbac4aea6d633c959751a60fd010cb3c2c1acddb7a67da4c6da0a0e77"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-round-3.tga",
+          "sha256": "d68063231664ece07909dc6044ba26762bc8f60c06ab7a1585e6817382c8fe3c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-round-5.tga",
+          "sha256": "f27012cdbb5e50b3662e52ba3a820ed70f80de3ff3b335db72d0f50aaa7b652e"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-round-8.tga",
+          "sha256": "d3bc5d97b9da747a3d5e39ee14b1a09313849ea1f86c57392686d8a4794557d7"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-smooth-12.tga",
+          "sha256": "a21d34d844db7c61fd9cfa100eeda11cd6bb2ba6cbbd54eba21449975891ce8c"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-smooth-3.tga",
+          "sha256": "22d1ff94a6c5245cfd43cfc508079deb3c09441a5b5721421d7cdf1b89407723"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-smooth-5.tga",
+          "sha256": "86781aaa875f90de9b5a5609b637eb0054623f963dce285c7cf7d8a88bc741e1"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-smooth-8.tga",
+          "sha256": "66e8ecc9f9594e3cf4e478e4153a227f7bfe935af0a009ab804f4695b47fe54b"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-soft-12.tga",
+          "sha256": "7cd13df767316906e9f762d9ed98e72d11731da94dc52de37032ad64bc41bbc1"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-soft-3.tga",
+          "sha256": "962e0679ccf06843b120e7dfab5fade30d71628e2b542b6915dc650d3776972a"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-soft-5.tga",
+          "sha256": "1c93f3ed46797556a8d581019bce693d098568a6aa92b1a42f1537605349388a"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/half-soft-8.tga",
+          "sha256": "8e034564c76a06b59f9cd593b6da058e1a236a4b3e8498440b08d87f0535970e"
+        },
         {
           "path": "SquanchOn/media/Crosshairs/ring-bevel-12.tga",
           "sha256": "f8cda89992fe83ad8dc937ce5d02b4c8a6a23618588762376f56b3ad18837b7f"
@@ -749,6 +909,38 @@
           "sha256": "2d5585b1e536cb56e325f16cdbe593c96c06d23a4eabe6f6a663ff54ced79c40"
         },
         {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-12.tga",
+          "sha256": "f2236a62bf2b628627288fea7ba8c32b23f19ee684847abe2ff7b5bd64fb37fa"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-3.tga",
+          "sha256": "819593c70f38c48aa1a91a575a2831754d0f6d9d7ab4e2b662c768ec8b1bd4fb"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-5.tga",
+          "sha256": "ebd509eb3805c8551dd7462a9744afddbe0b291b2c66ebb6d52a52bbd3066e98"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-smooth-8.tga",
+          "sha256": "6ab9fb738947a64bebf36ba377a63e30aa35cfc6cc169b97c5575dec8e9d7bd3"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-12.tga",
+          "sha256": "2d492965a3063dc2f5cb06013daa2d7a1ab5a8c2e7b92a55eb446202499553d9"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-3.tga",
+          "sha256": "898d4e33132f350e06ee100499a5134e53671b00cc2e7e85f31c955227064f5d"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-5.tga",
+          "sha256": "a44ca18cce593ad263d083f009fef0b0734582714d555cf3d7d72e2070862f65"
+        },
+        {
+          "path": "SquanchOn/media/Crosshairs/ring-soft-8.tga",
+          "sha256": "664537de2e5c2cd32b6711df2a3124ea2ecafda2494be00574ee16dc4885a3c9"
+        },
+        {
           "path": "SquanchOn/media/borders/border-double.tga",
           "sha256": "d9663a2177df6c55d279475b06f898cb0b5d18f932677a383478632b84c0a0b3"
         },
@@ -815,198 +1007,6 @@
         {
           "path": "SquanchOn/media/textures/bar-underline.tga",
           "sha256": "41a4fd4041fd7bb74918fa6fead74fcdb5ef4b6241021293ef7209ebc72d0038"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-12.tga",
-          "sha256": "f2236a62bf2b628627288fea7ba8c32b23f19ee684847abe2ff7b5bd64fb37fa"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-3.tga",
-          "sha256": "819593c70f38c48aa1a91a575a2831754d0f6d9d7ab4e2b662c768ec8b1bd4fb"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-5.tga",
-          "sha256": "ebd509eb3805c8551dd7462a9744afddbe0b291b2c66ebb6d52a52bbd3066e98"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-smooth-8.tga",
-          "sha256": "6ab9fb738947a64bebf36ba377a63e30aa35cfc6cc169b97c5575dec8e9d7bd3"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-12.tga",
-          "sha256": "2d492965a3063dc2f5cb06013daa2d7a1ab5a8c2e7b92a55eb446202499553d9"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-3.tga",
-          "sha256": "898d4e33132f350e06ee100499a5134e53671b00cc2e7e85f31c955227064f5d"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-5.tga",
-          "sha256": "a44ca18cce593ad263d083f009fef0b0734582714d555cf3d7d72e2070862f65"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/ring-soft-8.tga",
-          "sha256": "664537de2e5c2cd32b6711df2a3124ea2ecafda2494be00574ee16dc4885a3c9"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-bevel-12.tga",
-          "sha256": "7c26e5afee78d1c194662bee3e91d315d4cfdde0a0ae0054a64427838115eb27"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-bevel-3.tga",
-          "sha256": "b4fc24c7aced7ef7c77446aec453d546446d7e0b2224e7e943c9df0ff367492e"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-bevel-5.tga",
-          "sha256": "60566f85c21d87a64928ad852c733c3ea37e803c3b1e6f2348d0094067730389"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-bevel-8.tga",
-          "sha256": "12f77ee591cb07a0d366e944daeadfae040c2599d002510511ef72f81d030bd6"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-deep-12.tga",
-          "sha256": "33ba517710e044b054560f0f64294d81e84da5f06e27dbf6c4d40203c1e0afe9"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-deep-3.tga",
-          "sha256": "8b18315b7bd742d117b4ff764fcd68c1c0fcd8ea1d7b4895979d21d4a10ec75d"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-deep-5.tga",
-          "sha256": "e9786cc0eebeb91b65933a2fbfc8d516c58d950bbe893abe0ed6a58347dc0e92"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-deep-8.tga",
-          "sha256": "a806fc3446878861bba001e3d03335f2fcdddc26180d4dee2a84c14f1a68fe0e"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-default-12.tga",
-          "sha256": "6d010127cf19b6b3ba3354640bc0f280d34a378cc67b6bc545687184a208f632"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-default-3.tga",
-          "sha256": "ae5af721ebe26f48f6712484fec27273227f7f7f91697003200b75bb06aee21d"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-default-5.tga",
-          "sha256": "c00efdc8f85306bfc8305103b1f89e06fc4e4c01dc78e31bc402d8cde0c524ef"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-default-8.tga",
-          "sha256": "ce2842b247b310c8d3fc02723ae4b9af07b9f0fda29a9efea70d8cc466764b97"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-flat-12.tga",
-          "sha256": "6d22c7972e56d2b451bcd10e57161b504f4bc4583a75e9fffe45517f2409bbec"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-flat-3.tga",
-          "sha256": "9ffbfdb091fe035789d7e2744177e4f81d9b8125935bee57945dbdde6e09404d"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-flat-5.tga",
-          "sha256": "a36323613da4faa1699888698a0fe56540bf4e843b619467c0684f4932061d28"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-flat-8.tga",
-          "sha256": "49c0bbb0309bf95299c8011efc303ba95f31394c6e825690d1f512cbd4c81376"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-glass-12.tga",
-          "sha256": "473389c02faac58a46b7ecce24ea9b8b5d0e05cb097db413fe0d8314e655b20c"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-glass-3.tga",
-          "sha256": "08f0cd2d79d1c8543e3bbc0c8d70cb92292f253f2f278a3197da7e964297d7ff"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-glass-5.tga",
-          "sha256": "62b71a853b4e1ddafe51ff2002fbc46c8f16b5ff25d3552749f5cb5c8bb9000a"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-glass-8.tga",
-          "sha256": "386e1c3f6e3b9fe195fd801ba2ce4b0c65eadd2b4f42d7e402e8a4584bdb0e82"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-gloss-12.tga",
-          "sha256": "b22d1180e18dba3614db3ac28f399df06287c6c9c9cd74a5674363491cd2406e"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-gloss-3.tga",
-          "sha256": "e35961eaab40ee52193460f48c3ea6978efb71bc75198ac129ad1e5cf28987bb"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-gloss-5.tga",
-          "sha256": "5b4e96643fddac57aa2b7abd9382e51c177b93bd94922f4396701dc4be9127ef"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-gloss-8.tga",
-          "sha256": "13dc41d0d4785ac894f0565c47e1656de62482262feac8d0ce3eb384ab264e17"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-groove-12.tga",
-          "sha256": "fe3af92032af95f57707f7da477f81f8f327f0e814863591d570a358e7585cd0"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-groove-3.tga",
-          "sha256": "85a2cf66e67d02b1a18adfec9848c83c9abd48a73b79b47e9b71babf68b4b6ff"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-groove-5.tga",
-          "sha256": "4ea23df28766632ed9b19958d739221a7d8ad7ca447cc8c1b84f5d23abeb4a8b"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-groove-8.tga",
-          "sha256": "56705639516e3a543435fd4d08fa76579b167b9e23a1eafd4049977bc37aca64"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-round-12.tga",
-          "sha256": "c544ef6e930253de9dc447a12300f10120aa753fd406ad6873a61997f1497493"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-round-3.tga",
-          "sha256": "29ca30f14d3b04bd75e215ca370d1600c766590535a3ece790a40c848b8f8cdc"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-round-5.tga",
-          "sha256": "6c320b84baf85ec881e30c614f70d2e4270fe3bc46be1e1ca62bb4748e58ec1e"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-round-8.tga",
-          "sha256": "a9109a67e62d72275477e0095d754b82287e543cea4795ef047d20a73cd2ca9c"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-smooth-12.tga",
-          "sha256": "798cd8803662589d395559ecf104e264114ec3ae3578f17236a41ddf32b5f2f0"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-smooth-3.tga",
-          "sha256": "4639aff9b24411c1c0c492c28cdecd02ff9392e4ce182488a18ea4928f6a8f65"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-smooth-5.tga",
-          "sha256": "b02d25dbb665b35611a4c9ab5431ca8eeed1fa2144e626560f14489a88bdf40a"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-smooth-8.tga",
-          "sha256": "d4f5de675d4a4204eacbb53476c1c0acc7fbeb20be2f0ae224d1ef597338c72b"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-soft-12.tga",
-          "sha256": "6b1eae5e4a57a356e9e609c3580154cef0a439beedc738d0a6f917f0251f0a61"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-soft-3.tga",
-          "sha256": "0a0858cc4685c1bf9425a7725b2da0398683c56dfbd46d7b661382471caceb98"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-soft-5.tga",
-          "sha256": "2e5adc351c4ff9e365d71a075021703113c298bc6fbfd76b051d86773ed3e664"
-        },
-        {
-          "path": "SquanchOn/media/Crosshairs/segment-soft-8.tga",
-          "sha256": "abbc6e6483b765c468da20df97a5999ef06ceb46be117f886eb45c316536c499"
         }
       ]
     },
