@@ -15,7 +15,7 @@ key when you need the interface; release it to return to mouselook.
 · [Changelog](CHANGELOG.md)
 · [Report an issue](https://github.com/Resource-Hacker/squanchers-squanch-on/issues/new?template=bug_report.md)
 
-**0.3.0-rewrite · Forever interface 16001 · partly verified in game.**
+**1.0.0 · Forever interface 16001 · partly verified in game.**
 Everything is in one `SquanchOn/` folder: mouselook and reticle, camera, unit
 frames, nameplates, buff and debuff bars, chat, drawers, a bag window, a damage
 meter, tooltip presentation, one settings window, profiles, fonts and textures.

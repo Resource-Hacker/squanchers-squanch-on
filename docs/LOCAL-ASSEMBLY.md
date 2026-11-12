@@ -36,7 +36,7 @@ No other addon is required.
 ## From a source checkout
 
 `python3 tools/package.py` checks the addon and writes
-`dist/SquanchOn-0.3.0-rewrite.zip` with a SHA-256 checksum; see
+`dist/SquanchOn-1.0.0.zip` with a SHA-256 checksum; see
 [contributing](../CONTRIBUTING.md). Copying the `SquanchOn/` folder directly
 works as well.
 

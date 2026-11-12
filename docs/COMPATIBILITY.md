@@ -2,7 +2,7 @@
 
 ## Client and evidence
 
-**0.3.0-rewrite targets Forever interface 16001 and is only partly verified.**
+**1.0.0 targets Forever interface 16001 and is only partly verified.**
 The author has checked it live only solo and out of combat on the Forever
 client, without Plater or DynamicCam loaded. See
 [verification status](#verification-status) for what has and has not been
@@ -11,7 +11,7 @@ Changing a TOC number does not establish compatibility.
 
 The reticle control comes from the author's working gameplay setup. The
 0.1.0-alpha unit-frame replacement was rejected for visual differences. An
-intermediate 0.2.0-candidate used original ElvUI/BenikUI engines; this 0.3 rewrite
+intermediate 0.2.0-candidate used original ElvUI/BenikUI engines; the 1.0 rewrite
 supersedes that packaging approach with independently written behavior. Acceptance
 of the original-engine setup does not validate this new renderer.
 

@@ -1326,7 +1326,7 @@ function addon:OnEvent(event, ...)
         profile[key] = nil
       end
     end)
-    self.db.loadedVersion = "0.3.0-rewrite"
+    self.db.loadedVersion = "1.0.0"
     if not self.db.nativeReturnRevision then
       self.db.nativeCombinedClick = false
       self.db.nativeReturnRevision = 1
@@ -1388,7 +1388,7 @@ function addon:OnEvent(event, ...)
     self:UpdateReticle()
     self:RecordNativeReceipt(event)
     if event == "PLAYER_LOGIN" then
-      print("Squancher's Squanch-On 0.3 rewrite loaded. /squanchon opens settings; /sqedit opens the layout grid.")
+      print("Squanch-On 1.0 loaded. /squanchon opens settings; /sqedit opens the layout grid.")
     end
   elseif event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
     self:RestoreNativeLeftDelta(event)

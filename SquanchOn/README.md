@@ -1,4 +1,4 @@
-# Squancher's Squanch-On — 0.3.0-rewrite
+# Squancher's Squanch-On — 1.0.0
 
 **Keep the camera locked. Open mouseover only when you mean it.**
 

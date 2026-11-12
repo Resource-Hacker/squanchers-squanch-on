@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0-rewrite — unreleased
+## 1.0.0 — unreleased
 
 - Ship everything in one `SquanchOn/` folder. No other addon, assembly step or
   separately supplied media is needed. Unit-frame layout and presentation are
