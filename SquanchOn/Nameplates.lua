@@ -158,7 +158,7 @@ NP.defaults = {
   -- An enemy NPC the player cannot attack shows its name only, in this font.
   bigName = { font = 'Expressway', size = 10, outline = 'OUTLINE' },
   -- Its profession or title line ("<Innkeeper>"), in the name's colour.
-  subtitle = { show = true, font = 'Expressway', size = 10, outline = 'OUTLINE' },
+  subtitle = { show = true, font = 'Expressway', size = 10, outline = 'OUTLINE', underBar = true, barSize = 7, barGap = 2 },
   -- Cyrillic names in Latin letters.
   translit = true,
   -- Friendly plates by kind of zone (out of combat, on zone changes).

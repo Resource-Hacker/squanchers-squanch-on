@@ -111,6 +111,8 @@ add(ROOT, 'Health bar', {
   { 'bigName.font', 'font', 'Name font of an unattackable enemy NPC' },
   { 'bigName.size', 'slider', 'Name size of an unattackable enemy NPC', slider(4, 30, 1, { integer = true }) },
   { 'subtitle.show', 'toggle', 'Title under a name-only NPC', { desc = 'The profession or title line, as "<Innkeeper>", in the colour of the name.' } },
+  { 'subtitle.underBar', 'toggle', 'Title under an NPC health bar', { desc = 'Shows the same line, as "<General Goods>", under the health bar of NPCs that have one.' } },
+  { 'subtitle.barSize', 'slider', 'Title size under a bar', slider(4, 20, 1, { integer = true }) },
   { 'subtitle.font', 'font', 'Title font' },
   { 'subtitle.size', 'slider', 'Title size', slider(4, 30, 1, { integer = true }) },
   { 'translit', 'toggle', 'Cyrillic names in Latin letters' },

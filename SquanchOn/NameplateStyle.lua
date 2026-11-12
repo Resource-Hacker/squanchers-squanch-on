@@ -442,10 +442,23 @@ local function updateName(frame)
   end
   local r, g, b = nameColor(frame, unit, settings.colors, config)
   frame.Name:SetTextColor(r, g, b)
-  -- A name-only NPC carries its title underneath, in the name's colour.
-  local line = settings.subtitle.show and (kind == 'enemynpc' or kind == 'friendlynpc') and not frame.Health:IsShown() and title(frame, unit)
+  -- An NPC carries its title ("<General Goods>"): under the name on a name-only
+  -- plate, and under the health bar when the bar shows (owner: readable without
+  -- mousing over every vendor).
+  local sub = settings.subtitle
+  local npc = kind == 'enemynpc' or kind == 'friendlynpc'
+  local barShown = frame.Health:IsShown()
+  local line = npc and sub.show and (not barShown or sub.underBar ~= false) and title(frame, unit)
   frame.npTitle = line and true or false
   if line then
+    local under = barShown and true or false
+    if frame.npTitleUnder ~= under then
+      frame.npTitleUnder = under
+      frame.Subtitle:ClearAllPoints()
+      if under then frame.Subtitle:SetPoint('TOP', frame.Health, 'BOTTOM', 0, -(tonumber(sub.barGap) or 2))
+      else frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2) end
+      NP:Font(frame.Subtitle, sub.font, under and (tonumber(sub.barSize) or 7) or sub.size, sub.outline)
+    end
     frame.Subtitle:SetText('<' .. line .. '>')
     frame.Subtitle:SetTextColor(r, g, b)
   end
@@ -565,9 +578,8 @@ local function dress(frame, settings, config)
   font(frame.Level, config.level); side(frame.Level, config.level, health)
   font(frame.Percent, config.percent); side(frame.Percent, config.percent, health)
   frame.Percent:SetAlpha(config.percent.alpha or 1)
-  font(frame.Subtitle, settings.subtitle)
-  frame.Subtitle:ClearAllPoints()
-  frame.Subtitle:SetPoint('TOP', frame.Name, 'BOTTOM', 0, -2)
+  -- Font and anchor of the title depend on whether the bar shows (updateName).
+  frame.npTitleUnder = nil
   local label = settings.target.label
   font(frame.TargetName, label)
   frame.TargetName:ClearAllPoints()
