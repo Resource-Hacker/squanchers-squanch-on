@@ -37,7 +37,7 @@ add('mode', { type = 'choice', label = 'Shows', section = 'Meter', order = 10,
     values = Meter.modeValues, labels = Meter.modeLabels, keywords = 'mode damage healing dps hps interrupts dispels deaths' })
 add('segment', { type = 'choice', label = 'Fight', section = 'Meter', order = 20,
     values = { 'current', 'overall' }, labels = { 'Current', 'Overall' },
-    desc = "Earlier fights are picked from the drawer's own menu.", keywords = 'segment session current overall' })
+    desc = "Earlier fights and Reset data are in the drawer's own fight menu.", keywords = 'segment session current overall' })
 
 add('texture', { type = 'statusbar', label = 'Bar texture', section = 'Bars', order = 10, keywords = 'statusbar texture' })
 add('barHeight', { type = 'slider', label = 'Bar height', section = 'Bars', order = 20,
@@ -48,7 +48,7 @@ add('showRank', { type = 'toggle', label = 'Rank number', section = 'Bars', orde
 add('showPerSecond', { type = 'toggle', label = 'Second value in brackets', section = 'Bars', order = 50,
     desc = 'The per-second rate beside a total, or the total beside a rate.', keywords = 'per second dps hps total' })
 add('showPercent', { type = 'toggle', label = 'Share of the total', section = 'Bars', order = 60,
-    desc = 'Appears out of combat only: the game hides the amounts from addons while you fight.',
+    desc = 'Appears out of combat only (the game hides the amounts from addons while you fight), and only on rows with room for it.',
     keywords = 'percent percentage share' })
 
 add('hideNative', { type = 'toggle', label = "Hide the game's own meter", section = 'Game meter', order = 10,

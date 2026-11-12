@@ -9,8 +9,10 @@
 -- Data: the client's C_DamageMeter sessions. Addons may not register the
 -- combat log on this API generation. Amounts are secret numbers in combat, so
 -- nothing here compares, adds or measures them: they only go to
--- StatusBar:SetValue/SetMinMaxValues, AbbreviateNumbers, string.format and
--- FontString:SetText. The list order is the one the client returns.
+-- StatusBar:SetValue/SetMinMaxValues, AbbreviateNumbers, string.format,
+-- concatenation and FontString:SetText (the operations the client allows on
+-- secrets: https://warcraft.wiki.gg/wiki/Secret_Values). The list order is the
+-- one the client returns.
 --
 -- HUD, not a menu: never registered with ns:TrackMenuFrame, and every control
 -- except the handle ignores the mouse while mouselook is locked and no
@@ -22,7 +24,7 @@ ns.MeterDrawer = Meter
 Meter.defaults = {
     enabled = true, open = false, mode = 'DamageDone', segment = 'current',
     texture = 'Squanch Smooth', barHeight = 14,
-    showRank = true, showPercent = true, showPerSecond = true, classColors = true,
+    showRank = true, showPercent = false, showPerSecond = true, classColors = true,
     autoOpen = false, autoClose = 10, animate = true, hideNative = true,
 }
 -- Enum.DamageMeterType keys, in menu order.
@@ -34,7 +36,12 @@ local MODES = {
 }
 local RATE_FIRST = { Dps = true, Hps = true }
 local NO_RATE = { Interrupts = true, Dispels = true, Deaths = true }
-local HEADER, PAD, THROTTLE, MIN_WIDTH = 28, 6, .25, 40
+-- Header labels for the names that do not fit the strip; the tooltip and the
+-- list show the full name.
+local SHORT = { DamageTaken = 'Dmg taken', AvoidableDamageTaken = 'Avoidable', EnemyDamageTaken = 'Enemy taken' }
+local HEADER, PAD, THROTTLE, MIN_WIDTH = 18, 6, .25, 40
+local WHITE = [[Interface\Buttons\WHITE8X8]]
+local FILL, TRACK, ROW_TEXT = .7, .6, { .93, .93, .9 } -- bar brightness, track alpha, row text
 
 local function types() return Enum and Enum.DamageMeterType end
 Meter.modeValues, Meter.modeLabels = {}, {}
@@ -66,6 +73,36 @@ local function amount(value)
     local ok, text = pcall(AbbreviateNumbers, value)
     if ok and text then return text end
     ok, text = pcall(string.format, '%.0f', value)
+    return ok and text or '?'
+end
+-- Per-second values, one decimal at most. A readable number is rounded in
+-- Lua. A secret one cannot be: AbbreviateNumbers does it with these
+-- breakpoints (shown value = floor(n / significandDivisor) / fractionDivisor,
+-- https://warcraft.wiki.gg/wiki/API_AbbreviateNumbers) once two known numbers
+-- came out right on this client; otherwise string.format('%.1f'), which the
+-- client also runs on secrets.
+local function step(from, suffix, significand, fraction)
+    return { breakpoint = from, abbreviation = suffix, significandDivisor = significand, fractionDivisor = fraction, abbreviationIsGlobal = false }
+end
+local RATE = { breakpointData = {
+    step(1e9, 'B', 1e8, 10), step(1e6, 'M', 1e5, 10), step(1e4, 'K', 1e3, 1), step(1e3, 'K', 100, 10), step(0, '', .1, 10),
+} }
+local rateOptions -- nil: untried; false: this client renders them differently
+local function rate(value)
+    if not secret(value) then
+        if type(value) ~= 'number' then return '?' end
+        if value >= 1000 then return amount(math.floor(value + .5)) end
+        return (string.format('%.1f', value):gsub('%.0$', ''))
+    end
+    if rateOptions == nil then
+        local ok, low, high = pcall(function() return AbbreviateNumbers(10.16, RATE), AbbreviateNumbers(1234, RATE) end)
+        rateOptions = ok and low == '10.1' and high == '1.2K' and RATE or false
+    end
+    if rateOptions then
+        local ok, text = pcall(AbbreviateNumbers, value, rateOptions)
+        if ok and text then return text end
+    end
+    local ok, text = pcall(string.format, '%.1f', value)
     return ok and text or '?'
 end
 local function label(parent, size)
@@ -127,11 +164,9 @@ function Meter:Layout()
     -- Contents are laid out in interface units whatever the panel's scale is.
     local unit = UIParent:GetEffectiveScale() / scale
     self.content:SetScale(unit)
-    local inner, height = width / unit, panel:GetHeight() / unit
-    local free = math.max(60, inner - PAD * 4 - 36)
-    self.modeBox:SetWidth(math.floor(free * .55))
-    self.segmentBox:SetWidth(free - math.floor(free * .55))
-    self:LayoutRows(height - HEADER - PAD)
+    self.inner = width / unit
+    self:UpdateHeader()
+    self:LayoutRows(panel:GetHeight() / unit - HEADER - PAD)
     self:PlaceHandle()
 end
 function Meter:QueueLayout()
@@ -147,7 +182,8 @@ function Meter:PlaceHandle()
     local handle = self.handle
     if not handle then return end
     handle:ClearAllPoints()
-    handle:SetPoint('LEFT', self.open and self.frame or self.panel, 'RIGHT', rimWidth(), 0)
+    -- Centred on the painted outer edge; the arrow's art is the middle of it.
+    handle:SetPoint('CENTER', self.open and self.frame or self.panel, 'RIGHT', rimWidth() + 2, 0)
     handle.arrow:SetRotation(self.open and math.pi / 2 or -math.pi / 2)
     handle:SetShown(self:Settings().enabled and true or false)
 end
@@ -195,7 +231,7 @@ local function createRow(list)
     local bar = CreateFrame('StatusBar', nil, row)
     bar:SetAllPoints(row); bar:EnableMouse(false)
     local back = bar:CreateTexture(nil, 'BACKGROUND')
-    back:SetAllPoints(bar); back:SetColorTexture(0, 0, 0, .35)
+    back:SetAllPoints(bar); back:SetColorTexture(0, 0, 0, TRACK)
     local text = CreateFrame('Frame', nil, row)
     text:SetAllPoints(row); text:SetFrameLevel(bar:GetFrameLevel() + 1)
     local value = label(text, 8)
@@ -203,6 +239,11 @@ local function createRow(list)
     local name = label(text, 8)
     name:SetPoint('LEFT', text, 'LEFT', 3, 0); name:SetPoint('RIGHT', value, 'LEFT', -4, 0)
     name:SetWordWrap(false)
+    for _, text in ipairs({ name, value }) do
+        local path = text:GetFont()
+        if path then text:SetFont(path, 8, 'OUTLINE') end
+        text:SetTextColor(ROW_TEXT[1], ROW_TEXT[2], ROW_TEXT[3])
+    end
     local line = row:CreateTexture(nil, 'ARTWORK')
     line:SetPoint('TOPLEFT', row, 'BOTTOMLEFT'); line:SetPoint('TOPRIGHT', row, 'BOTTOMRIGHT'); line:SetHeight(1)
     local color = skin.lineColor
@@ -237,7 +278,7 @@ function Meter:SessionType()
 end
 local function paint(row, src, rank, settings, top, sum)
     local mode = settings.mode
-    local total, rate = src.totalAmount, src.amountPerSecond
+    local total, perSecond = src.totalAmount, src.amountPerSecond
     local died = mode == 'Deaths'
     if died then
         row.bar:SetMinMaxValues(0, 1); row.bar:SetValue(1)
@@ -246,10 +287,10 @@ local function paint(row, src, rank, settings, top, sum)
     end
     local class = src.classFilename
     local color = settings.classColors and not secret(class) and class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-    if color then row.bar:SetStatusBarColor(color.r, color.g, color.b, .85)
+    if color then row.bar:SetStatusBarColor(color.r * FILL, color.g * FILL, color.b * FILL, 1)
     else
         local muted = ns.DarkSkin.innerBorderColor
-        row.bar:SetStatusBarColor(muted[1], muted[2], muted[3], .85)
+        row.bar:SetStatusBarColor(muted[1] * FILL, muted[2] * FILL, muted[3] * FILL, 1)
     end
     if settings.showRank then row.name:SetFormattedText('%d. %s', rank, src.name) else row.name:SetText(src.name) end
     local text
@@ -257,16 +298,19 @@ local function paint(row, src, rank, settings, top, sum)
         local ok, clock = pcall(SecondsToClock, src.deathTimeSeconds)
         text = ok and clock or ''
     else
-        local first, second = total, rate
-        if RATE_FIRST[mode] then first, second = rate, total end
-        text = amount(first)
-        if settings.showPerSecond and not NO_RATE[mode] then text = text .. ' (' .. amount(second) .. ')' end
-        -- A share needs arithmetic, which secret amounts (in combat) do not allow.
+        local first, second = amount(total), NO_RATE[mode] and '' or rate(perSecond)
+        if RATE_FIRST[mode] then first, second = second, first end
+        text = first
+        if settings.showPerSecond and not NO_RATE[mode] then text = text .. ' (' .. second .. ')' end
+        -- A share needs arithmetic, which secret amounts (in combat) do not
+        -- allow, and is shown only while it leaves the name half the row.
         if settings.showPercent and not secret(total) and not secret(sum) and type(sum) == 'number' and sum > 0 then
-            text = text .. string.format(' %d%%', total / sum * 100 + .5)
+            row.value:SetText(text .. string.format(' %d%%', total / sum * 100 + .5))
+            local ok, fits = pcall(function() return row.value:GetStringWidth() <= row:GetWidth() * .5 end)
+            if ok and fits then text = nil end
         end
     end
-    row.value:SetText(text)
+    if text then row.value:SetText(text) end
     row.index = rank
 end
 local function render(self)
@@ -314,11 +358,6 @@ function Meter:Refresh()
 end
 
 -- Header -------------------------------------------------------------------
-local function show(control, value, text)
-    control:SetValue(value, text)
-    local path = control.text:GetFont()
-    if path then control.text:SetFont(path, 10, '') end
-end
 local function choose(key, value)
     local options = ns.Options
     if options and options.byId['meter.' .. key] then options:Set('meter.' .. key, value)
@@ -326,6 +365,7 @@ local function choose(key, value)
 end
 local function segmentItems()
     local items = { { value = 'current', label = 'Current' }, { value = 'overall', label = 'Overall' } }
+    local last = { value = 'reset', label = 'Reset data' }
     pcall(function()
         local sessions = C_DamageMeter.GetAvailableCombatSessions()
         local count = 0
@@ -337,13 +377,47 @@ local function segmentItems()
             items[#items + 1] = { value = session.sessionID, label = name }
         end
     end)
+    items[#items + 1] = last
     return items
 end
+-- A flat text button: no rim, a faint highlight under the mouse, the full name
+-- as its tooltip. getItems/onCommit work as on an OptionWidgets dropdown.
+local function headerButton(parent, size, color, popupWidth)
+    local widgets = ns.OptionWidgets
+    local button = CreateFrame('Button', nil, parent)
+    button:SetHeight(HEADER - 4)
+    button:SetHighlightTexture(WHITE); button:GetHighlightTexture():SetVertexColor(1, .78, .42, .12)
+    button.text = widgets:Label(button, '', size, color and color[1], color and color[2], color and color[3])
+    button.text:SetPoint('LEFT', 2, 0); button.text:SetPoint('RIGHT', -2, 0); button.text:SetWordWrap(false)
+    button:SetScript('OnClick', function(self)
+        if widgets:PopupOwner() == self then widgets:ClosePopup(); return end
+        if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+        widgets:OpenPopup(self, self:getItems(), self.value, nil, popupWidth)
+    end)
+    button:SetScript('OnEnter', function(self)
+        if not self.tip or not GameTooltip then return end
+        GameTooltip:SetOwner(self, 'ANCHOR_TOP'); GameTooltip:SetText(self.tip); GameTooltip:Show()
+    end)
+    button:SetScript('OnLeave', function(self) if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+    button:SetScript('OnHide', function(self) if widgets:PopupOwner() == self then widgets:ClosePopup() end end)
+    return button
+end
+-- The fight label takes what its text needs, up to 45% of the strip; the mode
+-- name gets the rest and falls back to its short form when it would be cut.
 function Meter:UpdateHeader()
     local settings = self:Settings()
-    show(self.modeBox, settings.mode, self.modeLabels[settings.mode] or settings.mode)
-    if self.sessionID then show(self.segmentBox, self.sessionID, self.sessionName or 'Fight')
-    else show(self.segmentBox, settings.segment, settings.segment == 'overall' and 'Overall' or 'Current') end
+    local mode, segment = self.modeBox, self.segmentBox
+    local free = math.max(40, (self.inner or 150) - PAD * 2)
+    if self.sessionID then segment.value, segment.tip = self.sessionID, self.sessionName or 'Fight'
+    else segment.value, segment.tip = settings.segment, settings.segment == 'overall' and 'Overall' or 'Current' end
+    segment.text:SetText(segment.tip)
+    local segmentWidth = math.min(math.ceil(segment.text:GetStringWidth()) + 6, math.floor(free * .45))
+    segment:SetWidth(segmentWidth)
+    local full = self.modeLabels[settings.mode] or settings.mode
+    mode.value, mode.tip = settings.mode, full
+    mode:SetWidth(free - segmentWidth)
+    mode.text:SetText(full)
+    if SHORT[settings.mode] and mode.text:GetStringWidth() > free - segmentWidth - 4 then mode.text:SetText(SHORT[settings.mode]) end
 end
 
 -- Mouse: ignored while mouselook is locked, unless a modifier is held.
@@ -353,7 +427,7 @@ function Meter:SetInteractive(on)
     self.interactive = on
     for _, row in ipairs(self.rows) do row:EnableMouse(on) end
     self.list:EnableMouseWheel(on)
-    self.modeBox:EnableMouse(on); self.segmentBox:EnableMouse(on); self.resetButton:EnableMouse(on)
+    self.modeBox:EnableMouse(on); self.segmentBox:EnableMouse(on)
     if not on and self.tipRow then rowLeave(self.tipRow) end
 end
 
@@ -503,34 +577,31 @@ function Meter:Initialize()
     local content = CreateFrame('Frame', nil, frame)
     content:SetAllPoints(frame); content:EnableMouse(false)
     self.content = content
-    local modeBox = widgets:Dropdown(content, 80)
-    modeBox:SetPoint('TOPLEFT', content, 'TOPLEFT', PAD, -PAD)
+    local modeBox = headerButton(content, 10, skin.headerTextColor, 150)
+    modeBox:SetPoint('TOPLEFT', content, 'TOPLEFT', PAD - 2, -2)
     function modeBox:getItems()
         local items = {}
         for _, value in ipairs(Meter.modeValues) do items[#items + 1] = { value = value, label = Meter.modeLabels[value] } end
         return items
     end
     modeBox.onCommit = function(_, value) choose('mode', value) end
-    local segmentBox = widgets:Dropdown(content, 60)
-    segmentBox:SetPoint('LEFT', modeBox, 'RIGHT', PAD, 0)
+    local segmentBox = headerButton(content, 8)
+    segmentBox:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 2 - PAD, -2)
+    segmentBox.text:SetJustifyH('RIGHT')
     segmentBox.getItems = segmentItems
-    segmentBox.onCommit = function(control, value)
-        if type(value) == 'number' then
-            self.sessionID, self.sessionName, self.offset = value, nil, 0
-            for _, item in ipairs(segmentItems()) do if item.value == value then self.sessionName = item.label end end
-            self:UpdateHeader(); self:Refresh()
-        else
-            self.sessionID, self.sessionName, self.offset = nil, nil, 0
-            if self:Settings().segment == value then self:UpdateHeader(); self:Refresh() else choose('segment', value) end
-        end
-    end
-    local reset = widgets:SmallButton(content, 'Reset', 36, function()
-        if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then pcall(C_DamageMeter.ResetAllCombatSessions) end
+    segmentBox.onCommit = function(_, value)
         self.sessionID, self.sessionName, self.offset = nil, nil, 0
+        if value == 'reset' then
+            if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then pcall(C_DamageMeter.ResetAllCombatSessions) end
+        elseif type(value) == 'number' then
+            self.sessionID = value
+            for _, item in ipairs(segmentItems()) do if item.value == value then self.sessionName = item.label end end
+        elseif self:Settings().segment ~= value then
+            choose('segment', value); return
+        end
         self:UpdateHeader(); self:Refresh()
-    end)
-    reset:SetPoint('LEFT', segmentBox, 'RIGHT', PAD, 0)
-    self.modeBox, self.segmentBox, self.resetButton = modeBox, segmentBox, reset
+    end
+    self.modeBox, self.segmentBox = modeBox, segmentBox
 
     local list = CreateFrame('Frame', nil, content)
     list:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -HEADER)
