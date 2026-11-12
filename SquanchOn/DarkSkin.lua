@@ -975,6 +975,9 @@ function Skin:AlignChatTabs(dock)
                         end
                     end
                 end
+                -- The first tab sits on the panel rim, which is its left edge:
+                -- its own left line would double it with a dark pixel between.
+                joined = true
                 lastStatic = tab
             else
                 joined = lastDynamic ~= nil or hasStatic
