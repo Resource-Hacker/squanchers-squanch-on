@@ -347,7 +347,17 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- The plate bar is translucent, so a ring behind it would show through.
   -- Each ring texture is therefore drawn as two cropped pieces, one above and
   -- one below the bar, leaving the band behind the bar empty.
-  local pieces = { ring, ringGloss, ringRim, ringEdges[1], ringEdges[2] }
+  -- Mouseover glow: soft additive copies of the plain line stepping outward
+  -- from the ring, in the ring's colour (as the reticle's in-range glow does).
+  local ringGlows = {}
+  for index, strength in ipairs({ 0.7, 0.45, 0.28, 0.15 }) do
+    local glow = image(ringFrame, "circle", "OVERLAY")
+    glow:SetDrawLayer("OVERLAY", -1)
+    glow.strength, glow.step = strength, index
+    glow:Hide()
+    ringGlows[index] = glow
+  end
+  local pieces = { ring, ringGloss, ringRim, ringEdges[1], ringEdges[2], ringGlows[1], ringGlows[2], ringGlows[3], ringGlows[4] }
   local twins = {}
   for index, texture in ipairs(pieces) do
     twins[index] = ringFrame:CreateTexture(nil, "OVERLAY")
@@ -464,6 +474,10 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- outside (edge.border is the inflation that moves the line that far).
       if edge.border then d = edge.direction * edge.border end
       edge.inflate = d
+    end
+    -- Each glow line sits one more screen pixel and a half outside the ring.
+    for _, glow in ipairs(ringGlows) do
+      glow.inflate = (ringEdges[1].border or 0) + pixel * 1.5 * glow.step
     end
     layoutPieces()
   end
@@ -663,6 +677,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- Secret colours pass straight to the region and are never compared.
     if secret then shownRed = nil else shownRed, shownGreen, shownBlue = red, green, blue end
     ring:SetVertexColor(red, green, blue)
+    for _, glow in ipairs(ringGlows) do glow:SetVertexColor(red, green, blue) end
     for _, edge in ipairs(ringEdges) do if not edge.border then edge:SetVertexColor(red, green, blue) end end
     if cut then layoutPieces() end
   end
@@ -891,7 +906,13 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       local gloss = barLook and type(target) == "table" and tonumber(target.overlayAlpha) or 0
       -- Mouseover on the selected plate brightens the ring (not the bar): the
       -- plate's hover strength is added to the ring's gloss.
-      if gloss > 0 and marker.hovered then gloss = math.min(1, gloss + (tonumber(target.hoverAlpha) or 0.5)) end
+      local lit = gloss > 0 and marker.hovered and settings.hoverGlow ~= false
+      if lit then gloss = 1 end
+      local power = limit(settings.hoverGlowStrength, 1, 0, 2)
+      for _, glow in ipairs(ringGlows) do
+        glow:SetAlpha(math.min(1, glow.strength * power))
+        glow:SetShown(lit and true or false)
+      end
       if gloss > 0 then
         ringGloss:SetTexture(artwork .. "ring-gloss-" .. (art:match("%-(%d+)$") or "5") .. ".tga")
         ringGloss:SetAlpha(gloss)

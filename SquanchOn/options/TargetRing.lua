@@ -65,6 +65,12 @@ Options:Add('targetring', {
         desc = 'Screen pixels added to the line of a ring that wears the health bar look. The ring keeps its radius; the line moves to the nearest drawn width.',
         keywords = 'ring bar look line thick thickness', path = 'barLookThickness', min = 0, max = 12, softMax = 6, step = 1, default = 1, apply = refit }),
 
+    row({ id = 'targetring.hoverGlow', type = 'toggle', label = 'Glow on mouseover', section = 'Friendly target', order = 56,
+        desc = 'While the mouse is over the selected player, the ring brightens and gains a soft glow around its outside.',
+        keywords = 'ring mouseover hover glow highlight', path = 'hoverGlow', default = true, apply = refit }),
+    row({ id = 'targetring.hoverGlowStrength', type = 'slider', label = 'Mouseover glow strength', section = 'Friendly target', order = 57,
+        keywords = 'ring mouseover hover glow strength', path = 'hoverGlowStrength', min = 0, max = 2, step = 0.05, default = 1, drag = true, apply = refit }),
+
     row({ id = 'targetring.friendlyBarLook', type = 'toggle', label = 'Health bar look on players', section = 'Friendly target', order = 60,
         desc = 'On a friendly player the ring takes the texture of the nameplate health bar and the colour that bar shows.',
         keywords = 'friendly ring bar look texture colour color nameplate health', path = 'friendlyBarLook', default = true, apply = refit }),
