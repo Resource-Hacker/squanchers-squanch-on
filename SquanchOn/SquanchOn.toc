@@ -15,8 +15,6 @@ libs/LibDispel/LibDispel.lua
 libs/LibSerialize/LibSerialize.lua
 libs/LibDeflate/LibDeflate.lua
 libs/oUF/oUF_Forever.xml
-# TEMPORARY (2026-11-12): combat start/end timing probe; remove with CombatEdgeProbe.lua
-CombatEdgeProbe.lua
 
 Range.lua
 DefaultProfile.lua

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Debuffs on enemy nameplates, the unit frames' aura rows, the target's aura
+  bars and the player's buff and debuff bars keep working in combat: while the
+  game keeps aura data secret, the client's own aura container draws them.
+- The world map opens as a drawer that slides out sideways from the quest list
+  (side arrow on the quest pane, or M), at the quest list's height, without
+  the duplicate quest panel; themed World › zone breadcrumbs.
+- Every themed window wears the same raised title plate as the drawers (the
+  character sheet shows the character's name there).
+- Quest rows no longer jump after quest updates, map opening or combat.
+- Drawers open in place during combat; the first spellbook open after a reload
+  no longer flashes at the top left.
+- Chat header icons stay in the header when a toast or a vehicle bar appears.
+- The target frame's range fade follows ElvUI's rules (Auto Shot counts).
+- Click pulse on a selected target's split ring squeezes toward the bar.
+- Mouseover ring fades are 0.2 s; the reticle's dot sits on the game's pick
+  point with the emblem's diamond around it; the in-range glow is back.
+- Nameplates: cleaner name outlines, a line-of-sight fade setting, countdown
+  text 6, no subtitle under pets and companions.
+
 ## 1.0.0 — 2026-11-12
 
 - An action-MMO setup first, made for a Horde Hunter: the README and reticle
