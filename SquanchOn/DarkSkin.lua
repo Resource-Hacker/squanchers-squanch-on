@@ -1373,7 +1373,9 @@ end
 function Skin:PinChatFriends(width, height, cellScale)
     local friends, strip = QuickJoinToastButton, self.chatIconStrip
     if not friends or not strip or friends.squancherPinning then return end
-    if InCombatLockdown() then self.pending = true; return end
+    -- A plain button: a toast's ChatAlertFrame:UpdateAnchors re-anchors it in
+    -- combat too, so pin it then unless a secure frame now depends on it.
+    if InCombatLockdown() and (friends:IsProtected() or friends:IsAnchoringRestricted()) then self.pending = true; return end
     if not self:ChatSetting("friends") then
         -- Hidden, NativeActionBars leaves the cell out of the strip.
         if friends:IsShown() then self.chatFriendsHidden = true; friends:Hide() end

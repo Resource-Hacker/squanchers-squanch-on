@@ -208,17 +208,32 @@ local function shouldShowMicro(info)
     return true
 end
 
+-- Micro buttons, their menu/container and Friends are plain native frames, so
+-- their placement also holds in combat. Defer only when a secure frame depends
+-- on one of them (explicit/implicit protection or a secure anchor chain).
+local function combatLocked(...)
+    if not InCombatLockdown() then return false end
+    for index = 1, select("#", ...) do
+        local frame = select(index, ...)
+        if frame and (frame:IsProtected() or frame:IsAnchoringRestricted()) then return true end
+    end
+    return false
+end
+
 -- The micro menu lives in the chat header strip, flush against the panel's
 -- inner right rim with Friends as its last cell. Native buttons keep their
 -- scripts; only parent, scale and anchors change.
 function Bars:LayoutMicroMenu()
-    if InCombatLockdown() then self.pending = true; return end
+    if combatLocked(MicroMenuContainer, MicroMenu, QuickJoinToastButton) then self.pending = true; return end
     local skin = ns.DarkSkin
     local panel, strip = skin and skin.chatPanel, skin and skin.chatIconStrip
-    if self.menuLayout or not panel or not strip or not strip:GetRight() or not MicroMenu or MicroMenu:GetParent() ~= MicroMenuContainer then return end
+    if self.menuLayout or not panel or not strip or not strip:GetRight() or not MicroMenu then return end
     -- DynamicCam temporarily owns parentage while hiding the UI.
     if MicroMenuContainer.ludius_parentBeforeFadeOut then self.pending = true; return end
     self.menuLayout = true
+    -- Vehicle and pet-battle bars borrow the menu (OverrideMicroMenuPosition);
+    -- it stays in the chat header, inside its native container.
+    if MicroMenu:GetParent() ~= MicroMenuContainer then MicroMenu:SetParent(MicroMenuContainer) end
     local friends = QuickJoinToastButton
     if friends and not (friends:GetParent() == panel and friends:IsShown()) then friends = nil end
     if MicroMenuContainer:GetParent() ~= panel then MicroMenuContainer:SetParent(panel) end
@@ -275,15 +290,15 @@ function Bars:LayoutMicroMenu()
     MicroMenu:SetSize(rawWidth, rawHeight)
     MicroMenuContainer:SetSize(rawWidth * useScale, rawHeight * useScale)
     point(MicroMenu, "CENTER", MicroMenuContainer, "CENTER")
-    -- Cell widths in panel units, from the right rim leftward.
+    -- Cell widths in panel units, from the right rim leftward. The strip is the
+    -- row's only anchor: the chat alert container re-anchors Friends whenever a
+    -- toast shows or hides, and must not carry the micro buttons with it.
     local widths = {}
     if friends then
         skin:PinChatFriends(cellWidth, rawHeight, useScale)
         widths[1] = cellWidth * useScale
-        point(MicroMenuContainer, "RIGHT", friends, "LEFT")
-    else
-        point(MicroMenuContainer, "RIGHT", strip, "RIGHT")
     end
+    point(MicroMenuContainer, "RIGHT", strip, "RIGHT", -(widths[1] or 0), 0)
     for index = #buttons, 1, -1 do widths[#widths + 1] = buttons[index]:GetWidth() * useScale end
     skin:FitChatIconStrip(widths)
     for _, key in ipairs({"BorderArt", "BackgroundArt"}) do if MicroMenu[key] then MicroMenu[key]:SetAlpha(0) end end
@@ -536,6 +551,7 @@ function Bars:Initialize()
         self.frames[MicroMenuContainer] = { fade = 0.9 }
         hooksecurefunc(MicroMenu, "Layout", function() self:LayoutMicroMenu() end)
         hooksecurefunc(MicroMenu, "ResetMicroMenuPosition", function() self:LayoutMicroMenu() end)
+        hooksecurefunc(MicroMenu, "OverrideMicroMenuPosition", function() self:LayoutMicroMenu() end)
         hooksecurefunc(MicroMenuContainer, "Layout", function() self:LayoutMicroMenu() end)
         if MicroMenuContainer.ApplySystemAnchor then hooksecurefunc(MicroMenuContainer, "ApplySystemAnchor", function() self:LayoutMicroMenu() end) end
         if MicroMenu.UpdateScale then hooksecurefunc(MicroMenu, "UpdateScale", function() self:LayoutMicroMenu() end) end
