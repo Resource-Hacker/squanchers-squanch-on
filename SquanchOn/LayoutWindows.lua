@@ -379,24 +379,37 @@ function module:Refresh()
     end)
 end
 
+-- Protected (explicitly or through a protected child) or anchor-restricted:
+-- in combat such a frame can be neither moved nor used as an anchor.
+local function restricted(frame)
+    return frame:IsProtected() or (frame.IsAnchoringRestricted and frame:IsAnchoringRestricted()) or false
+end
+
 function module:Apply(id, frame)
     local owner = attached(frame)
     if owner then owner:Queue(); return end
     if self.applying[frame] or not frame:IsVisible() then return end
     -- Placement skipped by combat is repeated when it ends. A chat drawer is
-    -- placed now when neither it nor the chat panel is protected (explicitly
-    -- or through a protected child): combat restricts moving protected frames
-    -- only. Otherwise the native panel manager's combat open (UIParent
-    -- top-left) would stand until combat ends, and the unfold would not play.
+    -- placed in combat too unless the window itself is restricted. The chat
+    -- panel holds the micro menu, so it can be restricted; then the window
+    -- takes the same place by rectangle on UIParent and is re-anchored to
+    -- chat when combat ends. Otherwise the native panel manager's combat open
+    -- (its left or centre slot) would stand until combat ends.
+    local byRect
     if InCombatLockdown() then
         local chat = self:DrawerChat(id, frame)
-        if not chat or frame:IsProtected() or chat:IsProtected() then self.pending = true; return end
+        if not chat or restricted(frame) then self.pending = true; return end
+        byRect = restricted(chat)
+        if byRect then self.pending = true end
     end
     if ns.NativeWindowPlacement then ns.NativeWindowPlacement:Import(frame:GetName(), id, frame) end
     local chat = self:DrawerChat(id, frame)
     local record = ns.LayoutEditor:Read(id)
     if not chat and (not record or not finite(record.scale) or record.scale <= 0) then return end
-    local target, rect = chat and ns.LayoutEditor:Rect(chat), chat and ns.LayoutEditor:Rect(frame)
+    -- Chat is read guarded: in combat it may be a restricted frame.
+    local readable, target = pcall(ns.LayoutEditor.Rect, ns.LayoutEditor, chat)
+    target = chat and readable and target or nil
+    local rect = chat and ns.LayoutEditor:Rect(frame)
     -- No rectangle yet (the window is still being laid out): try the next frame.
     if chat and (not target or not rect) then self:QueueSettle(id, frame); return end
     self.applying[frame] = true
@@ -423,7 +436,15 @@ function module:Apply(id, frame)
             local ratio = math.min(target.w / width, math.max(1, target.y - 12) / rect.h)
             if math.abs(ratio - 1) > 0.0005 then frame:SetScale(frame:GetScale() * ratio) end
             frame:ClearAllPoints()
-            frame:SetPoint('BOTTOMLEFT', chat, 'TOPLEFT', 0, 0)
+            if byRect then
+                -- Chat's measured top-left (physical pixels from the screen's
+                -- top-left) in this window's units; UIParent spans the screen.
+                local _, ph, ux, uy = ns.LayoutEditor:Metrics()
+                local k = UIParent:GetEffectiveScale() / frame:GetEffectiveScale()
+                frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', target.x / ux * k, (ph - target.y) / uy * k)
+            else
+                frame:SetPoint('BOTTOMLEFT', chat, 'TOPLEFT', 0, 0)
+            end
             return
         end
         if maximizedMap(frame) then
@@ -466,6 +487,23 @@ function module:QueueSettle(id, frame)
         self.settleQueued[frame] = nil
         if frame:IsVisible() then self:Apply(id, frame) end
     end)
+end
+
+-- Each panel open, close or relayout (ShowUIPanel, HideUIPanel,
+-- UpdateUIPanelPositions) lets the native panel manager re-anchor every open
+-- panel to its left/centre/right slot. With the world map open beside it,
+-- the character sheet was left in the manager's centre slot although the
+-- SetPoint posthooks below should have moved it back; so, not relying on
+-- them, every open window is placed again right after each such call, and
+-- once more next frame.
+function module:Restate()
+    for frame, id in pairs(self.native) do
+        if frame:IsVisible() then
+            self:Apply(id, frame)
+            self.settleTries[frame] = nil
+            self:QueueSettle(id, frame)
+        end
+    end
 end
 
 local function native(definition)
@@ -572,6 +610,14 @@ function module:Register()
     end
     for _, definition in ipairs(windows) do native(definition) end
     self.registered = true
+    if not self.panelsHooked then
+        self.panelsHooked = true
+        -- Posthooks of the global entry points: their dispatch to the panel
+        -- manager has finished when these run. Placement only, no panel calls.
+        for _, name in ipairs({ 'ShowUIPanel', 'HideUIPanel', 'UpdateUIPanelPositions' }) do
+            if type(_G[name]) == 'function' then hooksecurefunc(name, function() module:Restate() end) end
+        end
+    end
     if not self.chatHooked and ns.DarkSkin and ns.DarkSkin.LayoutChat then
         self.chatHooked = true
         hooksecurefunc(ns.DarkSkin, 'LayoutChat', function()

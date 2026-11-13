@@ -194,7 +194,7 @@ NP.defaults = {
     mine = true, cc = true, defensive = true, tooltip = true,
   },
   target = {
-    highlight = { 0.588, 0, 0.118, 0.109 }, highlightHeight = 11, overlayAlpha = 0.6, hoverAlpha = 0.5,
+    highlight = { 0.588, 0, 0.118, 0.109 }, highlightHeight = 3, overlayAlpha = 0.6, hoverAlpha = 0.5,
     ornament = true, ornamentColor = { 1, 0, 0, 0.7 }, aggroGlow = true,
     -- White flash over the bar when a unit turns on a damage dealer or healer.
     aggroFlash = { enabled = true, instanceOnly = true, duration = 0.2, color = { 1, 1, 1, 1 }, text = true },
@@ -205,7 +205,7 @@ NP.defaults = {
   alpha = { inRange = 0.9, outOfRange = 0.9, healthOutOfRange = 0.9, castOutOfRange = 0.5, aurasOutOfRange = 0.9,
     nonTargetMultiplier = 0.5, notInCombatEnabled = true, notInCombat = 0.25, rangeYards = 40 },
   -- Size 12 and offset (-0.5, -8) at the previous 1.5 icon scale.
-  indicators = { size = 18, x = -0.75, y = -12, friendlyFaction = true, enemyFaction = true, rare = true, raidMark = true, quest = true },
+  indicators = { size = 18, x = -0.75, y = -12, friendlyFaction = true, enemyFaction = true, rare = true, raidMark = true, quest = true, questSkull = true },
   -- Additions over the previous look. All off while classicLook is on.
   enhance = {
     classicLook = true,
@@ -254,6 +254,12 @@ function NP:Settings()
       local cvars = settings.cvars
       if type(cvars) == 'table' and tonumber(cvars.nameplateMaxDistance) == 60 then cvars.nameplateMaxDistance = 100 end
       settings.revision = 4
+    end
+    -- Revision 5 (owner, 2026-11-12): the target's red highlight hugs the bar.
+    if (settings.revision or 0) < 5 then
+      local target = settings.target
+      if type(target) == 'table' and tonumber(target.highlightHeight) == 11 then target.highlightHeight = 3 end
+      settings.revision = 5
     end
     fill(settings, self.defaults); filled = settings
   end

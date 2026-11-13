@@ -149,24 +149,42 @@ local function refreshChrome(button, role)
         -- ModelSceneControlButton.Icon and its native pressed displacement stay untouched.
     end
 end
+-- The pane's native divider: the gold line with the diamond cap between the
+-- model and the stats, an anonymous child of the pane (RightPaneHost) drawing
+-- the common-framedivider atlas, natively 1 below the pane's top.
+local function paneDivider(pane)
+    for _, child in ipairs({ pane:GetChildren() }) do
+        for _, region in ipairs({ child:GetRegions() }) do
+            if region.GetAtlas and region:GetAtlas() == "common-framedivider" then return child end
+        end
+    end
+end
 -- Owner: the character sheet's pane line runs up to the window's top rim,
--- across the band the title used to take. The pane's small box keeps its
--- sides and bottom; its top is lifted into the middle of the window rim, where
--- the rim covers it.
+-- across the band the title used to take. The native divider's top (its
+-- diamond cap) moves up to the rim's inner edge, where the title plate sits.
+-- The pane's small box keeps its sides and bottom; its top is lifted into the
+-- middle of the window rim, where the rim covers it (else it would cross the
+-- divider below the band).
 local function reachTopRim(window, pane)
     local skin = ns.DarkSkin
     local host = skin:SmallBox(pane)
+    local divider = paneDivider(pane)
     local function fit()
         local top, paneTop = window:GetTop(), pane:GetTop()
         local ws, ps = window:GetEffectiveScale(), pane:GetEffectiveScale()
         if not (top and paneTop and ws > 0 and ps > 0) then return end
         local dialog = skin.styles.dialog
-        local rim = (dialog.edge * 9 / 13 - dialog.offset) / 2 -- window units below the top
-        local rise = ((top - rim) * ws - paneTop * ps) / ps
+        local inner = dialog.edge * 9 / 13 - dialog.offset -- window units below the top
+        local rise = ((top - inner / 2) * ws - paneTop * ps) / ps
         local inset = host.boxInset or 0
         host:ClearAllPoints()
         host:SetPoint("TOPLEFT", pane, "TOPLEFT", inset, math.max(-inset, rise))
         host:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -inset, inset)
+        if divider then
+            divider:ClearAllPoints()
+            divider:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, math.max(-1, ((top - inner) * ws - paneTop * ps) / ps))
+            divider:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT")
+        end
     end
     fit()
     if not host.rimReach then
@@ -901,8 +919,11 @@ end
 -- zone with an optional dropdown arrow, an overflow menu). NavBar keeps its
 -- buttons, widths, order, frame levels, menus and clicks; only their art, the
 -- label's anchors and font change. Each button wears the raised charcoal face
--- with a thin gold rim, 22 high in its 30; the current map (the last button,
--- which NavBar disables) is drawn like the selected chat tab: pressed, white.
+-- with a thin gold rim, 22 high in its 30, all on one row: the same height and
+-- label baseline, NAV_GAP interface units between neighbouring faces. The
+-- current map (the last button, which NavBar disables) differs only by its
+-- white label; drawn pressed it looked sunk below the others.
+local NAV_GAP = 3
 local navBars, navStates = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
 local navHidden = setmetatable({}, { __mode = "k" })
 -- The NavButtonTemplate dropdown's square face is alpha 0 at rest and set to 1
@@ -922,7 +943,7 @@ local function paintNavButton(button)
     local state = navStates[button]
     local list = button:GetParent() and button:GetParent().navList
     local current = list and list[#list] == button
-    state.paint(true, current or state.down, not current and state.hovered)
+    state.paint(true, not current and state.down, not current and state.hovered)
     local label = navLabel(button)
     if not label then return end
     local path, size, flags = ns.DarkSkin:HeadingFont()
@@ -946,16 +967,10 @@ local function skinNavButton(button, glyph)
         if region:IsObjectType("Texture") then region:SetAlpha(0) end
     end
     local paint, border = ns.DarkSkin:RaisedPlate(button, "inner")
-    local state = { paint = paint }
-    navStates[button] = state
     -- The next button is anchored `xoffset` into this one (home -15, overflow
-    -- -18) and drawn below it: end the face where that button begins.
-    local overlap = math.max(0, -(button.xoffset or 0))
-    local edge = ns.DarkSkin.styles.inner.offset
-    border:ClearAllPoints()
-    border:SetPoint("TOPLEFT", button, "TOPLEFT", -edge, -4)
-    border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", edge - overlap, 4)
-    state.overlap = overlap
+    -- -18) and drawn below it: the face ends where that button begins.
+    local state = { paint = paint, border = border, overlap = math.max(0, -(button.xoffset or 0)), gap = 0 }
+    navStates[button] = state
     if glyph then
         -- The overflow menu's glyph was its art: a label in its place.
         state.label = button:CreateFontString(nil, "OVERLAY")
@@ -981,6 +996,19 @@ local function skinNavButton(button, glyph)
     button:HookScript("OnMouseUp", function() state.down = false; refresh() end)
     button:HookScript("OnHide", function() state.hovered, state.down = false, false end)
 end
+-- The face, 22 high in the button's 30 (every button is 30 high, all centred
+-- on the bar's row), from the button's left end to where the next begins.
+-- Every face but the row's first starts NAV_GAP interface units in, whatever
+-- the map's scale; the dropdown arrow keeps its cell at the face's right end.
+local function fitNavFace(button, first)
+    local state = navStates[button]
+    local scale = button:GetEffectiveScale()
+    state.gap = (not first and scale > 0) and NAV_GAP * UIParent:GetEffectiveScale() / scale or 0
+    local edge = ns.DarkSkin.styles.inner.offset
+    state.border:ClearAllPoints()
+    state.border:SetPoint("TOPLEFT", button, "TOPLEFT", state.gap - edge, -4)
+    state.border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", edge - state.overlap, 4)
+end
 -- The label centred on the face, left of a shown dropdown arrow. Its native
 -- height (12) would clip the scaled font: 0 lets the text size it.
 local function placeNavLabel(button)
@@ -988,7 +1016,7 @@ local function placeNavLabel(button)
     if not label then return end
     local arrow = button.MenuArrowButton
     label:ClearAllPoints()
-    label:SetPoint("LEFT", button, "LEFT", 4, 0)
+    label:SetPoint("LEFT", button, "LEFT", 4 + state.gap, 0)
     if arrow and arrow:IsShown() then label:SetPoint("RIGHT", arrow, "LEFT", -2, 0)
     else label:SetPoint("RIGHT", button, "RIGHT", -4 - state.overlap, 0) end
     label:SetHeight(0)
@@ -997,14 +1025,22 @@ end
 -- After every NavBar change (NavBar_CheckLength ends each add, reset and trim):
 -- new buttons get the look, and the current map moves to the last one.
 function Controls:FinishNavBar(bar)
+    -- The row's first face: the overflow menu when shown (it sits at the
+    -- bar's left), otherwise the first shown breadcrumb.
+    local overflow = bar.overflowButton
+    local first = overflow and overflow:IsShown() and overflow or nil
+    for _, button in ipairs(bar.navList or {}) do
+        if not first and button:IsShown() then first = button end
+    end
     for _, button in ipairs(bar.navList or {}) do
         skinNavButton(button)
+        fitNavFace(button, button == first)
         placeNavLabel(button)
         paintNavButton(button)
     end
-    local overflow = bar.overflowButton
     if overflow then
         skinNavButton(overflow, "...")
+        fitNavFace(overflow, overflow == first)
         placeNavLabel(overflow)
         paintNavButton(overflow)
     end

@@ -302,28 +302,60 @@ function Bars:LayoutMicroMenu()
         if control and control:GetParent() == panel then reach(control) end
     end
     local header = strip:GetHeight()
-    if not header or header < 1 then header = 20 end
+    if not header or header < 1 then header = 16 end
     local room = (strip:GetRight() * strip:GetEffectiveScale() - leftRight) / unit - 4
-    local useScale = math.max(header * 0.5 / rawHeight, math.min(header / rawHeight, room / totalWidth))
-    scale(MicroMenu, useScale)
-    local x = 0
-    for _, button in ipairs(buttons) do
-        point(button, "TOPLEFT", MicroMenu, "TOPLEFT", x, 0)
-        x = x + button:GetWidth()
+    -- Owner, 2026-11-12: the row fits the icons. The native buttons carry
+    -- transparent margins around their art (measured in game: the art spans
+    -- ~81% of a button's width at its widest and ~74% of its height), so the
+    -- art, not the button, fills the row less MARGIN pixels above and below,
+    -- and each cell is the art plus MARGIN pixels each side plus the seam.
+    local ART_W, ART_H, ART_UP = 0.81, 0.742, 0.042
+    local MARGIN = 2 -- screen pixels of space around each icon inside its cell (owner)
+    local px = PixelUtil.GetPixelToUIUnitFactor() / unit
+    local seam = 2 * px
+    -- One more pixel below: the divider's faint top row would otherwise read
+    -- as touching the icons' dark bottom edge.
+    local useScale = (header - (2 * MARGIN + 1) * px) / (rawHeight * ART_H)
+    -- Whole screen pixels: art width rounded, plus one pixel each side and the
+    -- two-pixel seam. With every cell a whole number of pixels, each seam and
+    -- each icon lands on the same pixel offsets (no 0/1/2-pixel wobble).
+    local function artPixels(button, s) return math.max(1, math.floor(button:GetWidth() * ART_W * s / px + 0.5)) end
+    local function cellWidth(button, s) return (artPixels(button, s) + 2 * MARGIN + 2) * px end
+    -- Friends takes exactly the first icon's cell.
+    local friendCell = friends and buttons[1] and cellWidth(buttons[1], useScale) or 0
+    local total = friendCell
+    for _, button in ipairs(buttons) do total = total + cellWidth(button, useScale) end
+    if total > room and total > 0 then
+        useScale = useScale * room / total
+        friendCell = friends and buttons[1] and cellWidth(buttons[1], useScale) or 0
     end
-    MicroMenu:SetSize(rawWidth, rawHeight)
-    MicroMenuContainer:SetSize(rawWidth * useScale, rawHeight * useScale)
+    scale(MicroMenu, useScale)
+    -- Cells left to right; each button's art is centred in the part of its
+    -- cell right of the seam, and raised art is lowered onto the row's centre.
+    local x, cells = 0, {}
+    for index, button in ipairs(buttons) do
+        local width = cellWidth(button, useScale)
+        local centre = x + seam + MARGIN * px + artPixels(button, useScale) * px / 2
+        -- Measured in game: one pixel up leaves one pixel between the art and
+        -- the row top and between the art and the divider.
+        point(button, "CENTER", MicroMenu, "LEFT", centre / useScale, -ART_UP * button:GetHeight() + px / useScale)
+        cells[index] = width
+        x = x + width
+    end
+    MicroMenu:SetSize(math.max(1, x / useScale), rawHeight)
+    MicroMenuContainer:SetSize(math.max(1, x), header)
     point(MicroMenu, "CENTER", MicroMenuContainer, "CENTER")
     -- Cell widths in panel units, from the right rim leftward. The strip is the
     -- row's only anchor: the chat alert container re-anchors Friends whenever a
     -- toast shows or hides, and must not carry the micro buttons with it.
     local widths = {}
     if friends then
-        skin:PinChatFriends(cellWidth, rawHeight, useScale)
-        widths[1] = cellWidth * useScale
+        -- Friends' art fills its button: the button itself is the art box.
+        skin:PinChatFriends((friendCell - seam - 2 * MARGIN * px) / useScale, (header - 2 * MARGIN * px) / useScale, useScale, MARGIN * px)
+        widths[1] = friendCell
     end
     point(MicroMenuContainer, "RIGHT", strip, "RIGHT", -(widths[1] or 0), 0)
-    for index = #buttons, 1, -1 do widths[#widths + 1] = buttons[index]:GetWidth() * useScale end
+    for index = #cells, 1, -1 do widths[#widths + 1] = cells[index] end
     skin:FitChatIconStrip(widths)
     for _, key in ipairs({"BorderArt", "BackgroundArt"}) do if MicroMenu[key] then MicroMenu[key]:SetAlpha(0) end end
     self.menuLayout = false

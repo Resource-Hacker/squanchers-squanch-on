@@ -149,6 +149,7 @@ add(ROOT, 'Indicators', {
   { 'indicators.enemyFaction', 'toggle', 'Faction emblem on enemy players' },
   { 'indicators.rare', 'toggle', 'Rare marker', { desc = 'A rare elite carries a gold star beside the grey one.' } },
   { 'indicators.quest', 'toggle', 'Quest badge on friendly quest NPCs' },
+  { 'indicators.questSkull', 'toggle', 'Skull on enemies you still need for a quest' },
   { 'indicators.raidMark', 'toggle', 'Raid target mark' },
 })
 local function cvar(name, label, min, max, step)

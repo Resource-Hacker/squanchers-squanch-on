@@ -27,7 +27,7 @@ Skin.themeDefaults = {
     headerText = { r = 0.902, g = 0.686, b = 0.376 }, bodyText = { r = 0.9, g = 0.9, b = 0.86 },
 }
 Skin.chatDefaults = {
-    tabFont = "Bui Homizio", tabSize = 10, tabHeight = 22,
+    tabFont = "Bui Homizio", tabSize = 10, tabHeight = 18,
     iconStrip = true, friends = true, voice = true,
     toastScale = 0.7, toastTheme = true, compactChannels = true,
     -- fillAlpha: nil follows the theme's panel opacity.
@@ -232,7 +232,7 @@ local function gearBorder(border, size)
         drawBand({4,26,4,26})
         -- The corner's measured contour (with the elbow texels) as one mask.
         local mask=cap:CreateMaskTexture()
-        mask:SetTexture(BORDER_MASKS.."corner-mask-"..CORNER_KEYS[name],"CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+        mask:SetTexture(BORDER_MASKS.."corner-mask-v2-"..CORNER_KEYS[name],"CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
         mask:SetAllPoints(cap)
         for _,region in ipairs({cap:GetRegions()}) do
             if region~=mask and region.AddMaskTexture then region:AddMaskTexture(mask) end
@@ -506,7 +506,7 @@ function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
         -- One mask keeps exactly the measured gold contour (no centre, no dark
         -- halo) for all eight pieces (asset-source/generate-border-masks.py).
         local mask=border:CreateMaskTexture()
-        mask:SetTexture(BORDER_MASKS.."slot-mask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+        mask:SetTexture(BORDER_MASKS.."slot-mask-v2","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
         mask:SetAllPoints(border)
         border.mask=mask
         for _,rect in ipairs(rawSlotRects) do
@@ -959,18 +959,24 @@ function Skin:TitlePlate(frame, title, text)
     followTitle(plate)
     return plate
 end
--- A native text the plate replaces stays invisible (alpha only: it keeps its
--- text, anchors and layout), whatever later repaints it; the character sheet
--- showed its name twice.
+-- A native text the plate replaces stays invisible, whatever later repaints
+-- it: alpha 0 and hidden. It keeps its text and anchors, so the plate still
+-- reads it. Alpha alone did not hold on the character sheet: its name showed
+-- twice (each open retitles it; SetTitleColor writes a colour with alpha 1).
 local held = setmetatable({}, weak)
 function Skin:HoldInvisible(region)
     if not region or not region.SetAlpha then return end
     region:SetAlpha(0)
+    if region.Hide then region:Hide() end
     if held[region] then return end
     held[region] = true
     hooksecurefunc(region, "SetAlpha", function(text, alpha)
         if alpha ~= 0 then text:SetAlpha(0) end
     end)
+    if region.Show then hooksecurefunc(region, "Show", function(text) text:Hide() end) end
+    if region.SetShown then
+        hooksecurefunc(region, "SetShown", function(text, shown) if shown then text:Hide() end end)
+    end
 end
 Skin:OnTheme(function()
     for _, plate in pairs(Skin.titlePlates) do paintTitlePlate(plate); fitTitlePlate(plate) end
@@ -1370,7 +1376,7 @@ end
 
 -- Friends is the strip's last cell: a micro-button-sized cell with no chrome
 -- of its own. Native click, tooltip, count and toasts stay with the button.
-function Skin:PinChatFriends(width, height, cellScale)
+function Skin:PinChatFriends(width, height, cellScale, gap)
     local friends, strip = QuickJoinToastButton, self.chatIconStrip
     if not friends or not strip or friends.squancherPinning then return end
     -- A plain button: a toast's ChatAlertFrame:UpdateAnchors re-anchors it in
@@ -1381,12 +1387,13 @@ function Skin:PinChatFriends(width, height, cellScale)
         if friends:IsShown() then self.chatFriendsHidden = true; friends:Hide() end
         return
     end
-    if width then self.chatIconCell = { width, height, cellScale } end
-    local cell = self.chatIconCell or { 32, 40, 0.5 }
+    if width then self.chatIconCell = { width, height, cellScale, gap or 0 } end
+    local cell = self.chatIconCell or { 32, 40, 0.5, 0 }
     friends.squancherPinning = true
     friends:SetParent(self.chatPanel);friends:ClearAllPoints()
     friends:SetSize(cell[1], cell[2]);friends:SetScale(cell[3])
-    friends:SetPoint("RIGHT", strip, "RIGHT")
+    -- One pixel clear of the right rim, like every cell's art.
+    friends:SetPoint("RIGHT", strip, "RIGHT", -(cell[4] or 0) / cell[3], 0)
     friends:SetFrameStrata("LOW")
     friends:SetFrameLevel(self.chatPanel:GetFrameLevel() + 8)
     friends.squancherPinning = nil

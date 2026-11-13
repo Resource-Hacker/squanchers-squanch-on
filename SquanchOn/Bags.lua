@@ -624,7 +624,8 @@ function Bags:Build()
         -- child of the window (shows and fades with it); it takes no mouse.
         local plate = CreateFrame('Frame', nil, frame)
         plate:SetSize(76, 18)
-        plate:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 10, -4)
+        -- Centred on the top rim, like every other title plate (owner, 2026-11-12).
+        plate:SetPoint('BOTTOM', frame, 'TOP', 0, -4)
         plate:SetFrameLevel(rim:GetFrameLevel() + 2)
         skin:RaisedPlate(plate, 'compact')
         local heading = skin.headerTextColor

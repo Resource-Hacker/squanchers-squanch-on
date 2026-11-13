@@ -565,7 +565,8 @@ local function updateIndicators(frame)
   local previous = seat(frame, emblem, wanted, nil, indicators)
   previous = seat(frame, frame.Elite, rare and frame.npRareElite, previous, indicators)
   previous = seat(frame, frame.Rare, rare, previous, indicators)
-  seat(frame, frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar, previous, indicators)
+  previous = seat(frame, frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar, previous, indicators)
+  seat(frame, frame.QuestSkull, indicators.questSkull ~= false and kind == 'enemynpc' and frame.npQuest and bar, previous, indicators)
 end
 function Style:Indicators(frame) updateIndicators(frame) end
 
@@ -624,6 +625,7 @@ local function dress(frame, settings, config)
   frame.Rare:SetSize(indicators.size, indicators.size)
   frame.Elite:SetSize(indicators.size, indicators.size)
   frame.QuestIcon:SetSize(indicators.size * 5 / 6, indicators.size * 5 / 6)
+  frame.QuestSkull:SetSize(indicators.size * 5 / 6, indicators.size * 5 / 6)
   frame.RaidTargetIndicator:SetSize(indicators.size, indicators.size)
 
   local power = frame.Power
@@ -910,6 +912,11 @@ function Style:Build(frame)
   frame.QuestIcon:SetTexture('Interface\\TargetingFrame\\PortraitQuestBadge')
   frame.QuestIcon:SetTexCoord(2 / 32, 26 / 32, 1 / 32, 31 / 32)
   frame.QuestIcon:Hide()
+  -- Owner: an enemy you still need for a quest carries a skull (the client's own
+  -- small skull, not the raid-mark skull).
+  frame.QuestSkull = overlay:CreateTexture(nil, 'ARTWORK')
+  frame.QuestSkull:SetTexture('Interface\\TargetingFrame\\UI-TargetingFrame-Skull')
+  frame.QuestSkull:Hide()
   frame.RaidTargetIndicator = overlay:CreateTexture(nil, 'OVERLAY')
   frame.RaidTargetIndicator:SetPoint('RIGHT', health, 'LEFT', -14, 0)
   -- The list the target ring reads to fit a friendly target's emblem.

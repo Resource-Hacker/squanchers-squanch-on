@@ -681,8 +681,8 @@ function Meter:Initialize()
     -- A child of the drawer, so it shows, hides and fades in with it.
     local modeBox = headerButton(frame, 8, skin.headerTextColor, 150)
     modeBox:SetSize(PLATE_W, PLATE_H)
-    -- Right end, mirroring the bag window's title at its left end.
-    modeBox:SetPoint('BOTTOMRIGHT', frame, 'TOPRIGHT', -PLATE_X, 0)
+    -- Centred on the top rim, like every other title plate (owner, 2026-11-12).
+    modeBox:SetPoint('BOTTOM', frame, 'TOP', 0, 0)
     modeBox:SetFrameLevel(self.border:GetFrameLevel() + 2)
     modeBox.text:ClearAllPoints(); modeBox.text:SetAllPoints(modeBox); modeBox.text:SetJustifyH('CENTER')
     skin:RaisedButton(modeBox, 'compact')
