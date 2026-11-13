@@ -81,9 +81,12 @@ NP.Auras = {
   GetAuraDataByIndex = function(unit, index, filter)
     local facts = NP.fake[unit]
     if not facts then return C_UnitAuras.GetAuraDataByIndex(unit, index, filter) end
+    -- Preview units understand the compound filters the real client applies.
+    local base = filter:match('^(%u+)')
+    local mine, cc = filter:find('PLAYER', 1, true), filter:find('CROWD_CONTROL', 1, true)
     local seen = 0
     for _, aura in ipairs(facts.auras or {}) do
-      if (aura.helpful and 'HELPFUL' or 'HARMFUL') == filter then
+      if (aura.helpful and 'HELPFUL' or 'HARMFUL') == base and (not mine or aura.mine) and (not cc or aura.cc) then
         seen = seen + 1
         if seen == index then return aura end
       end

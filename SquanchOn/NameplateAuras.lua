@@ -24,17 +24,8 @@ local function passes(unit, aura, filter)
   local ok, hidden = pcall(Source.IsAuraFilteredOut, unit, aura, filter)
   if ok and public(hidden) and hidden ~= nil then return not hidden end
 end
--- Debuffs: the player's own, and crowd control from anyone.
-local function wanted(unit, aura, settings)
-  if settings.cc and passes(unit, aura, 'HARMFUL|CROWD_CONTROL') == true then return true end
-  if not settings.mine then return false end
-  local shown = passes(unit, aura, 'HARMFUL|PLAYER')
-  if shown == nil then
-    local own = aura.isFromPlayerOrPlayerPet
-    shown = public(own) and own == true
-  end
-  return shown
-end
+-- Debuffs: the player's own, and crowd control from anyone (see Refresh).
+local ownIDs = {}
 -- Buffs: major defensive cooldowns on players and on units the player can assist.
 local function defensive(unit, aura)
   return passes(unit, aura, 'HELPFUL|BIG_DEFENSIVE') == true or passes(unit, aura, 'HELPFUL|EXTERNAL_DEFENSIVE') == true
@@ -155,10 +146,41 @@ function Auras:Refresh(frame)
   -- The row belongs to the bar: a plate that shows its name only has none.
   if settings.enabled and unit and kind ~= 'self' and frame.Health:IsShown() and UF and UF.db and UF.NewAuraIcon
     and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-    for index = 1, 40 do
-      local ok, aura = pcall(Source.GetAuraDataByIndex, unit, index, 'HARMFUL')
-      if not ok or not aura then break end
-      if wanted(unit, aura, settings) then show(aura, 'Debuffs') end
+    -- In combat an enemy's aura facts (source, instance ID, and the answer of
+    -- a per-aura filter check) can be secret, which used to hide the player's
+    -- own debuffs, e.g. Hunter's Mark, the moment combat began. The client's
+    -- filtered lists are not: 'HARMFUL|PLAYER' is exactly the player's own.
+    for id in pairs(ownIDs) do ownIDs[id] = nil end
+    if settings.mine then
+      for index = 1, 40 do
+        local ok, aura = pcall(Source.GetAuraDataByIndex, unit, index, 'HARMFUL|PLAYER')
+        if not ok or not aura then break end
+        local id = aura.auraInstanceID
+        if id ~= nil and public(id) then ownIDs[id] = true end
+        show(aura, 'Debuffs')
+      end
+    end
+    if settings.cc and not InCombatLockdown() then
+      -- Out of combat the per-aura answer is public: ask it for each debuff.
+      for index = 1, 40 do
+        local ok, aura = pcall(Source.GetAuraDataByIndex, unit, index, 'HARMFUL')
+        if not ok or not aura then break end
+        local id = aura.auraInstanceID
+        if not (id ~= nil and public(id) and ownIDs[id]) and passes(unit, aura, 'HARMFUL|CROWD_CONTROL') == true then
+          show(aura, 'Debuffs')
+        end
+      end
+    elseif settings.cc then
+      -- In combat that answer can be secret; the client's filtered list is not.
+      for index = 1, 40 do
+        local ok, aura = pcall(Source.GetAuraDataByIndex, unit, index, 'HARMFUL|CROWD_CONTROL')
+        if not ok or not aura then break end
+        -- Skip crowd control the player's own list already showed.
+        local id, own = aura.auraInstanceID, aura.isFromPlayerOrPlayerPet
+        local shown = (id ~= nil and public(id) and ownIDs[id])
+          or (settings.mine and public(own) and own == true)
+        if not shown then show(aura, 'Debuffs') end
+      end
     end
     -- Enhancement: enemy buffs the player can remove, when such an ability is known.
     local enhance = ns.NameplateEnhance

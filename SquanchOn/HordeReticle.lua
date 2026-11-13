@@ -118,7 +118,11 @@ local function makeFrame(id, index)
   frame:SetSize(d.width, d.height)
   frame:SetPoint(d.selfPoint, parent, "CENTER", d.xOffset, d.yOffset)
   -- Owner-selected foreground mouseover glow; the imported aura used BACKGROUND.
-  frame:SetFrameStrata(id == "Mouseover Glow" and "TOOLTIP" or (strata[d.frameStrata] or "MEDIUM"))
+  -- Owner: the mouseover dot and glow come in BEHIND the brighter target dot
+  -- (Target Range, TOOLTIP), so both sit one strata lower, still above the UI.
+  local layer = strata[d.frameStrata] or "MEDIUM"
+  if id == "Mouseover Glow" or id == "Mouseover Dot" then layer = "HIGH" end
+  frame:SetFrameStrata(layer)
   frame:SetFrameLevel(group:GetFrameLevel() + index * 4)
   frame:EnableMouse(false)
   frame:SetAlpha(d.alpha or 1)
@@ -228,15 +232,17 @@ function module:Refresh()
   end
   local mouseHostile = self.enabled and class == "HUNTER" and hostile("mouseover")
   local mouseInRange = mouseHostile and autoShotRange("mouseover")
-  -- /run SquanchOn.HordeReticle:Test() shows the dot and glow without a target.
+  -- /run SquanchOn.HordeReticle:Test() shows both dots and the glow without a target.
   if self.test then mouseHostile, mouseInRange = true, true end
   active(self.frames["Mouseover Glow"], mouseHostile)
   active(self.frames["Mouseover Dot"], mouseHostile)
   self.frames["Mouseover Glow"].inRange = mouseInRange
   self.frames["Mouseover Dot"].inRange = mouseInRange
   local targetHostile = self.enabled and class == "HUNTER" and hostile("target")
+  local targetInRange = targetHostile and autoShotRange("target")
+  if self.test then targetHostile, targetInRange = true, true end
   active(self.frames["Target Range"], targetHostile)
-  self.frames["Target Range"].inRange = targetHostile and autoShotRange("target")
+  self.frames["Target Range"].inRange = targetInRange
   self.targetAttackable = yes(_G.UnitCanAttack, "player", "target")
   if self.enabled then updatePet() else active(self.frames["Pet Tracker"], false) end
 end
