@@ -1326,8 +1326,12 @@ function UF:RangeState(unit)
     if rangeBoolean(UnitExists,unit)~=true or rangeBoolean(UnitIsUnit,unit,'player')==true then return nil end
     -- Owner: when the target ring shows its range marks (blocks or circling
     -- triangles) the target is in reach, and its frame is lit.
+    -- While the target ring is on screen, its marks are the answer: blocks or
+    -- circling triangles light the frame, no marks fade it (owner, 2026-11-12).
     local ring=ns.TargetCrosshairs
-    if ring and ring.rangeMode and (unit=='target' or rangeBoolean(UnitIsUnit,unit,'target')==true) then return true end
+    if ring and ring.Showing and ring:Showing() and (unit=='target' or rangeBoolean(UnitIsUnit,unit,'target')==true) then
+        return ring.rangeMode~=nil
+    end
     if rangeBoolean(UnitIsDeadOrGhost,unit)==true then return inSpellsRange(unit,'RESURRECT')==true end
     if rangeBoolean(UnitCanAttack,'player',unit)==true then return inSpellsRange(unit,'ENEMY') end
     if rangeBoolean(UnitIsUnit,'pet',unit)==true then return inSpellsRange(unit,'PET') end

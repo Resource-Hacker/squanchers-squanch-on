@@ -792,9 +792,16 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     for index = 1, #rectangles do rectangles[index]:SetAlpha(melee and alpha or 0) end
     orbit:SetAlpha(marker.inRange and alpha or 0)
   end
+  -- Whether the ring is on screen for the current target (the unit frames
+  -- take their range fade from it then).
+  function marker:Showing() return display:IsShown() end
   local function applyRange(mode)
+    local changed = marker.rangeMode ~= mode
     marker.rangeMode = mode
     marker.inRange = mode ~= nil
+    -- The target frame lights and fades with the marks, at once.
+    local uf, frame = suite.UnitFrames, _G.SquanchOnUF_Target
+    if changed and uf and uf.RefreshFade and frame and frame.db then pcall(uf.RefreshFade, uf, frame) end
     pointers:SetShown(mode == "ranged" or mode == "healing")
     for index = 1, #rectangles do rectangles[index]:SetShown(mode == "melee") end
     rangeOpacity()
