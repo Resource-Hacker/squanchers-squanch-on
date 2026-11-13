@@ -12,12 +12,20 @@
 -- slides out from the list's edge at exactly the list's height. When the map
 -- closes the list returns to its own height.
 --
+-- Opening and closing: an arrow on the quest list's side toward the screen
+-- centre (the minimap panel's side arrow, DarkSkin:DrawerArrow) pulls the map
+-- out; while the map is out the arrow is hidden. The map's own title plate
+-- ("Map", NativeWindowBorders.lua) and the quest drawer's close button close it.
+--
 -- Taint: nothing here calls a map method, writes a map field or shows or hides
 -- a UI panel. Addon code may not show or hide panels in combat
 -- (UIParentPanelManager CheckProtectedFunctionsAllowed), and a map shown from
 -- addon code acquires its pins on a tainted path, where SetPassThroughButtons
--- is blocked in combat. So the Map plate and the quest drawer's close button
--- are secure action buttons that click Blizzard's own buttons.
+-- is blocked in combat. So the arrow, the click on the Map plate and the quest
+-- drawer's close button are secure action buttons that click Blizzard's own
+-- buttons. Secure buttons are shown, hidden and moved only out of combat, and
+-- are never anchored to the map: that would protect the map, which must stay
+-- movable in combat (Fit).
 local _, ns = ...
 local Drawer = {}
 ns.MapDrawer = Drawer
@@ -98,6 +106,7 @@ function Drawer:Fit()
     local ok, err = pcall(place, self)
     self.fitting = false
     if not ok then geterrorhandler()(err) end
+    self:QueueCloser()
 end
 
 function Drawer:Queue()
@@ -168,46 +177,104 @@ function Drawer:Initialize()
     -- On a closed map this button does nothing: HideUIPanel returns for a hidden frame.
     self.closeTarget = clickable(map.BorderFrame.CloseButton)
     quests.closeButton:SetAttribute('clickbutton', self.closeTarget)
-    -- The Map plate: a raised plate on the quest drawer's top rim, at the end
-    -- facing the screen centre, beside the centred Quests title.
-    local handle = CreateFrame('Button', nil, quests.frame, 'SecureActionButtonTemplate')
-    handle:SetSize(40, 18)
-    handle:RegisterForClicks('LeftButtonUp')
-    handle:SetAttribute('useOnKeyDown', false)
-    handle:SetAttribute('type', 'click')
-    handle:SetAttribute('clickbutton', self.openTarget)
-    skin:RaisedButton(handle, 'compact')
-    local label = handle:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-    label:SetAllPoints(handle)
-    label:SetText('Map')
-    if ns.NativeText then ns.NativeText:Header(label, 'questHeader') end
-    quests:HeadingLook(label)
-    self.handle = handle
+    -- The Map arrow: the minimap panel's side arrow, here a secure action
+    -- button on the quest list that clicks the map's opener (a toggle).
+    local arrow = skin:DrawerArrow(quests.frame, 'Map', 'SecureActionButtonTemplate')
+    arrow:SetAttribute('useOnKeyDown', false)
+    arrow:SetAttribute('type', 'click')
+    arrow:SetAttribute('clickbutton', self.openTarget)
+    self.arrow = arrow
+    -- The click on the map's title plate: a secure button with no art over the
+    -- plate (which belongs to the map), a child of the quest list and placed
+    -- by rectangle (PlaceCloser), so it is never anchored to the map.
+    local closer = CreateFrame('Button', nil, quests.frame, 'SecureActionButtonTemplate')
+    closer:Hide()
+    closer:RegisterForClicks('LeftButtonUp')
+    closer:SetAttribute('useOnKeyDown', false)
+    closer:SetAttribute('type', 'click')
+    closer:SetAttribute('clickbutton', self.closeTarget)
+    -- The plate lights under the mouse like a raised button.
+    local function light(hovered)
+        local plate = skin.titlePlates[map.BorderFrame]
+        if plate then plate.paint(true, false, hovered) end
+    end
+    closer:HookScript('OnEnter', function() light(true) end)
+    closer:HookScript('OnLeave', function() light(false) end)
+    self.closer = closer
     -- Panel management re-anchors the map to its native place whenever panels
     -- change; place it back at once, before a frame is drawn there.
     hooksecurefunc(map, 'SetPoint', function() self:Fit() end)
-    map:HookScript('OnShow', function() self:Opened() end)
+    map:HookScript('OnShow', function()
+        self:Opened()
+        self:SyncArrow()
+    end)
     map:HookScript('OnHide', function()
         self:KeepWindowed()
         ns.QuestDrawer:SetReach(nil)
+        self:SyncArrow()
+        self:QueueCloser()
     end)
     self.ready = true
     self:KeepWindowed()
     return true
 end
 
--- After every full quest drawer layout (out of combat only): the plate's side
+-- The arrow points toward the screen centre: it pulls the map out. While the
+-- map is shown it is hidden; in combat, where a secure button cannot be
+-- hidden, it is turned back instead (still the same toggle) until combat ends.
+function Drawer:SyncArrow()
+    local arrow = self.arrow
+    if not arrow then return end
+    local open = WorldMapFrame:IsShown()
+    ns.DarkSkin:PointDrawerArrow(arrow, (leftward(panelRect()) ~= open) and 'left' or 'right')
+    if InCombatLockdown() then self.pending = true; return end
+    arrow:SetShown(enabled() and self.openTarget ~= nil and not open)
+end
+
+-- The closer covers the map's title plate while the map is out beside the
+-- list. Out of combat only: a map opened in combat gets its click when combat
+-- ends (M, Escape, its X and the list's close button work throughout), and one
+-- closed in combat leaves the closer, which then clicks nothing, until then.
+function Drawer:PlaceCloser()
+    local closer, map, drawer = self.closer, WorldMapFrame, ns.QuestDrawer.frame
+    if not closer then return end
+    if InCombatLockdown() then self.pending = true; return end
+    local plate = ns.DarkSkin.titlePlates[map.BorderFrame]
+    local open = self:Owns(map) and self.closeTarget and map:IsShown() and not map:IsMaximized()
+    local left, bottom, width, height
+    if open and plate and plate:IsVisible() then left, bottom, width, height = plate:GetRect() end
+    local dleft, dbottom = drawer:GetLeft(), drawer:GetBottom()
+    if not (left and dleft and dbottom) then closer:Hide(); return end
+    local k = plate:GetEffectiveScale() / drawer:GetEffectiveScale()
+    closer:ClearAllPoints()
+    closer:SetPoint('BOTTOMLEFT', drawer, 'BOTTOMLEFT', left * k - dleft, bottom * k - dbottom)
+    closer:SetSize(width * k, height * k)
+    closer:SetFrameLevel(self.arrow:GetFrameLevel())
+    closer:Show()
+end
+-- The plate's rectangle settles with the map's placement: read it next frame.
+function Drawer:QueueCloser()
+    if not self.closer or self.closerQueued then return end
+    self.closerQueued = true
+    C_Timer.After(0, function() self.closerQueued = nil; self:PlaceCloser() end)
+end
+
+-- After every full quest drawer layout (out of combat only): the arrow's side
 -- and the close button's map action.
 function Drawer:Attach()
     local quests = ns.QuestDrawer
     if InCombatLockdown() or not quests.ready or not self:Initialize() then return end
-    local on, frame, handle = enabled(), quests.frame, self.handle
-    quests.closeButton:SetAttribute('type', on and self.closeTarget and 'click' or nil)
-    handle:SetShown(on and self.openTarget ~= nil)
-    handle:ClearAllPoints()
-    if leftward(panelRect()) then handle:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 4, -4)
-    else handle:SetPoint('BOTTOMRIGHT', frame, 'TOPRIGHT', -4, -4) end
-    handle:SetFrameLevel(quests.titlePlate:GetFrameLevel())
+    local frame, arrow, skin = quests.frame, self.arrow, ns.DarkSkin
+    quests.closeButton:SetAttribute('type', enabled() and self.closeTarget and 'click' or nil)
+    -- Centred on that side, 2 beyond the compact rim's painted outer edge: the
+    -- meter arrow's place on the minimap panel's side.
+    local out = skin.styles.compact.offset - skin.styles.compact.edge * 4.5 / 13 + 2
+    arrow:ClearAllPoints()
+    if leftward(panelRect()) then arrow:SetPoint('CENTER', frame, 'LEFT', -out, 0)
+    else arrow:SetPoint('CENTER', frame, 'RIGHT', out, 0) end
+    arrow:SetFrameLevel(quests.titlePlate:GetFrameLevel() + 1)
+    self:SyncArrow()
+    self:QueueCloser()
 end
 
 hooksecurefunc(ns.QuestDrawer, 'Layout', function() Drawer:Attach() end)
@@ -220,9 +287,12 @@ local events = CreateFrame('Frame')
 events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent', function()
     -- Only work that combat deferred: the quest list's show, the settings, a
-    -- refit. A held-back pull-up resumes in QuestDrawer.lua.
+    -- refit, the arrow's and closer's visibility. A held-back pull-up resumes
+    -- in QuestDrawer.lua.
     if not Drawer.pending then return end
     Drawer.pending = nil
     Drawer:KeepWindowed()
     Drawer:Fit()
+    Drawer:SyncArrow()
+    Drawer:QueueCloser()
 end)

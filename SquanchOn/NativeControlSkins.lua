@@ -22,6 +22,8 @@ local buttonFields = {
 local function ownedElsewhere(frame)
     if frame.IsForbidden and frame:IsForbidden() then return true end
     if frame.ignoreInLayout or frame == GameMenuFrame or frame:GetObjectType() == "GameTooltip" then return true end
+    -- The world map's breadcrumbs have their own adapter (Controls:NavBar).
+    if WorldMapFrame and frame == WorldMapFrame.NavBar then return true end
     local name = frame.GetName and frame:GetName() or ""
     return name:find("Tooltip") or name:find("^ElvUI") or name:find("^Squancher") or name:find("^SquanchOn")
 end
@@ -867,8 +869,138 @@ local function compactSettings(frame)
     end
     db.settingsCompactScale = SETTINGS_SCALE
 end
+-- The world map's breadcrumbs (NavigationBar.lua: home "World", one button per
+-- zone with an optional dropdown arrow, an overflow menu). NavBar keeps its
+-- buttons, widths, order, frame levels, menus and clicks; only their art, the
+-- label's anchors and font change. Each button wears the raised charcoal face
+-- with a thin gold rim, 22 high in its 30; the current map (the last button,
+-- which NavBar disables) is drawn like the selected chat tab: pressed, white.
+local navBars, navStates = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
+local navHidden = setmetatable({}, { __mode = "k" })
+-- The NavButtonTemplate dropdown's square face is alpha 0 at rest and set to 1
+-- by its own OnEnter; keep it at 0 (the gold arrow and highlight remain).
+local function keepHidden(texture)
+    if not texture or navHidden[texture] then return end
+    navHidden[texture] = true
+    texture:SetAlpha(0)
+    hooksecurefunc(texture, "SetAlpha", function(self, alpha) if alpha ~= 0 then self:SetAlpha(0) end end)
+end
+local function navLabel(button)
+    return navStates[button] and navStates[button].label or button.text
+end
+-- Like the chat tabs' labels: tab font and size in interface units, whatever
+-- the map's scale. Heading gold; the current map white.
+local function paintNavButton(button)
+    local state = navStates[button]
+    local list = button:GetParent() and button:GetParent().navList
+    local current = list and list[#list] == button
+    state.paint(true, current or state.down, not current and state.hovered)
+    local label = navLabel(button)
+    if not label then return end
+    local path, size, flags = ns.DarkSkin:HeadingFont()
+    local scale = button:GetEffectiveScale()
+    -- Never taller than the 22-unit face of a strongly shrunken map.
+    if scale > 0 then size = math.min(15, size * UIParent:GetEffectiveScale() / scale) end
+    label:SetFont(path, size, flags)
+    local color = current and { 1, 1, 1, 1 } or ns.DarkSkin.headerTextColor
+    label:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+end
+local function skinNavButton(button, glyph)
+    if not button or navStates[button] then return end
+    -- Every texture here is NavBar art: faces, chevrons, the selection and the
+    -- home button's shadow. State changes swap them; none resets their alpha.
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region:IsObjectType("Texture") then region:SetAlpha(0) end
+    end
+    local paint, border = ns.DarkSkin:RaisedPlate(button, "inner")
+    local state = { paint = paint }
+    navStates[button] = state
+    -- The next button is anchored `xoffset` into this one (home -15, overflow
+    -- -18) and drawn below it: end the face where that button begins.
+    local overlap = math.max(0, -(button.xoffset or 0))
+    local edge = ns.DarkSkin.styles.inner.offset
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", button, "TOPLEFT", -edge, -4)
+    border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", edge - overlap, 4)
+    state.overlap = overlap
+    if glyph then
+        -- The overflow menu's glyph was its art: a label in its place.
+        state.label = button:CreateFontString(nil, "OVERLAY")
+        state.label:SetText(glyph)
+    end
+    local arrow = button.MenuArrowButton
+    if arrow then
+        keepHidden(arrow.NormalTexture); keepHidden(arrow.PushedTexture)
+        ns.DarkSkin:TintChrome(arrow.Art)
+        ns.DarkSkin:TintChrome(arrow:GetHighlightTexture())
+        -- One small-border rule sets the dropdown apart; it shows with the arrow.
+        local rule = arrow:CreateTexture(nil, "ARTWORK")
+        ns.DarkSkin:SmallRule(rule, true)
+        rule:SetPoint("TOPLEFT", arrow, "TOPLEFT", 0, -8)
+        rule:SetPoint("BOTTOMLEFT", arrow, "BOTTOMLEFT", 0, 8)
+    end
+    local function refresh() paintNavButton(button) end
+    button:HookScript("OnEnter", function() state.hovered = true; refresh() end)
+    button:HookScript("OnLeave", function() state.hovered = false; state.down = false; refresh() end)
+    button:HookScript("OnMouseDown", function(_, mouse) if mouse == "LeftButton" then state.down = true; refresh() end end)
+    button:HookScript("OnMouseUp", function() state.down = false; refresh() end)
+    button:HookScript("OnHide", function() state.hovered, state.down = false, false end)
+end
+-- The label centred on the face, left of a shown dropdown arrow. Its native
+-- height (12) would clip the scaled font: 0 lets the text size it.
+local function placeNavLabel(button)
+    local label, state = navLabel(button), navStates[button]
+    if not label then return end
+    local arrow = button.MenuArrowButton
+    label:ClearAllPoints()
+    label:SetPoint("LEFT", button, "LEFT", 4, 0)
+    if arrow and arrow:IsShown() then label:SetPoint("RIGHT", arrow, "LEFT", -2, 0)
+    else label:SetPoint("RIGHT", button, "RIGHT", -4 - state.overlap, 0) end
+    label:SetHeight(0)
+    label:SetJustifyH("CENTER")
+end
+-- After every NavBar change (NavBar_CheckLength ends each add, reset and trim):
+-- new buttons get the look, and the current map moves to the last one.
+function Controls:FinishNavBar(bar)
+    for _, button in ipairs(bar.navList or {}) do
+        skinNavButton(button)
+        placeNavLabel(button)
+        paintNavButton(button)
+    end
+    local overflow = bar.overflowButton
+    if overflow then
+        skinNavButton(overflow, "...")
+        placeNavLabel(overflow)
+        paintNavButton(overflow)
+    end
+end
+function Controls:NavBar(bar)
+    if not bar or not bar.navList then return end
+    if not navBars[bar] then
+        navBars[bar] = true
+        -- The bar's own parchment, overlay and inset trim: the map window's
+        -- shared fill shows through. Buttons, menus and gamepad icons remain.
+        for _, owner in ipairs({ bar, bar.overlay }) do
+            for _, region in ipairs({ owner:GetRegions() }) do
+                if region:IsObjectType("Texture") then region:SetAlpha(0) end
+            end
+        end
+        if not self.navHooked then
+            self.navHooked = true
+            hooksecurefunc("NavBar_CheckLength", function(owner)
+                if navBars[owner] then Controls:FinishNavBar(owner) end
+            end)
+        end
+        -- Label sizes follow the map's scale (MapDrawer fits it to the quest list).
+        local map = bar:GetParent()
+        if map and map.SetScale then hooksecurefunc(map, "SetScale", function() Controls:FinishNavBar(bar) end) end
+    end
+    self:FinishNavBar(bar)
+end
+
 function Controls:FinishWindow(frame)
     if InCombatLockdown() then pending[frame] = 'window'; return end
+    if WorldMapFrame and frame == WorldMapFrame then self:NavBar(frame.NavBar) end
     if frame == CharacterFrame then
         finishCharacterBackground(frame)
         for index, pane in ipairs(frame.SidePanes or {}) do

@@ -212,7 +212,7 @@ function Meter:PlaceHandle()
     handle:ClearAllPoints()
     -- Centred on the painted outer edge; the arrow's art is the middle of it.
     handle:SetPoint('CENTER', self.open and self.frame or self.panel, 'RIGHT', rimWidth() + 2, 0)
-    handle.arrow:SetRotation(self.open and math.pi / 2 or -math.pi / 2)
+    ns.DarkSkin:PointDrawerArrow(handle, self.open and 'left' or 'right')
     handle:SetShown(self:Settings().enabled and true or false)
 end
 
@@ -777,21 +777,8 @@ function Meter:Initialize()
     self:SetInteractive(false)
 
     -- Arrow on the panel's right edge; on the drawer's right edge while open.
-    local handle = CreateFrame('Button', nil, panel)
-    handle.ignoreInLayout = true
-    handle:SetSize(18, 22)
+    local handle = skin:DrawerArrow(panel, 'Damage meter')
     handle:SetFrameLevel(frame:GetFrameLevel() + 20)
-    handle:RegisterForClicks('LeftButtonUp')
-    local arrow = handle:CreateTexture(nil, 'ARTWORK')
-    arrow:SetTexture([[Interface\Buttons\UI-ScrollBar-ScrollUpButton-Up]])
-    arrow:SetPoint('CENTER'); arrow:SetSize(22, 18)
-    skin:TintChrome(arrow)
-    handle.arrow = arrow
-    local title = widgets:Label(handle, 'Damage meter', 10, skin.headerTextColor[1], skin.headerTextColor[2], skin.headerTextColor[3])
-    title:SetPoint('BOTTOM', handle, 'TOP', 0, 2); title:Hide()
-    handle:SetScript('OnEnter', function() title:Show() end)
-    handle:SetScript('OnLeave', function() title:Hide() end)
-    handle:SetScript('OnHide', function() title:Hide() end)
     handle:SetScript('OnClick', function() if self.open then self:Close() else self:Open() end end)
     self.handle = handle
 

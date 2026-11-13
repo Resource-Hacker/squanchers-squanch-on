@@ -133,39 +133,21 @@ local function styleCharacterTabs(skin, frame)
     end
 end
 
-local portraitHeaders = setmetatable({}, {__mode = "k"})
-local lootHeaders = setmetatable({}, {__mode = "k"})
+local portraitPlates = setmetatable({}, {__mode = "k"})
+local lootFills = setmetatable({}, {__mode = "k"})
 local function styleLootWindow(skin, frame, border)
     -- Forever LootFrame uses ScrollingFlatPanelTemplate: Bg is a decorative
     -- FlatPanelBackgroundTemplate FRAME, rather than the usual Bg texture.
     -- Its four native background regions otherwise stack behind our fill.
+    -- Its title wears the shared title plate like every titled window.
     if frame.Bg then frame.Bg:SetAlpha(0) end
     if frame.NineSlice and frame.NineSlice.Center then frame.NineSlice.Center:SetAlpha(0) end
-    local state=lootHeaders[frame]
-    if not state then
-        state={}
-        lootHeaders[frame]=state
-        state.fill=frame:CreateTexture(nil,"BACKGROUND",nil,-8)
+    local fill = lootFills[frame]
+    if not fill then
+        fill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+        lootFills[frame] = fill
     end
-    skin:StylePanelBackground(state.fill,border)
-    local title,close=frame.TitleContainer,frame.ClosePanelButton
-    if not title or not close then return end
-    if not state.header then
-        local header=CreateFrame("Frame",nil,frame)
-        state.header=header
-        header.ignoreInLayout=true
-        header:EnableMouse(false)
-        -- Keep native title/close input above the presentation-only plate.
-        header:SetFrameLevel(math.max(0,math.min(title:GetFrameLevel(),close:GetFrameLevel())-2))
-        skin:RaisedPlate(header,"compact")
-    end
-    local header=state.header
-    local inset=border.cornerSize*9/13*border:GetEffectiveScale()/frame:GetEffectiveScale()
-    header:ClearAllPoints()
-    header:SetPoint("TOPLEFT",border,"TOPLEFT",inset,-inset)
-    header:SetPoint("TOPRIGHT",border,"TOPRIGHT",-inset,-inset)
-    -- Native ScrollBox starts at -22: occupy only its existing title band.
-    header:SetHeight(title:GetHeight())
+    skin:StylePanelBackground(fill, border)
 end
 
 local function fitWindowPortrait(frame)
@@ -183,30 +165,29 @@ local function fitWindowPortrait(frame)
     portrait:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -2, 2)
 end
 
-local function styleWindowHeader(skin, frame)
+local function styleWindowPortrait(skin, frame)
     local container, title, close = frame.PortraitContainer, frame.TitleContainer, frame.CloseButton
     if not (container and container.portrait and title and close) then return end
-    local characterHeader = portraitHeaders[frame]
-    if not characterHeader then
-        -- Keep the native portrait texture/source, name and close-button action.
+    if not portraitPlates[frame] then
+        portraitPlates[frame] = true
+        -- Keep the native portrait texture/source and close-button action.
         -- The square sits proud of the sheet like the Escape-menu title plate.
         if container.CircleMask then container.portrait:RemoveMaskTexture(container.CircleMask) end
         fitWindowPortrait(frame)
         skin:RaisedPlate(container, "compact")
-        characterHeader = CreateFrame("Frame", nil, frame)
-        portraitHeaders[frame] = characterHeader
-        characterHeader.ignoreInLayout = true
-        characterHeader:EnableMouse(false)
-        characterHeader:SetFrameLevel(title:GetFrameLevel() - 2)
-        characterHeader:SetPoint("TOPLEFT", frame, "TOPLEFT", ns.SocialDrawer and ns.SocialDrawer:Owns(frame) and 36 or 55, 0)
-        characterHeader:SetPoint("BOTTOMRIGHT", close, "BOTTOMRIGHT", 0, 0)
-        skin:RaisedPlate(characterHeader, "compact")
-        title:ClearAllPoints()
-        title:SetPoint("TOPLEFT", characterHeader, "TOPLEFT", 8, -1)
-        title:SetPoint("BOTTOMRIGHT", close, "BOTTOMLEFT", -6, 1)
         if frame.UpdatePortrait then hooksecurefunc(frame, "UpdatePortrait", fitWindowPortrait) end
     end
     fitWindowPortrait(frame)
+end
+
+-- The window's native title: TitledPanelMixin's TitleContainer.TitleText (the
+-- portrait, button and default panel templates), or SettingsFrameTemplate's,
+-- which is drawn on its border.
+local function titleText(owner)
+    local container = owner.TitleContainer
+    if container and container.TitleText then return container.TitleText end
+    local slice = owner == SettingsPanel and owner.NineSlice
+    return slice and slice.Text or nil
 end
 
 -- GameDialog uses one full-frame border atlas in BG.Top, not NineSlice edges.
@@ -252,9 +233,14 @@ local function applyWindow(frame)
             end)
         end
     end
-    -- Any native portrait window gets the same offset square and title plate.
-    -- The helper is a no-op for ordinary windows without a portrait header.
-    styleWindowHeader(skin, owner)
+    -- Any native portrait window gets the same offset square portrait. The
+    -- helper is a no-op for ordinary windows without a portrait header.
+    styleWindowPortrait(skin, owner)
+    -- Every titled window wears the drawers' title plate on its top rim, in
+    -- place of its title bar text. The map's says Map, not "Map & Quest Log";
+    -- MapDrawer.lua makes it close the attached map.
+    local title = titleText(owner)
+    if title then skin:TitlePlate(owner, title, frame == WorldMapFrame and "Map" or nil) end
     if frame == CharacterFrame then
         for _, slot in ipairs(equipment) do
             local button = _G["Character" .. slot .. "Slot"]

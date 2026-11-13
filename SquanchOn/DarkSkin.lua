@@ -156,6 +156,7 @@ function Skin:VisitLayoutBorders(frame, visit)
     local owner = frame == WorldMapFrame and frame.BorderFrame or frame
     if owner ~= frame then panels(owner) end
     panels(owner and owner.PortraitContainer)
+    panels(owner and self.titlePlates[owner])
     if frame == GameMenuFrame then panels(frame.Header) end
     if frame == CharacterFrame then
         for _, tab in ipairs(frame.ModeTabs and frame.ModeTabs.Tabs or {}) do
@@ -884,6 +885,111 @@ function Skin:RaisedButton(button, style)
     end
     refresh()
     return border
+end
+
+-- THE TITLE PLATE: the raised name plate the drawers wear on their top rim
+-- (Quests, Bags, Damage, the settings window), for any window. 18 high and at
+-- least 76 wide (else the label plus 12 each side) in interface units, whatever
+-- the window's own scale; centred, its bottom on the window rim's inner edge;
+-- the label in the heading look. `title` is the window's native title
+-- FontString: it is concealed (alpha only, it keeps its text and anchors) and
+-- followed through its own SetText/SetFormattedText, so the plate changes
+-- whenever the window retitles itself. A `text` fixes the label instead.
+-- Presentation only: the plate takes no mouse and is a child of the window, so
+-- it shows, hides and fades with it. Skin.titlePlates[window] is the plate,
+-- plate.paint its raised paint.
+local TITLE_W, TITLE_H, TITLE_PAD = 76, 18, 12
+Skin.titlePlates = setmetatable({}, weak)
+local function paintTitlePlate(plate)
+    plate.label:SetFont(Skin:HeadingFont(8))
+    local color = Skin.headerTextColor
+    plate.label:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+end
+local function fitTitlePlate(plate)
+    local owner = plate.owner
+    local scale, ui = owner:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if not (scale > 0 and ui > 0) then return end
+    -- Interface units on screen, as the drawers' plates: windows opened above
+    -- chat are scaled to its width, the world map to the quest list's height.
+    plate:SetScale(ui / scale)
+    local width = plate.label:GetUnboundedStringWidth()
+    if issecretvalue and issecretvalue(width) then width = 0 end
+    plate:SetSize(math.max(TITLE_W, math.ceil(width) + TITLE_PAD * 2), TITLE_H)
+    -- The dialog rim's gold ends this far inside the window (FitPanelBorder).
+    local inner = styles.dialog.edge * 9 / 13 - styles.dialog.offset
+    plate:ClearAllPoints()
+    plate:SetPoint("BOTTOM", owner, "TOP", 0, -inner * scale / ui)
+    local rim = Skin.byFrame[owner] and Skin.byFrame[owner].dialog
+    plate:SetFrameLevel((rim or owner):GetFrameLevel() + 2)
+end
+local function followTitle(plate)
+    local text = plate.text
+    if text == nil and plate.title then text = plate.title:GetText() end
+    local secret = issecretvalue and issecretvalue(text)
+    plate.label:SetText(text or "")
+    plate:SetShown(secret or (text ~= nil and text ~= ""))
+    fitTitlePlate(plate)
+end
+function Skin:TitlePlate(frame, title, text)
+    local plate = self.titlePlates[frame]
+    if not plate then
+        plate = CreateFrame("Frame", nil, frame)
+        plate.ignoreInLayout = true
+        plate:EnableMouse(false)
+        plate.owner, plate.title, plate.text = frame, title, text
+        plate.paint = self:RaisedPlate(plate, "compact")
+        local label = plate:CreateFontString(nil, "OVERLAY")
+        label:SetAllPoints(plate); label:SetJustifyH("CENTER"); label:SetWordWrap(false)
+        label:SetShadowColor(0, 0, 0, 1); label:SetShadowOffset(1, -1)
+        plate.label = label
+        paintTitlePlate(plate)
+        self.titlePlates[frame] = plate
+        if title and text == nil then
+            local function retitle() followTitle(plate) end
+            hooksecurefunc(title, "SetText", retitle)
+            hooksecurefunc(title, "SetFormattedText", retitle)
+        end
+        -- Keep interface units when the window, or the window holding it (the
+        -- world map's border frame), is rescaled.
+        local function refit() fitTitlePlate(plate) end
+        hooksecurefunc(frame, "SetScale", refit)
+        local parent = frame:GetParent()
+        if parent and parent ~= UIParent then hooksecurefunc(parent, "SetScale", refit) end
+    end
+    if title then title:SetAlpha(0) end
+    followTitle(plate)
+    return plate
+end
+Skin:OnTheme(function()
+    for _, plate in pairs(Skin.titlePlates) do paintTitlePlate(plate); fitTitlePlate(plate) end
+end)
+
+-- THE DRAWER ARROW: the minimap panel's side handle (the damage meter's, the
+-- quest list's map arrow). The tinted scrollbar arrow, 18 x 22, its name shown
+-- above it while the mouse is over it. `template` makes it, e.g., a secure
+-- action button. Callers anchor it, act on its click and turn it with
+-- PointDrawerArrow.
+function Skin:DrawerArrow(parent, name, template)
+    local handle = CreateFrame("Button", nil, parent, template)
+    handle.ignoreInLayout = true
+    handle:SetSize(18, 22)
+    handle:RegisterForClicks("LeftButtonUp")
+    local arrow = handle:CreateTexture(nil, "ARTWORK")
+    arrow:SetTexture([[Interface\Buttons\UI-ScrollBar-ScrollUpButton-Up]])
+    arrow:SetPoint("CENTER"); arrow:SetSize(22, 18)
+    self:TintChrome(arrow)
+    handle.arrow = arrow
+    local color = self.headerTextColor
+    local label = ns.OptionWidgets:Label(handle, name, 10, color[1], color[2], color[3])
+    label:SetPoint("BOTTOM", handle, "TOP", 0, 2); label:Hide()
+    handle:HookScript("OnEnter", function() label:Show() end)
+    handle:HookScript("OnLeave", function() label:Hide() end)
+    handle:HookScript("OnHide", function() label:Hide() end)
+    return handle
+end
+-- 'left' or 'right'. The art points up; a texture rotation is legal in combat.
+function Skin:PointDrawerArrow(handle, direction)
+    handle.arrow:SetRotation(direction == "left" and math.pi / 2 or -math.pi / 2)
 end
 
 local function menuButton(button)
