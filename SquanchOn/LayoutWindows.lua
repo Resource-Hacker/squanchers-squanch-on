@@ -383,8 +383,15 @@ function module:Apply(id, frame)
     local owner = attached(frame)
     if owner then owner:Queue(); return end
     if self.applying[frame] or not frame:IsVisible() then return end
-    -- Placement skipped by combat is repeated when it ends.
-    if InCombatLockdown() then self.pending = true; return end
+    -- Placement skipped by combat is repeated when it ends. A chat drawer is
+    -- placed now when neither it nor the chat panel is protected (explicitly
+    -- or through a protected child): combat restricts moving protected frames
+    -- only. Otherwise the native panel manager's combat open (UIParent
+    -- top-left) would stand until combat ends, and the unfold would not play.
+    if InCombatLockdown() then
+        local chat = self:DrawerChat(id, frame)
+        if not chat or frame:IsProtected() or chat:IsProtected() then self.pending = true; return end
+    end
     if ns.NativeWindowPlacement then ns.NativeWindowPlacement:Import(frame:GetName(), id, frame) end
     local chat = self:DrawerChat(id, frame)
     local record = ns.LayoutEditor:Read(id)

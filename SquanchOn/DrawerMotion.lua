@@ -266,7 +266,7 @@ end
 
 -- Call from the drawer's OnShow, after its placement code. Plays at most once
 -- per shown state. With `anchor`, it plays only when the drawer really sits on
--- that anchor (a window shown in combat keeps its native place and opens
+-- that anchor (a drawer combat leaves unplaced keeps its native place and opens
 -- instantly). `shell` is the frame whose rectangle is the painted window and
 -- `style` its DarkSkin rim style; they default to the drawer and 'dialog'.
 -- `direction` 'left' or 'right' slides the shell out sideways from the edge
