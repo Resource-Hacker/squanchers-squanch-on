@@ -434,6 +434,18 @@ function module:Apply(id, frame)
                 if pane and full and full > 0 then width = rect.w * pane / full end
             end
             local ratio = math.min(target.w / width, math.max(1, target.y - 12) / rect.h)
+            -- Owner: a window much wider than chat (the talent trees) was
+            -- squashed to chat's width. Such a window comes up as high as the
+            -- character sheet does, widening past the chat, within the screen.
+            if frame ~= CharacterFrame and CharacterFrame then
+                local sheetTop = module:DrawerTop(CharacterFrame)
+                local tall = sheetTop and target.y - sheetTop
+                if tall and tall > rect.h * ratio + 1 then
+                    local screenWidth = ns.LayoutEditor:Metrics()
+                    local wide = (screenWidth - target.x - 8) / rect.w
+                    ratio = math.min(tall / rect.h, wide, math.max(1, target.y - 12) / rect.h)
+                end
+            end
             if math.abs(ratio - 1) > 0.0005 then frame:SetScale(frame:GetScale() * ratio) end
             frame:ClearAllPoints()
             if byRect then
