@@ -41,6 +41,16 @@ local function load()
     Motion.grow = math.max(.05, tonumber(Motion:Setting('grow')) or Motion.defaults.grow)
     Motion.fade = math.max(.05, tonumber(Motion:Setting('fade')) or Motion.defaults.fade)
 end
+-- The unfold's easing (quartic ease-out, a long soft landing), shared with
+-- motions outside this file such as the quest list's pull-up.
+function Motion:Ease(progress)
+    return 1 - (1 - math.max(0, math.min(1, progress))) ^ 4
+end
+-- The current unfold time, or nil when drawers open instantly.
+function Motion:Unfold()
+    load()
+    return self.enabled and self.grow or nil
+end
 
 local states = setmetatable({}, { __mode = 'k' }) -- frame -> state, or false
 local rimGroups = setmetatable({}, { __mode = 'k' })
@@ -58,9 +68,10 @@ local function alphaGroup(region)
     return group
 end
 -- Groups are kept per frame; the durations follow the current settings.
-local function play(group)
+-- `delay` lengthens the hold for a motion that starts later.
+local function play(group, delay)
     group:Stop()
-    group.hold:SetDuration(Motion.grow * Motion.lead); group.fadeIn:SetDuration(Motion.fade)
+    group.hold:SetDuration((delay or 0) + Motion.grow * Motion.lead); group.fadeIn:SetDuration(Motion.fade)
     group:Play()
 end
 
@@ -169,7 +180,7 @@ local function anchoredTo(frame, anchor)
     end
 end
 
-local function open(frame, anchor, shell, style, direction)
+local function open(frame, anchor, shell, style, direction, delay)
     if not ns.DarkSkin or not frame:IsVisible() then return end
     if anchor and not anchoredTo(frame, anchor) then return end
     shell = shell or frame
@@ -182,28 +193,35 @@ local function open(frame, anchor, shell, style, direction)
     end
     if not state or state.played or state.running then return end
     state.played = true
+    delay = math.max(0, tonumber(delay) or 0)
 
     local proxy, skin = state.proxy, ns.DarkSkin
-    proxy:SetFrameStrata(frame:GetFrameStrata())
-    proxy:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
-    proxy:SetScale(shell:GetEffectiveScale() / UIParent:GetEffectiveScale())
-    proxy:ClearAllPoints()
     -- 'left' grows from the shell's right edge toward the left, 'right' the
     -- reverse; anything else is the upward unfold from the bottom edge.
     local sideways = direction == 'left' or direction == 'right'
-    if sideways then
-        local edge = direction == 'left' and 'RIGHT' or 'LEFT'
-        proxy:SetPoint('TOP' .. edge, shell, 'TOP' .. edge, 0, 0)
-        proxy:SetPoint('BOTTOM' .. edge, shell, 'BOTTOM' .. edge, 0, 0)
-    else
-        proxy:SetPoint('BOTTOMLEFT', shell, 'BOTTOMLEFT', 0, 0)
-        proxy:SetPoint('BOTTOMRIGHT', shell, 'BOTTOMRIGHT', 0, 0)
-    end
     local extent = sideways and proxy.SetWidth or proxy.SetHeight
     local measure = sideways and shell.GetWidth or shell.GetHeight
-    extent(proxy, 1)
-    proxy:SetAlpha(1)
-    skin:StylePanelBackground(state.fill, state.border)
+    -- The stand-in takes the shell's place when it starts to grow: after a
+    -- delay the shell may have changed size meanwhile (the quest list's pull-up).
+    local function place()
+        proxy:SetFrameStrata(frame:GetFrameStrata())
+        proxy:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
+        proxy:SetScale(shell:GetEffectiveScale() / UIParent:GetEffectiveScale())
+        proxy:ClearAllPoints()
+        if sideways then
+            local edge = direction == 'left' and 'RIGHT' or 'LEFT'
+            proxy:SetPoint('TOP' .. edge, shell, 'TOP' .. edge, 0, 0)
+            proxy:SetPoint('BOTTOM' .. edge, shell, 'BOTTOM' .. edge, 0, 0)
+        else
+            proxy:SetPoint('BOTTOMLEFT', shell, 'BOTTOMLEFT', 0, 0)
+            proxy:SetPoint('BOTTOMRIGHT', shell, 'BOTTOMRIGHT', 0, 0)
+        end
+        extent(proxy, 1)
+        proxy:SetAlpha(1)
+        skin:StylePanelBackground(state.fill, state.border)
+    end
+    local placed = delay == 0
+    if placed then place() else proxy:SetAlpha(0) end
 
     state.running = true
     local hold = Motion.grow * Motion.lead
@@ -213,7 +231,7 @@ local function open(frame, anchor, shell, style, direction)
     proxy:SetScript('OnUpdate', function(_, delta)
         elapsed = elapsed + delta
         local full = measure(shell)
-        if elapsed >= total or not full or full <= 0 or not frame:IsVisible() then
+        if elapsed >= delay + total or not full or full <= 0 or not frame:IsVisible() then
             finish(state)
             return
         end
@@ -224,24 +242,26 @@ local function open(frame, anchor, shell, style, direction)
             for _, rim in ipairs(ignoringRims(frame)) do
                 local group = rimGroups[rim]
                 if not group then group = alphaGroup(rim); rimGroups[rim] = group end
-                play(group)
+                play(group, math.max(0, delay - elapsed))
                 state.rims[#state.rims + 1] = group
             end
         end
+        -- The delay: the drawer is held invisible and no stand-in shows yet.
+        local t = elapsed - delay
+        if t < 0 then return end
+        if not placed then place(); placed = true end
         -- Unfold: a long, soft landing (quartic ease-out).
-        local grown = math.min(1, elapsed / Motion.grow)
-        local eased = 1 - (1 - grown) ^ 4
-        extent(proxy, math.max(math.min(Motion.minHeight, full), full * eased))
+        extent(proxy, math.max(math.min(Motion.minHeight, full), full * Motion:Ease(t / Motion.grow)))
         -- Hand-over: the window's own translucent shell fades in over the
         -- stand-in. Fading the stand-in linearly would let the two fills add up
         -- unevenly (a visible pulse); this keeps their combined opacity constant.
-        local shown = math.max(0, math.min(1, (elapsed - hold) / Motion.fade))
+        local shown = math.max(0, math.min(1, (t - hold) / Motion.fade))
         proxy:SetAlpha((1 - shown) / (1 - fillAlpha * shown))
     end)
     proxy:Show()
-    play(state.group)
+    play(state.group, delay)
     -- The motion ends itself; this only covers one that did not.
-    C_Timer.After(total + .1, function() finish(state) end)
+    C_Timer.After(delay + total + .1, function() finish(state) end)
 end
 
 -- Call from the drawer's OnShow, after its placement code. Plays at most once
@@ -251,10 +271,11 @@ end
 -- `style` its DarkSkin rim style; they default to the drawer and 'dialog'.
 -- `direction` 'left' or 'right' slides the shell out sideways from the edge
 -- the drawer is attached by, with the same timing and easing; it defaults to
--- the upward unfold. Any error means an instant open.
-function Motion:Open(frame, anchor, shell, style, direction)
+-- the upward unfold. `delay` seconds hold the drawer invisible before its
+-- shell starts to grow (default none). Any error means an instant open.
+function Motion:Open(frame, anchor, shell, style, direction, delay)
     load()
     if not self.enabled or not frame or not frame.CreateAnimationGroup then return end
-    local ok = pcall(open, frame, anchor, shell, style, direction)
+    local ok = pcall(open, frame, anchor, shell, style, direction, delay)
     if not ok and states[frame] then pcall(finish, states[frame]) end
 end

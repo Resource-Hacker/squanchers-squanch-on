@@ -263,8 +263,53 @@ function Drawer:Refit()
     local shellScale=shell and shell:GetEffectiveScale()
     local scale=frame:GetEffectiveScale()
     local height=top and bottom and math.max(20,(top-bottom)*shellScale/scale) or 20
-    frame:SetHeight(height)
+    -- The painted shell ends on the frame's bottom, so a pull-up (SetReach)
+    -- extends it; at the natural height that is the same edge.
+    self.naturalHeight=height
+    if shell then shell:SetPoint('BOTTOM',frame,'BOTTOM',0,0) end
+    frame:SetHeight(math.max(height,self.reachShown or 0))
     self.fitPending=false
+end
+
+-- Pull-up: while the world map is out beside the drawer (MapDrawer.lua) the
+-- drawer is at least `height` tall (frame units, nil releases it). It grows
+-- and returns with the drawer motion's timing and easing, upward from its
+-- fixed bottom. The frame is protected, so combat holds this back; it resumes
+-- from where it stopped when combat ends.
+function Drawer:SetReach(height,instant)
+    self.reach=height
+    if not self.ready then return end
+    if InCombatLockdown() then self.reachPending=true;return end
+    self.reachPending=nil
+    local natural=self.naturalHeight or self.frame:GetHeight()
+    local from=self.reachShown or natural
+    local to=height and math.max(height,natural) or natural
+    local time=not instant and self.frame:IsShown() and ns.DrawerMotion:Unfold()
+    local ticker=self.reachTicker or CreateFrame('Frame')
+    self.reachTicker=ticker
+    ticker:SetScript('OnUpdate',nil)
+    if not time or math.abs(to-from)<.5 then
+        self.reachShown=height and to or nil
+        self:FitReach()
+        return
+    end
+    local elapsed=0
+    ticker:SetScript('OnUpdate',function(_,delta)
+        if InCombatLockdown() then ticker:SetScript('OnUpdate',nil);self.reachPending=true;return end
+        elapsed=elapsed+delta
+        if elapsed>=time then
+            ticker:SetScript('OnUpdate',nil)
+            self.reachShown=height and to or nil
+        else
+            self.reachShown=from+(to-from)*ns.DrawerMotion:Ease(elapsed/time)
+        end
+        self:FitReach()
+    end)
+end
+function Drawer:FitReach()
+    if not self.ready or InCombatLockdown() then return end
+    local height=math.max(self.naturalHeight or 20,self.reachShown or 0)
+    if math.abs(self.frame:GetHeight()-height)>.01 then self.frame:SetHeight(height) end
 end
 
 -- The drawer title wears the shared heading look (the unselected chat tab's
@@ -421,6 +466,8 @@ events:SetScript('OnEvent',function(_,event)
     if event=='PLAYER_LOGIN' then Drawer.loggedIn=true end
     if not Drawer.loggedIn then return end
     if not Drawer.ready then Drawer:RequestLayout();return end
+    -- A pull-up or its release that combat held back runs now.
+    if event=='PLAYER_REGEN_ENABLED' and Drawer.reachPending then Drawer:SetReach(Drawer.reach) end
     -- Once built, only work that combat deferred is repeated: a requested
     -- layout, or the refit after native passes in combat. Those passes already
     -- placed rows at the drawer's widths, so no further native pass is forced.

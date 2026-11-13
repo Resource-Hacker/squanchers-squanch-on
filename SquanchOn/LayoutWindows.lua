@@ -175,6 +175,25 @@ function module:DrawerChat(id, frame)
     return ns.DarkSkin and ns.DarkSkin.chatPanel
 end
 
+-- Top edge of a chat drawer window in physical pixels from the screen top:
+-- measured while it is open, otherwise where Apply would put it now (its
+-- native size is known while closed; the result does not depend on its
+-- current scale). Nil when the window is no chat drawer.
+function module:DrawerTop(frame)
+    local id = frame and self.native[frame]
+    local chat = id and self:DrawerChat(id, frame)
+    local editor = ns.LayoutEditor
+    local target = chat and editor:Rect(chat)
+    if not target then return end
+    local rect = frame:IsVisible() and editor:Rect(frame)
+    if rect then return rect.y end
+    local full, height = frame:GetWidth(), frame:GetHeight()
+    if not (finite(full) and finite(height)) or full <= 0 or height <= 0 then return end
+    local pane = frame == CharacterFrame and math.min(full, self.characterPane or 399) or full
+    -- Apply's ratio: the pane matches chat's width, capped by the room above chat.
+    return target.y - math.min(height * target.w / pane, math.max(1, target.y - 12))
+end
+
 function module:MatchItemWindow(frame)
     local name, id = frame:GetName(), self.native[frame]
     if self:DrawerChat(id, frame) then return end
