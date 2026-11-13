@@ -149,6 +149,34 @@ local function refreshChrome(button, role)
         -- ModelSceneControlButton.Icon and its native pressed displacement stay untouched.
     end
 end
+-- Owner: the character sheet's pane line runs up to the window's top rim,
+-- across the band the title used to take. The pane's small box keeps its
+-- sides and bottom; its top is lifted into the middle of the window rim, where
+-- the rim covers it.
+local function reachTopRim(window, pane)
+    local skin = ns.DarkSkin
+    local host = skin:SmallBox(pane)
+    local function fit()
+        local top, paneTop = window:GetTop(), pane:GetTop()
+        local ws, ps = window:GetEffectiveScale(), pane:GetEffectiveScale()
+        if not (top and paneTop and ws > 0 and ps > 0) then return end
+        local dialog = skin.styles.dialog
+        local rim = (dialog.edge * 9 / 13 - dialog.offset) / 2 -- window units below the top
+        local rise = ((top - rim) * ws - paneTop * ps) / ps
+        local inset = host.boxInset or 0
+        host:ClearAllPoints()
+        host:SetPoint("TOPLEFT", pane, "TOPLEFT", inset, math.max(-inset, rise))
+        host:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -inset, inset)
+    end
+    fit()
+    if not host.rimReach then
+        host.rimReach = true
+        pane:HookScript("OnShow", fit)
+        pane:HookScript("OnSizeChanged", fit)
+        window:HookScript("OnSizeChanged", fit)
+    end
+end
+
 local function finishChromeButton(button, role)
     if not button or not button.HookScript then return end
     if not chromeHooks[button] then
@@ -1035,7 +1063,7 @@ function Controls:FinishWindow(frame)
             end
         end
         local right = frame.RightPaneHost
-        if right then hideTexture(right.StoneBg); ns.DarkSkin:SmallBox(right) end
+        if right then hideTexture(right.StoneBg); ns.DarkSkin:SmallBox(right); reachTopRim(frame, right) end
         local player, pet = _G.CharacterStatsPaneScrollBox, _G.CharacterStatsPanePetScrollBox
         finishList(player and player.ScrollBox, characterCategory)
         finishList(pet and pet.ScrollBox, characterCategory)
