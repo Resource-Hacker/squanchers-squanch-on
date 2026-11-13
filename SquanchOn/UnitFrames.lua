@@ -1263,9 +1263,17 @@ function UF:KnownRangeSpells(kind)
         if selected~=true and IsPlayerSpell then selected=rangeBoolean(IsPlayerSpell,id) end
         if selected==true then known[#known+1]=id end
     end
-    cache[kind]=known
+    -- An empty answer is not kept: early after login the spellbook is not
+    -- loaded yet, and a cached empty list made every target look out of range.
+    if #known>0 then cache[kind]=known end
     return known
 end
+-- Learning, unlearning or a spellbook (re)load can change the answer.
+local rangeSpellEvents=CreateFrame('Frame')
+for _,event in ipairs({'SPELLS_CHANGED','LEARNED_SPELL_IN_TAB','PLAYER_TALENT_UPDATE'}) do
+    pcall(rangeSpellEvents.RegisterEvent,rangeSpellEvents,event)
+end
+rangeSpellEvents:SetScript('OnEvent',function() UF.rangeCache=nil end)
 
 -- Range fade state: true = reachable, false = out of reach, nil = cannot tell
 -- (no fade). Distances come from the shared Range module.
