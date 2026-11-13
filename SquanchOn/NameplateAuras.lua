@@ -401,7 +401,9 @@ function Auras:Alpha(frame, force, probe)
       local now = GetTime()
       if probe or not frame.npRangeAt or now - frame.npRangeAt > RANGE_KEEP then
         frame.npRangeAt = now
-        frame.npInRange = ns.Range and ns.Range:Within(unit, settings.rangeYards or 40) == true or false
+        -- As ElvUI: only a definite "beyond" dims. "Cannot tell" (in combat many
+        -- checks go quiet, and the plate distance limit is no proof) stays lit.
+        frame.npInRange = not (ns.Range and ns.Range:Within(unit, settings.rangeYards or 40) == false)
       end
       inRange = frame.npInRange
     end
