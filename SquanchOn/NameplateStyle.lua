@@ -537,6 +537,11 @@ local function seat(frame, icon, shown, previous, indicators)
   end
   return icon
 end
+local function side(text, spec, bar)
+  local points = SIDES[spec.side] or SIDES.CENTER
+  text:ClearAllPoints()
+  text:SetPoint(points[1], bar, points[2], spec.x or 0, spec.y or 0)
+end
 local function updateIndicators(frame)
   local settings = NP:Settings()
   local indicators, kind = settings.indicators, frame.npKind
@@ -566,7 +571,20 @@ local function updateIndicators(frame)
   previous = seat(frame, frame.Elite, rare and frame.npRareElite, previous, indicators)
   previous = seat(frame, frame.Rare, rare, previous, indicators)
   previous = seat(frame, frame.QuestIcon, indicators.quest and kind == 'friendlynpc' and frame.npQuest and bar, previous, indicators)
-  seat(frame, frame.QuestSkull, indicators.questSkull ~= false and kind == 'enemynpc' and frame.npQuest and bar, previous, indicators)
+  local skull = indicators.questSkull ~= false and kind == 'enemynpc' and frame.npQuest and bar and true or false
+  seat(frame, frame.QuestSkull, skull, previous, indicators)
+  -- Owner: with the quest skull on the bar, the health number moves just right
+  -- of the bar; it returns to its configured place when the skull goes.
+  if frame.npPercentAside ~= skull then
+    frame.npPercentAside = skull
+    local percent = config and config.percent
+    if skull then
+      frame.Percent:ClearAllPoints()
+      frame.Percent:SetPoint('LEFT', frame.Health, 'RIGHT', 3, 0)
+    elseif percent then
+      side(frame.Percent, percent, frame.Health)
+    end
+  end
 end
 function Style:Indicators(frame) updateIndicators(frame) end
 
@@ -589,11 +607,6 @@ end
 --   the rest follows the unit and is cheap: raid mark, name while casting.
 -- Style:Layout runs them in that order; Style:Arrange skips the first.
 local function font(text, spec) NP:Font(text, spec.font, spec.size, spec.outline) end
-local function side(text, spec, bar)
-  local points = SIDES[spec.side] or SIDES.CENTER
-  text:ClearAllPoints()
-  text:SetPoint(points[1], bar, points[2], spec.x or 0, spec.y or 0)
-end
 -- Without a bar the name sits ten units above the plate's centre; under the
 -- mouseover ring it keeps the place it has above a bar, clear of the emblem.
 local function seatName(frame, bar, config)
@@ -610,7 +623,9 @@ local function dress(frame, settings, config)
   for _, rim in ipairs(health.rim) do rim:SetColorTexture(r, g, b, a) end
 
   font(frame.Level, config.level); side(frame.Level, config.level, health)
-  font(frame.Percent, config.percent); side(frame.Percent, config.percent, health)
+  font(frame.Percent, config.percent)
+  if frame.npPercentAside then frame.Percent:ClearAllPoints(); frame.Percent:SetPoint('LEFT', health, 'RIGHT', 3, 0)
+  else side(frame.Percent, config.percent, health) end
   frame.Percent:SetAlpha(config.percent.alpha or 1)
   -- Font and anchor of the title depend on whether the bar shows (updateName).
   frame.npTitleUnder = nil
