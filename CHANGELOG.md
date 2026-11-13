@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.2 — 2026-11-12
+
+- Combat start and end no longer redo the whole action-bar layout: Blizzard
+  repositions its bars up to eight times at each transition and Squanch-On
+  re-laid out every bar after each call, rewriting every position and scale and
+  re-applying every button's art. Writes that change nothing are now skipped,
+  each bar's scale is fitted in one step, and re-layouts no longer re-apply
+  button art. This was the hitch of 100–170 ms at every combat start and end.
+- Action-slot borders are 8 textures under one mask instead of 58 pieces, and
+  panel corners one masked texture each instead of ~17; the look is the same.
+  The masks are generated from measured contour data
+  (`asset-source/generate-border-masks.py`).
+- The target frame is lit whenever the target ring shows its range marks, and
+  Auto Shot counts for its own range check (asked by name when the spell ID
+  cannot answer).
+- Nameplates: shown as far out as the client allows; only a definite
+  out-of-range dims a plate; friendly mouseover ring fades 0.2 s.
+- The world map drawer: the map is sized once before it slides out (its terrain
+  could draw blank after a quest-list pull-up), and an arrow on the map slides
+  it back in place of Blizzard's quest-panel toggle.
+- The character sheet's pane line runs up to the top rim; the chat-header menu
+  icons keep the game's own look.
+
 ## 1.0.1 — 2026-11-12
 
 - The login line and About page show the release number from the TOC, so each

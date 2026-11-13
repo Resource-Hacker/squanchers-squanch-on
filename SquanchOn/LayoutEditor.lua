@@ -95,7 +95,11 @@ end
 function Editor:ScaleToWidth(frame, width)
     if InCombatLockdown() then return end
     local rect = self:Rect(frame)
-    if rect then (frame.SetScaleBase or frame.SetScale)(frame, frame:GetScale() * width / rect.w) end
+    if not rect or rect.w <= 0 then return end
+    -- Already fitted: no write (a scale write makes the game recompute the frame's subtree).
+    local fitted = frame:GetScale() * width / rect.w
+    if math.abs(fitted - frame:GetScale()) < 0.0005 then return end
+    (frame.SetScaleBase or frame.SetScale)(frame, fitted)
 end
 
 function Editor:Read(id)

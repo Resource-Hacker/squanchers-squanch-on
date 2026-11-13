@@ -220,14 +220,9 @@ function UF:AurasSecret()
     end
     return InCombatLockdown()
 end
--- TEMPORARY diagnostic (remove once the rows are confirmed in a fight): the
--- first refused aura call of a session prints one chat line.
-local reported
+-- A refused aura call is kept (UF.auraError) for /dump; nothing is printed.
 function UF:AuraReport(api,err)
-    if reported then return end
-    reported=true
-    print(('|cff33ff99Squanch-On|r TEMPORARY aura check: %s failed (%s, aura data %s): %s'):format(api,
-        InCombatLockdown() and 'in combat' or 'out of combat',self:AurasSecret() and 'secret' or 'readable',tostring(err)))
+    if not self.auraError then self.auraError=tostring(api)..': '..tostring(err) end
 end
 local function call(object,method,...)
     local ok,err=pcall(object[method],object,...)

@@ -72,14 +72,18 @@ end
 
 -- iconOnly: a native icon write (SetTexture/Show/Hide). It cannot move or
 -- resize anything, so only the native rim and placeholder are suppressed again.
-local function refresh(button, iconOnly)
+-- mode nil: the button's art may have changed (native art writers);
+-- "icon": a native icon write; "layout": the bar re-laid out, so only a real
+-- change of size, scale, level or pixel size needs work.
+local function refresh(button, mode)
     local state = profiles[button]
     if not state or state.refreshing then return end
+    local iconOnly = mode == "icon"
     if InCombatLockdown() then
-        if not iconOnly then state.pending = "art" elseif not state.pending then state.pending = "icon" end
+        if not mode then state.pending = "art" elseif not state.pending then state.pending = "icon" end
         return
     end
-    local artDue = not iconOnly or state.pending == "art"
+    local artDue = not mode or state.pending == "art"
     state.pending=nil
     state.refreshing = true
     local width, height = button:GetSize()
@@ -110,7 +114,7 @@ end
 
 function Skin:ActionButton(button, kind, alphaOwner)
     if not button then return end
-    if profiles[button] then refresh(button); return end
+    if profiles[button] then refresh(button, "layout"); return end
     local icon = button.icon or button.Icon
     if not icon and button:GetName() then icon = _G[button:GetName() .. "Icon"] or _G[button:GetName() .. "IconTexture"] end
     kind = kind or (button.bar == PetActionBar and "pet" or "action")
@@ -126,7 +130,7 @@ function Skin:ActionButton(button, kind, alphaOwner)
     self.buttons[button] = state.backdrop
     -- Icons fitted to their painted rim, shared cell edges and native pressed art.
     local function full() refresh(button) end
-    local function iconWrite() refresh(button, true) end
+    local function iconWrite() refresh(button, "icon") end
     for _, method in ipairs(ART_METHODS) do
         if type(button[method]) == "function" then hooksecurefunc(button, method, full) end
     end
@@ -150,6 +154,8 @@ end
 -- Micro buttons are plain cells of the chat header strip. The chat panel owns
 -- their top/right rim, divider and fill; DarkSkin draws one seam per cell.
 function Skin:BarControls()
+    -- Owner, 2026-11-12: the menu icons stay as the game draws them.
+    if true then return end
     if not CharacterMicroButton then return end
     if MicroMenu and MicroMenu.GenerateButtonInfos then
         for _, info in ipairs(MicroMenu:GenerateButtonInfos()) do
@@ -193,6 +199,6 @@ local pendingSkins=CreateFrame("Frame")
 pendingSkins:RegisterEvent("PLAYER_REGEN_ENABLED")
 pendingSkins:SetScript("OnEvent",function()
     for button,state in pairs(profiles) do
-        if state.pending then refresh(button, state.pending == "icon") end
+        if state.pending then refresh(button, state.pending == "icon" and "icon" or nil) end
     end
 end)

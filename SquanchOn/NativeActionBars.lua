@@ -15,15 +15,37 @@ local layout = {
     { name = "PossessActionBar", point = "CENTER", relativePoint = "CENTER", x = 244, count = 2, scale = 1, spacing = 4, pad = 2, stance = true },
 }
 
+-- Every write below is skipped when the value is already in place. Blizzard
+-- repositions its bars up to 8 times at each combat start and end, and the
+-- layout runs after each; an unconditional write makes the game recompute every
+-- region under the bar, and 8 such passes froze a frame for ~100 ms.
+local function near(a, b) return math.abs((a or 0) - (b or 0)) < 0.0005 end
 local function point(frame, anchor, relative, relativeAnchor, x, y)
+    x, y = x or 0, y or 0
+    if frame:GetNumPoints() == 1 then
+        local p, r, rp, px, py = frame:GetPoint(1)
+        if p == anchor and r == relative and rp == relativeAnchor and near(px, x) and near(py, y) then return end
+    end
     local clear = frame.ClearAllPointsBase or frame.ClearAllPoints
     local setPoint = frame.SetPointBase or frame.SetPoint
     clear(frame)
-    setPoint(frame, anchor, relative, relativeAnchor, x or 0, y or 0)
+    setPoint(frame, anchor, relative, relativeAnchor, x, y)
 end
 
 local function scale(frame, value)
+    if near(frame:GetScale(), value) then return end
     (frame.SetScaleBase or frame.SetScale)(frame, value)
+end
+local function size(frame, width, height)
+    local w, h = frame:GetSize()
+    if near(w, width) and near(h, height) then return end
+    frame:SetSize(width, height)
+end
+local function alpha(region, value)
+    if not near(region:GetAlpha(), value) then region:SetAlpha(value) end
+end
+local function mouse(frame, enabled)
+    if frame:IsMouseEnabled() ~= enabled then frame:EnableMouse(enabled) end
 end
 
 -- The native right-bar writer always restores local scale 1, even for custom
@@ -98,66 +120,68 @@ function Bars:LayoutActionBar(frame, config)
     self.layingOut = true
     -- This bar has a custom owner. Native ManageFramePositions otherwise resets
     -- its scale to 1 outside the edit-mode writers when panels/targets change.
-    if frame == MainActionBar then
+    if frame == MainActionBar and not (frame:IsMovable() and frame:IsUserPlaced()) then
         -- SetUserPlaced requires a movable frame. This does not add drag handlers.
         frame:SetMovable(true)
         frame:SetUserPlaced(true)
     end
     local count = config.stance and math.min(frame.numButtonsShowable or config.count, config.count) or config.count
-    frame:SetFrameStrata("MEDIUM")
+    if frame:GetFrameStrata() ~= "MEDIUM" then frame:SetFrameStrata("MEDIUM") end
     local holder = scaleHolder(frame)
+    local rect = ns.LayoutTargets and barTargets[config.name] and ns.LayoutEditor:Read(barTargets[config.name])
     if holder then
         if frame.ludius_parentBeforeFadeOut then self.pending=true; self.layingOut=false; return end
         if frame:GetParent() ~= holder then frame:SetParent(holder) end
-        holder:SetScale(config.scale)
+        -- With a saved width the final scale is fitted below, straight from the
+        -- current one: no detour through the default scale.
+        if not rect then scale(holder, config.scale) end
         scale(frame, 1)
     else
         if scaleHolders[frame] and frame:GetParent() == scaleHolders[frame] then frame:SetParent(UIParent) end
-        scale(frame, config.scale)
+        if not rect then scale(frame, config.scale) end
     end
     point(frame, config.point, _G[config.relative] or UIParent, config.relativePoint or "BOTTOM", config.x, config.y)
     local pad, width, height = config.pad, 0, 0
-    local rect = ns.LayoutTargets and barTargets[config.name] and ns.LayoutEditor:Read(barTargets[config.name])
     for index, button in ipairs(frame.actionButtons) do
         local container = button.container
         -- Native edit-mode icon size scales the container independently of the
         -- bar. Dominos reparented the button directly, so preserve that one-scale
         -- geometry here while retaining the native container/action owner.
-        container:SetScale(1)
-        button:SetScale(1)
+        scale(container, 1)
+        scale(button, 1)
         if index <= count then
-            if config.cellSize then button:SetSize(config.cellSize, config.cellSize) end
+            if config.cellSize then size(button, config.cellSize, config.cellSize) end
             local bw, bh = button:GetSize()
             local left, right, top, bottom = button:GetHitRectInsets()
             local visibleWidth, visibleHeight = bw - left - right, bh - top - bottom
             point(container, "TOPLEFT", frame, "TOPLEFT", pad + width - left, -pad + top)
             point(button, "CENTER", container, "CENTER")
-            container:SetSize(bw, bh)
+            size(container, bw, bh)
             width = width + visibleWidth + config.spacing
             height = math.max(height, visibleHeight)
-            button:SetAlpha(1)
-            container:SetAlpha(1)
-            button:EnableMouse(true)
-            if button.Name then button.Name:SetAlpha(0) end
+            alpha(button, 1)
+            alpha(container, 1)
+            mouse(button, true)
+            if button.Name then alpha(button.Name, 0) end
             -- With a saved rectangle the bar's scale is still to change: the
             -- cells are skinned once, after it applies (below).
             if not rect then skin(button, config.pet and "pet" or nil, frame) end
             observeHover(button)
         else
             -- Keep native lifetime/action registration and key dispatch intact.
-            button:SetAlpha(0)
-            container:SetAlpha(0)
-            button:EnableMouse(false)
+            alpha(button, 0)
+            alpha(container, 0)
+            mouse(button, false)
             point(container, "TOPLEFT", frame, "TOPLEFT", pad, -pad)
         end
     end
-    frame:SetSize(math.max(1, width - config.spacing + 2 * pad), math.max(1, height + 2 * pad))
+    size(frame, math.max(1, width - config.spacing + 2 * pad), math.max(1, height + 2 * pad))
     if rect then
         ns.LayoutEditor:ScaleToWidth(frame, rect.w)
         if holder then
             -- Preserve the editor's effective scale while returning the
             -- native bar to the local scale its secure manager will use.
-            holder:SetScale(holder:GetScale() * frame:GetScale())
+            scale(holder, holder:GetScale() * frame:GetScale())
             scale(frame, 1)
         end
         if not config.relative then ns.LayoutEditor:Place(frame, rect) end
@@ -167,7 +191,7 @@ function Bars:LayoutActionBar(frame, config)
         end
     end
     for _, key in ipairs({ "EndCaps", "BorderArt", "Background", "ActionBarPageNumber" }) do
-        if frame[key] then frame[key]:SetAlpha(0) end
+        if frame[key] then alpha(frame[key], 0) end
     end
     if frame.HorizontalDividersPool then frame.HorizontalDividersPool:ReleaseAll() end
     if frame.VerticalDividersPool then frame.VerticalDividersPool:ReleaseAll() end

@@ -1284,10 +1284,24 @@ rangeSpellEvents:SetScript('OnEvent',function() UF.rangeCache=nil end)
 -- a unit is out of range only when the class's range spells all say so. If no
 -- spell can answer, out of combat the 28-yard follow check decides, and in
 -- combat it counts as in range. Friends also use the game's group range.
+-- By ID first; spells whose range comes from the weapon (Auto Shot) answer
+-- only the by-name check on this client, as the reticle's glow uses.
+local spellNames={}
+local function spellName(id)
+    local name=spellNames[id]
+    if name==nil then
+        local ok,info=pcall(C_Spell and C_Spell.GetSpellInfo or GetSpellInfo,id)
+        if ok and type(info)=='table' then info=info.name end
+        name=ok and public(info) and type(info)=='string' and info or false
+        spellNames[id]=name
+    end
+    return name or nil
+end
 local function spellsReach(unit,spells)
     local failed
     for _,id in ipairs(spells) do
         local reach=rangeBoolean(C_Spell and C_Spell.IsSpellInRange,id,unit)
+        if reach==nil and IsSpellInRange and spellName(id) then reach=rangeBoolean(IsSpellInRange,spellName(id),unit) end
         if reach==true then return true elseif reach==false then failed=true end
     end
     if failed then return false end
@@ -1310,6 +1324,10 @@ function UF:RangeState(unit)
     end
     if not public(unit) or type(unit)~='string' then return nil end
     if rangeBoolean(UnitExists,unit)~=true or rangeBoolean(UnitIsUnit,unit,'player')==true then return nil end
+    -- Owner: when the target ring shows its range marks (blocks or circling
+    -- triangles) the target is in reach, and its frame is lit.
+    local ring=ns.TargetCrosshairs
+    if ring and ring.rangeMode and (unit=='target' or rangeBoolean(UnitIsUnit,unit,'target')==true) then return true end
     if rangeBoolean(UnitIsDeadOrGhost,unit)==true then return inSpellsRange(unit,'RESURRECT')==true end
     if rangeBoolean(UnitCanAttack,'player',unit)==true then return inSpellsRange(unit,'ENEMY') end
     if rangeBoolean(UnitIsUnit,'pet',unit)==true then return inSpellsRange(unit,'PET') end

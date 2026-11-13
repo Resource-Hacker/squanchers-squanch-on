@@ -204,18 +204,8 @@ local function atlasSlice(texture, x1, y1, x2, y2)
     Skin:TintChrome(texture)
 end
 
--- Measured raw-pixel row spans of the four native diamonds, mirrored into
--- local corner coordinates. Disjoint bands remove only their exterior halo;
--- the inward quadrant stays empty and the original material is never repainted.
-local cornerSpans = {
-    TopLeftCorner = {{4,5,11,12},{5,6,9,13},{6,7,9,14},{7,8,8,15},{8,9,7,16},{9,11,5,26},{11,13,4,26},{13,15,5,26},{15,16,6,26},{16,17,7,26},{17,18,10,26},{18,21,10,18},{21,26,9,18}},
-    TopRightCorner = {{5,6,10,13},{6,7,9,13},{7,8,9,14},{8,9,8,15},{9,10,6,26},{10,11,5,26},{11,13,4,26},{13,14,5,26},{14,15,6,26},{15,16,7,26},{16,17,8,26},{17,18,9,26},{18,21,10,18},{21,26,9,18}},
-    BottomLeftCorner = {{4,5,11,12},{5,6,10,13},{6,7,9,14},{7,8,8,15},{8,9,7,16},{9,10,6,26},{10,11,5,26},{11,13,4,26},{13,14,5,26},{14,15,6,26},{15,16,7,26},{16,17,8,26},{17,18,9,26},{18,26,9,18}},
-    BottomRightCorner = {{5,6,10,13},{6,7,9,13},{7,8,8,14},{8,9,7,15},{9,10,7,26},{10,11,6,26},{11,13,4,26},{13,14,5,26},{14,15,6,26},{15,16,7,26},{16,17,8,26},{17,18,9,26},{18,26,9,18}},
-}
--- The native inward elbow contains six gold texels beyond the straight rim.
--- Restore them only on fitted panels; action slots keep their reference contour.
-local panelCornerElbows = {{18,19,18,21},{19,20,18,20},{20,21,18,19}}
+local BORDER_MASKS = "Interface\\AddOns\\" .. addonName .. "\\media\\borders\\"
+local CORNER_KEYS = { TopLeftCorner = "TL", TopRightCorner = "TR", BottomLeftCorner = "BL", BottomRightCorner = "BR" }
 local function gearBorder(border, size)
     border.cornerSize = size
     local function corner(name, anchor, x1, y1, x2, y2)
@@ -236,8 +226,17 @@ local function gearBorder(border, size)
                 (top and -1 or 1)*size*yStart/13)
             strip:SetSize(size*(xEnd-xStart)/13,size*(yEnd-yStart)/13)
         end
-        for _,span in ipairs(cornerSpans[name]) do drawBand(span) end
-        for _,span in ipairs(panelCornerElbows) do drawBand(span) end
+        -- One texture per corner (owner, 2026-11-12): every texture costs the
+        -- game time at each combat start and end, and the measured row bands
+        -- were ~17 textures per corner. The square spans the diamond's extent.
+        drawBand({4,26,4,26})
+        -- The corner's measured contour (with the elbow texels) as one mask.
+        local mask=cap:CreateMaskTexture()
+        mask:SetTexture(BORDER_MASKS.."corner-mask-"..CORNER_KEYS[name],"CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(cap)
+        for _,region in ipairs({cap:GetRegions()}) do
+            if region~=mask and region.AddMaskTexture then region:AddMaskTexture(mask) end
+        end
         border[name] = cap
         return cap
     end
@@ -489,18 +488,11 @@ end
 -- Retain native coordinates/scale while excluding the bitmap's exterior black
 -- shadow. Each disjoint rectangle maps source to destination at the same scale;
 -- unlike panel caps, no corner or straight run is stretched independently.
-local rawSlotRects = {{13,4.5,42,9},{13,46,42,50.5},{4.5,13,9,42},{46,13,50.5,42}}
-for _,corner in ipairs({
-    {"TopLeftCorner",true,true},{"TopRightCorner",false,true},
-    {"BottomLeftCorner",true,false},{"BottomRightCorner",false,false},
-}) do
-    local left,top=corner[2],corner[3]
-    for _,span in ipairs(cornerSpans[corner[1]]) do
-        local y1,y2,x1,x2=span[1]/2,span[2]/2,span[3]/2,span[4]/2
-        rawSlotRects[#rawSlotRects+1]={left and x1 or 55-x2,top and y1 or 55-y2,
-            left and x2 or 55-x1,top and y2 or 55-y1}
-    end
-end
+-- Four edges and four corner squares (owner, 2026-11-12): 8 textures per slot
+-- instead of 58 measured bands; the game re-processes every texture at each
+-- combat start and end (~70 slots x 58 bands froze a frame for ~55 ms).
+local rawSlotRects = {{13,4.5,42,9},{13,46,42,50.5},{4.5,13,9,42},{46,13,50.5,42},
+    {2,2,13,13},{42,2,53,13},{2,42,13,53},{42,42,53,53}}
 function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
     local byStyle=self.byFrame[frame]
     local border=byStyle and byStyle.rawSlot
@@ -511,9 +503,16 @@ function Skin:RawSlotBorder(frame, alphaOwner, restingAlpha)
         -- Sparse native-coordinate views omit the opaque center and outer
         -- black halo. They retain the complete measured gold/diamond contour.
         border.rawViews={}
+        -- One mask keeps exactly the measured gold contour (no centre, no dark
+        -- halo) for all eight pieces (asset-source/generate-border-masks.py).
+        local mask=border:CreateMaskTexture()
+        mask:SetTexture(BORDER_MASKS.."slot-mask","CLAMPTOBLACKADDITIVE","CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(border)
+        border.mask=mask
         for _,rect in ipairs(rawSlotRects) do
             local texture=border:CreateTexture(nil,"BACKGROUND")
             atlasSlice(texture,unpack(rect))
+            texture:AddMaskTexture(mask)
             texture:SetSnapToPixelGrid(false);texture:SetTexelSnappingBias(0)
             border.rawViews[#border.rawViews+1]={texture=texture,rect=rect}
         end

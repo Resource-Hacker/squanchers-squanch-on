@@ -382,32 +382,3 @@ events:SetScript('OnEvent', function()
     Drawer:SyncArrow()
     Drawer:QueueCloser()
 end)
-
--- TEMPORARY (2026-11-12): /sqmap prints what the open map's canvas holds, to
--- find why the terrain draws blank. Remove when settled.
-SLASH_SQUANCHONMAP1 = '/sqmap'
-SlashCmdList.SQUANCHONMAP = function()
-    local map = WorldMapFrame
-    local scroll = map and map.ScrollContainer
-    local child = scroll and scroll.Child
-    if not child then print('Squanch-On map: no canvas'); return end
-    local function a(frame) return frame and string.format('%.2f/%s', frame:GetAlpha(), frame:IsVisible() and 'v' or 'h') or '-' end
-    print(('Squanch-On map: id %s, map %s, scroll %s, child %s, scale %.3f, canvas %.3f, buffer %s'):format(
-        tostring(map:GetMapID()), a(map), a(scroll), a(child), map:GetScale(),
-        scroll.GetCanvasScale and scroll:GetCanvasScale() or -1, tostring(map.IsFrameBuffer and map:IsFrameBuffer())))
-    local layers, tiles, shown = 0, 0, 0
-    for _, frame in ipairs({ child:GetChildren() }) do
-        local pool = frame.detailTilePool or frame.textures
-        if frame.detailTilePool then
-            layers = layers + 1
-            for tile in frame.detailTilePool:EnumerateActive() do
-                tiles = tiles + 1
-                if tile:IsVisible() and tile:GetAlpha() > 0 then shown = shown + 1 end
-            end
-            print(('  layer %s alpha %.2f, %s'):format(layers, frame:GetAlpha(), frame:IsVisible() and 'visible' or 'hidden'))
-        end
-    end
-    print(('  detail layers %d, tiles %d, drawn %d'):format(layers, tiles, shown))
-    local over = map.ScrollContainer and map.ScrollContainer.OverscrollBG or map.OverscrollBG
-    if over then print('  overscroll layer ' .. tostring(over:GetDrawLayer()) .. ' alpha ' .. over:GetAlpha()) end
-end
