@@ -405,6 +405,27 @@ local function scanTitle(guid)
   if not fine or found then return false end
   return text
 end
+-- The client's own "owner" title formats ("%s's Pet", "%s's Companion", ...):
+-- other players' pets and companions are not player-controlled from here.
+local ownedPatterns
+local function ownedTitle(line)
+  if not public(line) or type(line) ~= 'string' then return false end
+  if not ownedPatterns then
+    ownedPatterns = {}
+    for _, key in ipairs({ 'UNITNAME_TITLE_PET', 'UNITNAME_TITLE_COMPANION', 'UNITNAME_TITLE_GUARDIAN',
+      'UNITNAME_TITLE_MINION', 'UNITNAME_TITLE_CHARM', 'UNITNAME_TITLE_CREATION' }) do
+      local format = _G[key]
+      if type(format) == 'string' and format:find('%s', 1, true) then
+        local escaped = format:gsub('[%^%$%(%)%%%.%[%]%*%+%-%?]', '%%%0'):gsub('%%%%s', '.+')
+        ownedPatterns[#ownedPatterns + 1] = '^' .. escaped .. '$'
+      end
+    end
+  end
+  for _, pattern in ipairs(ownedPatterns) do
+    if line:find(pattern) then return true end
+  end
+  return false
+end
 local function title(frame, unit)
   if frame.npFake then return frame.npFake.title end
   if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return end
@@ -447,8 +468,13 @@ local function updateName(frame)
   -- mousing over every vendor).
   local sub = settings.subtitle
   local npc = kind == 'enemynpc' or kind == 'friendlynpc'
+  -- Owner: pets, companions, guardians and other player-owned units skip the
+  -- line ("<Squancher's Pet>" is too much).
+  if npc and (ask(UnitPlayerControlled, unit) == true or ask(UnitIsOwnerOrControllerOfUnit, 'player', unit) == true
+    or (UnitIsBattlePetCompanion and ask(UnitIsBattlePetCompanion, unit) == true)) then npc = false end
   local barShown = frame.Health:IsShown()
   local line = npc and sub.show and (not barShown or sub.underBar ~= false) and title(frame, unit)
+  if line and ownedTitle(line) then line = nil end
   frame.npTitle = line and true or false
   if line then
     local under = barShown and true or false
