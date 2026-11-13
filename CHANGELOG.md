@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-11-12
 
+- The login line and About page show the release number from the TOC, so each
+  release names itself.
 - Debuffs on enemy nameplates, the unit frames' aura rows, the target's aura
   bars and the player's buff and debuff bars keep working in combat: while the
   game keeps aura data secret, the client's own aura container draws them.

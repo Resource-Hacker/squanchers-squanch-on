@@ -2,7 +2,7 @@
 ## Title: Squancher's Squanch-On
 ## Notes: Reticle-centered mouselook, hold-to-open mouseover and a unified native interface.
 ## Author: Squancher and contributors
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: SquanchOnDB
 ## AddonCompartmentFunc: SquanchOn_OnAddonCompartmentClick
 ## OptionalDeps: Plater, DynamicCam

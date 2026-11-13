@@ -1,5 +1,12 @@
 -- SPDX-License-Identifier: MIT
 local addonName, addon = ...
+-- The release number, from the TOC's "## Version" line, so every release
+-- shows its own number with no other edit.
+function addon:Version()
+  local read = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+  local ok, version = pcall(read, addonName, "Version")
+  return ok and type(version) == "string" and version ~= "" and version or "?"
+end
 
 _G.SquancherMouselookSuite = addon -- existing key-binding compatibility
 _G.SquanchOn = addon
@@ -1284,7 +1291,7 @@ function addon:OnEvent(event, ...)
         profile[key] = nil
       end
     end)
-    self.db.loadedVersion = "1.0.0"
+    self.db.loadedVersion = addon:Version()
     debugReceipts = self.db.debugReceipts == true
     if not self.db.nativeReturnRevision then
       self.db.nativeCombinedClick = false
@@ -1336,7 +1343,7 @@ function addon:OnEvent(event, ...)
     self:UpdateReticle()
     self:RecordNativeReceipt(event)
     if event == "PLAYER_LOGIN" then
-      print("Squanch-On 1.0 loaded. /squanchon opens settings; /sqedit opens the layout grid.")
+      print("Squanch-On " .. addon:Version() .. " loaded. /squanchon opens settings; /sqedit opens the layout grid.")
     end
   elseif event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
     self:RestoreNativeLeftDelta(event)
