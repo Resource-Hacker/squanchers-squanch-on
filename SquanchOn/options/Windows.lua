@@ -45,7 +45,7 @@ Options:Add('windows', {
         desc = 'Windows such as the character sheet, spellbook and quest log open above chat at its width. Off leaves them at their own place and size. A window you placed in /sqedit keeps that place either way. Used the next time a window opens.',
         keywords = 'drawer chat window dock attach above position free' }),
     row('windows', ns.LayoutWindows, 'mapDrawer', { id = 'windows.mapDrawer', type = 'toggle', label = 'Open the world map beside the quest list', section = 'Drawers', order = 6,
-        desc = 'The world map (M, or the arrow on the quest list's side) slides out beside the quest list at the list\'s height, with its quest pins but without its own quest log. The list first grows to at least the top of the character sheet. The arrow on the map, or collapsing the quest list, slides it back. Off leaves the map at its own place and size. Used the next time the map opens.',
+        desc = 'The world map (M, or the arrow on the quest list\'s side) slides out beside the quest list at the list\'s height, with its quest pins but without its own quest log. The list first grows to at least the top of the character sheet. The arrow on the map, or collapsing the quest list, slides it back. Off leaves the map at its own place and size. Used the next time the map opens.',
         keywords = 'world map quest log drawer attach beside M' }),
     row('windows', Motion, 'style', { id = 'windows.style', type = 'choice', label = 'Opening motion', section = 'Opening motion', order = 10,
         desc = 'Unfold grows the empty window upward from its bottom edge and then fades its content in. None opens at once.',
