@@ -17,9 +17,10 @@ of the original-engine setup does not validate this new renderer.
 
 Lua syntax, executable load dependencies and reuse hashes are checked by the
 packager. Those checks establish source/artifact integrity, not matching
-appearance or working controls. The existing gameplay
-images show earlier component examples; their [provenance](images/README.md)
-remains explicit and does not certify the rewrite.
+appearance or working controls. The gameplay images are real captures of
+version 1.0 from the author's play on 2026-11-12, except the target-ring
+capture from the earlier Plater setup; their [provenance](images/README.md)
+is explicit, and still images do not certify the rewrite.
 
 ## Runtime ownership
 
