@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Chat header: the tab row is narrower and fitted to the menu icons, each icon
+  centred in its own cell with even space all round; Friends matches them.
+- Quest mobs: an enemy you still need for a quest shows a small skull on its
+  plate (setting on the nameplate page), and its health number moves just
+  right of the bar while the skull shows.
+- Title plates on the damage meter and the bag window are centred on their top
+  rims, like every other window.
+- The target's red highlight hugs its health bar (3 units instead of 11).
+- Target frame range fade follows the target ring's marks exactly while the
+  ring shows: blocks or circling triangles light it, no marks fade it.
+- Character sheet: opens as its drawer even with the map or other windows
+  open; its name shows only in the title plate; the pane line reaches the
+  top rim.
+- Map breadcrumbs (World › continent › zone) form an even row; the current
+  zone is marked by its white label.
+- Action-slot border masks keep every pixel of the straight edges.
+
 ## 1.0.2 — 2026-11-12
 
 - Combat start and end no longer redo the whole action-bar layout: Blizzard
