@@ -36,19 +36,11 @@ function Drawer:InstallQuestEntries()
     end)
 end
 function Drawer:FitQuestEntries()
-    if InCombatLockdown() then self.pending=true;return end
+    if InCombatLockdown() then self.fitPending=true;return end
     local module=self.questEntries
     if not module then return end
     self:RestoreQuestBodies()
     module.Header:Hide()
-    -- Native XML starts this container at Header.BOTTOM (26 UI below module
-    -- TOP). With the shelf removed, its rows must occupy the whole module;
-    -- retaining that inset leaves only a sliver after compact-height fitting.
-    local contents=module.ContentsFrame
-    if contents then
-        contents:ClearAllPoints()
-        contents:SetAllPoints(module)
-    end
     local block,previous,total=module.firstBlock,nil,0
     while block do
         local nextBlock=block.nextBlock
@@ -200,10 +192,8 @@ function Drawer:Layout()
     local available=math.max(64,(UIParent:GetHeight()*UIParent:GetEffectiveScale()
         -anchorTop*anchorScale)/scale-8)
     local contentWidth=width-23 -- collapse control18 and right gutter5
-    -- Blizzard's UpdateHeight reads its parent's height on every native show.
-    -- The viewport owns available layout space; the drawer owns painted height.
+    self.available=available
     self.viewport:SetWidth(contentWidth)
-    self.viewport:SetHeight(available)
     tracker:SetClampedToScreen(false)
     tracker:SetScale(1)
     setWidth(tracker,contentWidth)
@@ -211,35 +201,55 @@ function Drawer:Layout()
     for _,module in ipairs(tracker.modules or {}) do
         setWidth(module,contentWidth-(module.leftMargin or 0))
         headerWidth(module.Header,module:GetWidth())
-        if module==self.questEntries then
-            -- Install the final viewport width before the owner measures text.
-            local contents=module.ContentsFrame
-            if contents then
-                contents:ClearAllPoints()
-                contents:SetAllPoints(module)
-            end
-            if module:IsCollapsed() then module:SetCollapsed(false) end
-        end
+        if module==self.questEntries and module:IsCollapsed() then module:SetCollapsed(false) end
     end
     if math.abs(tracker:GetHeight()-available)>.01 then tracker:SetHeight(available) end
-    tracker:ClearAllPoints()
-    tracker:SetPoint('TOPLEFT',self.viewport,'TOPLEFT',0,0)
+    -- Install the final widths and native offsets before the owner measures text.
+    self:AlignNative()
     -- Reflow only through the native owner, preserving block/item scripts.
     self:RestoreQuestBodies()
     if ns.NativeText then ns.NativeText:Tracker(tracker) end
     tracker:Update()
+    self:Refit()
+    self.pending=false
+    self.layouting=false
+end
+
+-- Native passes put the first module topModulePadding below the tracker's top
+-- (room for the hidden All Objectives header), and quest blocks blockOffsetX
+-- right of and fromHeaderOffsetY below ContentsFrame (room for the hidden
+-- Quests header). Offsetting the tracker and ContentsFrame by exactly those
+-- native reservations, instead of moving modules and blocks after each pass,
+-- makes every native pass place rows where the drawer does: also in combat,
+-- when nothing here may move them, and with no frame drawn in between.
+-- Only native values are read; no native field is written.
+function Drawer:AlignNative()
+    local tracker,module=self.tracker,self.questEntries
+    local reserve=tracker.topModulePadding or 0
+    -- Blizzard's UpdateHeight (default position) sets the parent's height plus
+    -- this anchor's offset: the viewport keeps that sum at the available space.
+    if self.available then self.viewport:SetHeight(math.max(1,self.available-reserve)) end
+    tracker:ClearAllPoints()
+    tracker:SetPoint('TOPLEFT',self.viewport,'TOPLEFT',0,reserve)
+    local contents=module and module.ContentsFrame
+    if contents then
+        contents:ClearAllPoints()
+        contents:SetPoint('TOPLEFT',module,'TOPLEFT',-(module.blockOffsetX or 0),-(module.fromHeaderOffsetY or 0))
+        contents:SetPoint('BOTTOMRIGHT',module,'BOTTOMRIGHT',0,0)
+    end
+end
+
+-- What only the drawer owns after a native pass: collapsed quests, dividers,
+-- the painted shell and the drawer's height. Runs at the end of each native
+-- pass, before that frame is drawn; combat defers it to PLAYER_REGEN_ENABLED.
+function Drawer:Refit()
+    if not self.ready then return end
+    if InCombatLockdown() then self.fitPending=true;return end
+    local tracker,frame,skin=self.tracker,self.frame,ns.DarkSkin
+    -- Also after native managed-frame/header update callbacks.
+    self:AlignNative()
     tracker.Header:Hide()
     self:FitQuestEntries()
-    -- Drop the native primary-header reservation using frame anchors only.
-    local previousModule
-    for _,module in ipairs(tracker.modules or {}) do
-        if module:IsShown() and module:GetContentsHeight()>0 then
-            module:SetPoint('TOP',previousModule or tracker,
-                previousModule and 'BOTTOM' or 'TOP',0,
-                previousModule and -(tracker.moduleSpacing or 0) or 0)
-            previousModule=module
-        end
-    end
     self.fitting=true
     skin:FitTracker()
     self.fitting=false
@@ -251,13 +261,10 @@ function Drawer:Layout()
     end
     local top,bottom=shell and shell:GetTop(),shell and shell:GetBottom()
     local shellScale=shell and shell:GetEffectiveScale()
+    local scale=frame:GetEffectiveScale()
     local height=top and bottom and math.max(20,(top-bottom)*shellScale/scale) or 20
     frame:SetHeight(height)
-    -- Anchor once more after native managed-frame/header update callbacks.
-    tracker:ClearAllPoints()
-    tracker:SetPoint('TOPLEFT',self.viewport,'TOPLEFT',0,0)
-    self.pending=false
-    self.layouting=false
+    self.fitPending=false
 end
 
 -- The drawer title wears the shared heading look (the unselected chat tab's
@@ -392,11 +399,13 @@ function Drawer:Initialize()
     -- Keep native root/module state expanded behind the hidden secure parent.
     if tracker:IsCollapsed() then tracker:SetCollapsed(false) end
     tracker:Show()
-    hooksecurefunc(tracker,'Update',function() self:RequestLayout() end)
     -- The native dirty callback captured Update before addon posthooks existed.
-    -- Its dynamically looked-up padding method still observes every native pass.
-    -- Refit after that pass, without tainting native padding/bookkeeping fields.
-    hooksecurefunc(tracker,'UpdateTopPadding',function() self:RequestLayout() end)
+    -- Every pass, dirty or direct, ends in the dynamically looked-up
+    -- UpdateHeaderPosition (ObjectiveTrackerFrameMixin:Update): refit there,
+    -- in the same frame, without tainting native padding/bookkeeping fields.
+    hooksecurefunc(tracker,'UpdateHeaderPosition',function()
+        if not self.layouting and self.frame:IsShown() then self:Refit() end
+    end)
     hooksecurefunc(tracker,'UpdateHeight',function() self:RequestLayout() end)
     hooksecurefunc(ns.MinimapPanel,'LayoutStack',function() self:RequestLayout() end)
     panel:HookScript('OnDragStop',function() self:RequestLayout() end)
@@ -411,10 +420,11 @@ events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent',function(_,event)
     if event=='PLAYER_LOGIN' then Drawer.loggedIn=true end
     if not Drawer.loggedIn then return end
-    -- Once built, only work that combat deferred is repeated.
-    if Drawer.ready and (event~='PLAYER_REGEN_ENABLED' or not Drawer.pending or not Drawer.frame:IsShown()) then return end
-    if event=='PLAYER_REGEN_ENABLED' and Drawer.questEntries then
-        Drawer.questEntries:MarkDirty()
-    end
-    Drawer:RequestLayout()
+    if not Drawer.ready then Drawer:RequestLayout();return end
+    -- Once built, only work that combat deferred is repeated: a requested
+    -- layout, or the refit after native passes in combat. Those passes already
+    -- placed rows at the drawer's widths, so no further native pass is forced.
+    if event~='PLAYER_REGEN_ENABLED' or not Drawer.frame:IsShown() then return end
+    if Drawer.pending then Drawer:RequestLayout()
+    elseif Drawer.fitPending then Drawer:Refit() end
 end)

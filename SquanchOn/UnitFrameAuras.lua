@@ -842,10 +842,33 @@ end
 local playerEvents=CreateFrame('Frame')
 playerEvents:RegisterEvent('PLAYER_LOGIN');playerEvents:RegisterEvent('PLAYER_ENTERING_WORLD');playerEvents:RegisterEvent('PLAYER_REGEN_ENABLED')
 playerEvents:RegisterEvent('UNIT_INVENTORY_CHANGED');pcall(playerEvents.RegisterEvent,playerEvents,'WEAPON_ENCHANT_CHANGED')
+-- The weapon-enchant part of the buff bar. UNIT_INVENTORY_CHANGED also fires
+-- for every arrow a Hunter fires, so only a real enchant change redraws, and
+-- never in combat: there the player's auras can be secret, and reading them
+-- from this tainted path failed on every shot (one error per shot, a
+-- visible hitch). Combat's end redraws once if anything changed meanwhile.
+local enchantSignature,enchantPending
+local function enchantChanged()
+    if not GetWeaponEnchantInfo then return true end
+    local hasMain,_,_,mainID,hasOff,_,_,offID,hasRanged,_,_,rangedID=GetWeaponEnchantInfo()
+    local signature=tostring(hasMain)..':'..tostring(mainID)..':'..tostring(hasOff)..':'..tostring(offID)
+        ..':'..tostring(hasRanged)..':'..tostring(rangedID)
+    if signature==enchantSignature then return false end
+    enchantSignature=signature
+    return true
+end
 playerEvents:SetScript('OnEvent',function(_,event,unit)
     if event=='UNIT_INVENTORY_CHANGED' or event=='WEAPON_ENCHANT_CHANGED' then
-        if showEnchants and (event~='UNIT_INVENTORY_CHANGED' or unit=='player') then UF:RefreshPlayerBars() end
+        if not showEnchants or (event=='UNIT_INVENTORY_CHANGED' and unit~='player') then return end
+        if InCombatLockdown() then enchantPending=true
+        elseif enchantChanged() then UF:RefreshPlayerBars() end
     elseif event~='PLAYER_REGEN_ENABLED' then settle()
-    -- Next frame: the unit frames finish their own post-combat start first.
-    elseif playerPending then C_Timer.After(0,settle) end
+    else
+        if enchantPending then
+            enchantPending=nil
+            if enchantChanged() then UF:RefreshPlayerBars() end
+        end
+        -- Next frame: the unit frames finish their own post-combat start first.
+        if playerPending then C_Timer.After(0,settle) end
+    end
 end)
