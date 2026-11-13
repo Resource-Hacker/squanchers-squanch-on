@@ -20,6 +20,8 @@
 - Action-slot border masks keep every pixel of the straight edges.
 - The quest list re-lays itself out when a native update measured its text at
   another width (text could stop wrapping after turning quests in).
+- Drawer windows much wider than the chat (the talent trees) come up to the
+  character sheet's height instead of being shrunk to the chat's width.
 
 ## 1.0.2 — 2026-11-12
 
