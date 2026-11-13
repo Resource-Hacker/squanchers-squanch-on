@@ -1256,7 +1256,11 @@ function UF:KnownRangeSpells(kind)
     local configured=source and source[kind] and source[kind][class] or {}
     for _,id in ipairs(configured) do
         local selected
-        if C_SpellBook and C_SpellBook.IsSpellKnown and bank then
+        -- As ElvUI: in the spellbook, overrides included (Auto Shot is there).
+        if C_SpellBook and C_SpellBook.IsSpellInSpellBook then
+            selected=rangeBoolean(C_SpellBook.IsSpellInSpellBook,id,nil,true)
+        end
+        if selected~=true and C_SpellBook and C_SpellBook.IsSpellKnown and bank then
             selected=rangeBoolean(C_SpellBook.IsSpellKnown,id,bank)
         end
         -- Some general abilities (Auto Shot) are not reported as spellbook spells.
@@ -1276,14 +1280,46 @@ end
 rangeSpellEvents:SetScript('OnEvent',function() UF.rangeCache=nil end)
 
 -- Range fade state: true = reachable, false = out of reach, nil = cannot tell
--- (no fade). Distances come from the shared Range module.
+-- (no fade). The same rules as ElvUI's unit-frame range (UF:UpdateRange):
+-- a unit is out of range only when the class's range spells all say so. If no
+-- spell can answer, out of combat the 28-yard follow check decides, and in
+-- combat it counts as in range. Friends also use the game's group range.
+local function spellsReach(unit,spells)
+    local failed
+    for _,id in ipairs(spells) do
+        local reach=rangeBoolean(C_Spell and C_Spell.IsSpellInRange,id,unit)
+        if reach==true then return true elseif reach==false then failed=true end
+    end
+    if failed then return false end
+end
+local function inSpellsRange(unit,kind)
+    local spells=UF.db and UF:KnownRangeSpells(kind) or {}
+    local reach=#spells>0 and spellsReach(unit,spells) or nil
+    if reach==nil and not InCombatLockdown() and CheckInteractDistance then
+        local near=rangeBoolean(CheckInteractDistance,unit,4)
+        if near~=nil then return near end
+    end
+    if reach==nil then return nil end
+    return reach
+end
 function UF:RangeState(unit)
-    if not public(unit) or type(unit)~='string' then return nil end
-    if rangeBoolean(UnitIsConnected,unit)==false then return nil end
+    -- The shared Range module (nameplates, target ring) asks the same spell list.
     local range=ns.Range
-    if not range then return nil end
-    range.spellProvider=range.spellProvider or function(kind) return UF.db and UF:KnownRangeSpells(kind) end
-    return range:Reach(unit)
+    if range and not range.spellProvider then
+        range.spellProvider=function(kind) return UF.db and UF:KnownRangeSpells(kind) end
+    end
+    if not public(unit) or type(unit)~='string' then return nil end
+    if rangeBoolean(UnitExists,unit)~=true or rangeBoolean(UnitIsUnit,unit,'player')==true then return nil end
+    if rangeBoolean(UnitIsDeadOrGhost,unit)==true then return inSpellsRange(unit,'RESURRECT')==true end
+    if rangeBoolean(UnitCanAttack,'player',unit)==true then return inSpellsRange(unit,'ENEMY') end
+    if rangeBoolean(UnitIsUnit,'pet',unit)==true then return inSpellsRange(unit,'PET') end
+    if rangeBoolean(UnitIsConnected,unit)==false then return false end
+    -- The game's own group range: a checked "out of range" is final.
+    if UnitInRange then
+        local ok,inRange,checked=pcall(UnitInRange,unit)
+        if ok and public(inRange) and public(checked) and checked and not inRange then return false end
+    end
+    return inSpellsRange(unit,'FRIENDLY')
 end
 
 local function initialize()
