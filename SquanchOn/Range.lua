@@ -145,6 +145,18 @@ local function searchItems(entry, unit, list)
   end
 end
 
+local spellNames = {}
+local function spellName(spellID)
+  local name = spellNames[spellID]
+  if name == nil then
+    local ok, info = pcall(C_Spell and C_Spell.GetSpellInfo or GetSpellInfo, spellID)
+    if ok and type(info) == "table" then info = info.name end
+    name = ok and public(info) and type(info) == "string" and info or false
+    spellNames[spellID] = name
+  end
+  return name or nil
+end
+
 local spellRanges = {}
 local function spellRange(spellID, now)
   local known = spellRanges[spellID]
@@ -158,7 +170,8 @@ local function spellRange(spellID, now)
     if ok then minimum, maximum = low, high end
   end
   if not public(minimum) or type(minimum) ~= "number" then minimum = 0 end
-  if not public(maximum) or type(maximum) ~= "number" then maximum = nil end
+  -- 0 means "the weapon's range" (Auto Shot, Shoot): unknown here, not melee.
+  if not public(maximum) or type(maximum) ~= "number" or maximum <= 0 then maximum = nil end
   if known then
     known.min, known.max, known.time = minimum, maximum, now
   else
@@ -173,6 +186,12 @@ local function checkSpells(entry, unit, spells, now)
     local minimum, maximum = spellRange(spellID, now)
     if not maximum or maximum > MELEE_YARDS then
       local reaches = answer(C_Spell.IsSpellInRange, spellID, unit)
+      -- Some spells (Auto Shot) answer only through the by-name check, which is
+      -- also what the reticle's in-range glow uses.
+      if reaches == nil and IsSpellInRange then
+        local name = spellName(spellID)
+        if name then reaches = answer(IsSpellInRange, name, unit) end
+      end
       if reaches ~= nil and maximum and (not entry.reach or maximum > entry.reach) then entry.reach = maximum end
       if reaches == true then
         entry.spellHit = true

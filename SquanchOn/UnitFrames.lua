@@ -1258,7 +1258,9 @@ function UF:KnownRangeSpells(kind)
         local selected
         if C_SpellBook and C_SpellBook.IsSpellKnown and bank then
             selected=rangeBoolean(C_SpellBook.IsSpellKnown,id,bank)
-        elseif IsPlayerSpell then selected=rangeBoolean(IsPlayerSpell,id) end
+        end
+        -- Some general abilities (Auto Shot) are not reported as spellbook spells.
+        if selected~=true and IsPlayerSpell then selected=rangeBoolean(IsPlayerSpell,id) end
         if selected==true then known[#known+1]=id end
     end
     cache[kind]=known
