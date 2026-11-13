@@ -352,10 +352,14 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     return texture
   end
   local ringSize, cutOn, cutY, cutHeight, bandHealth = nil, false, 0, 0, nil
+  -- The click pulse scales the whole ring frame about its centre; the bar does
+  -- not scale. While it plays, the cut is laid out at 1 / that scale so the
+  -- cut ends stay on the bar's edges instead of sliding into the bar.
+  local pulseScale = 1
   local function layoutPiece(texture)
     local size, d = ringSize, texture.inflate or 0
     local active = cutOn and size and size > 0 or false
-    local y, band = active and cutY, active and cutHeight
+    local y, band = active and cutY / pulseScale, active and cutHeight / pulseScale
     if texture.laidSize == size and texture.laidInflate == d and texture.laidY == y and texture.laidBand == band then return end
     texture.laidSize, texture.laidInflate, texture.laidY, texture.laidBand = size, d, y, band
     local twin = texture.twin
@@ -553,14 +557,30 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- Click feedback pulses the whole ring.
   -- Native scale animations accumulate, so the return multiplies by 1 / 0.75.
   local clickAnimation = ringFrame:CreateAnimationGroup()
+  local resizes = {}
   for order, scale in ipairs({0.75, 1 / 0.75}) do
     local resize = clickAnimation:CreateAnimation("Scale")
+    resizes[order] = resize
     resize:SetOrder(order)
     resize:SetScale(scale, scale)
     resize:SetDuration(order == 1 and 0.18 or 0.26)
     resize:SetSmoothing(order == 1 and "OUT" or "IN_OUT")
     resize:SetOrigin("CENTER", 0, 0)
   end
+  -- The ring's current animated scale, from each step's smoothed progress.
+  local function followPulse()
+    local scale = 1
+    if resizes[1]:IsPlaying() then
+      scale = 1 - 0.25 * resizes[1]:GetSmoothProgress()
+    elseif resizes[2]:IsPlaying() then
+      scale = 0.75 + 0.25 * resizes[2]:GetSmoothProgress()
+    end
+    if scale ~= pulseScale then
+      pulseScale = scale
+      if cutOn then layoutPieces() end
+    end
+  end
+  clickAnimation:SetScript("OnUpdate", followPulse)
   local clickGeneration, clickGUID, pressedGUID = 0, nil, nil
   local function clearClick()
     clickGeneration = clickGeneration + 1
@@ -568,6 +588,10 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     pressedGUID = nil
     marker.clickFeedbackActive = false
     clickAnimation:Stop()
+    if pulseScale ~= 1 then
+      pulseScale = 1
+      if cutOn then layoutPieces() end
+    end
   end
   clickAnimation:SetScript("OnFinished", function()
     clearClick()
