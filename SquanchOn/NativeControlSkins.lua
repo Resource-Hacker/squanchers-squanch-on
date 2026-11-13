@@ -898,10 +898,15 @@ local function paintNavButton(button)
     local label = navLabel(button)
     if not label then return end
     local path, size, flags = ns.DarkSkin:HeadingFont()
+    -- NavBar sizes each button to its label at the native font, so the label
+    -- never grows past that size or it spills over the button's ends.
+    if not state.nativeSize then
+        local _, native = label:GetFont()
+        state.nativeSize = type(native) == "number" and native > 0 and native or 12
+    end
     local scale = button:GetEffectiveScale()
-    -- Never taller than the 22-unit face of a strongly shrunken map.
-    if scale > 0 then size = math.min(15, size * UIParent:GetEffectiveScale() / scale) end
-    label:SetFont(path, size, flags)
+    if scale > 0 then size = size * UIParent:GetEffectiveScale() / scale end
+    label:SetFont(path, math.min(state.nativeSize - 1, size), flags)
     local color = current and { 1, 1, 1, 1 } or ns.DarkSkin.headerTextColor
     label:SetTextColor(color[1], color[2], color[3], color[4] or 1)
 end
