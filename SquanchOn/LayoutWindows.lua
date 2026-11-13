@@ -564,6 +564,7 @@ function module:Register()
         end)
     end
     for _, definition in ipairs(windows) do native(definition) end
+    self.registered = true
     if not self.chatHooked and ns.DarkSkin and ns.DarkSkin.LayoutChat then
         self.chatHooked = true
         hooksecurefunc(ns.DarkSkin, 'LayoutChat', function()
@@ -586,5 +587,13 @@ events:RegisterEvent('PLAYER_REGEN_ENABLED')
 events:SetScript('OnEvent', function(_, event)
     -- Combat end repeats the pass only when combat deferred part of it.
     if event == 'PLAYER_REGEN_ENABLED' and not module.pending and not next(module.contentPending) then return end
+    -- A load-on-demand window (spellbook and talents, professions book,
+    -- collections, ...) is created inside LoadAddOn and shown by the same
+    -- call, before the deferred pass below runs: hook it now, while it is
+    -- still hidden, so its first show is placed (and unfolds) in its drawer
+    -- instead of drawing at the native panel position until the next frame.
+    if event == 'ADDON_LOADED' and module.registered and not InCombatLockdown() then
+        for _, definition in ipairs(windows) do native(definition) end
+    end
     C_Timer.After(0, function() module:Register() end)
 end)
