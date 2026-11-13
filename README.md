@@ -1,6 +1,6 @@
 # Squancher's Squanch-On
 
-![Squanch-On: keep the camera locked, open mouseover only when you mean it. Steer, hold right mouse, release.](docs/images/reticle-control.svg)
+![Squanch-On: you literally aim. Keep the camera locked; open mouseover only when you mean it. Three real in-game stills of the Horde reticle: steering past a Clattering Scorpid with mouseover closed, holding right mouse with the red dot and glow open on it, and closed again over open ground just after an earlier hold.](docs/images/reticle-control.png)
 
 **A true FPS-style action mode for World of Warcraft: you literally aim.**
 Action-MMO setup · Horde first · Hunter first.
@@ -93,27 +93,29 @@ Opening the gate does not cast a spell or automatically select a hard target.
 
 <table>
   <tr>
-    <td width="58%"><img src="docs/images/horde-reticle-gameplay.png" alt="Gameplay detail showing the Horde reticle in the world near a friendly NPC." width="580"></td>
+    <td width="58%"><img src="docs/images/horde-reticle-gameplay.png" alt="Durotar at sunset behind the author's orc, with the Horde reticle at the screen centre and an inset of its game pixels at 6x." width="580"></td>
     <td width="42%"><img src="docs/images/target-ring-gameplay.png" alt="Selected Duokna nameplate with the dashed target ring and merchant icon." width="360"></td>
   </tr>
   <tr>
-    <td><strong>The world reticle.</strong> A compact Horde marker keeps the aim point visible during the author's mouselook playstyle.</td>
+    <td><strong>The world reticle.</strong> The Horde emblem marks the aim point while you steer (mouseover closed, so no dot). In game it is roughly 42 pixels tall on a 1440-pixel-high screen; the inset shows its actual pixels at 6x.</td>
     <td><strong>The selected-target ring.</strong> A separate marker follows the target's visible nameplate. The ring is now one solid line inside the selected plate; this capture shows the earlier dashed art.</td>
   </tr>
 </table>
 
-These are real development gameplay details from the author's earlier setup,
-with Plater nameplates. They illustrate the reticle and target artwork; a still image does
-not demonstrate the hold/release transition or certify the rewrite.
+The reticle shot is a 1.0 screenshot from 2026-11-12. The target-ring capture is
+from the author's earlier setup, with Plater nameplates. A still image does not
+demonstrate the hold/release transition or certify the rewrite.
 [Image provenance and credits](docs/images/README.md).
 
 ## Read range at a glance
 
-![Range legend: cardinal blocks for melee reach; triangles for a learned ranged damage or healing spell; a dashed ring identifies the selected target.](docs/images/range-guide.svg)
+![Range markers in real captures: the solid ring in a selected friendly NPC's plate; four static blocks for melee reach on a hostile Makrura Clacker at 42% health; rotating triangles for Auto Shot range at full health; a ring around a friendly player's faction emblem while that player is under the open gate.](docs/images/range-guide.png)
 
-The selected visible target has a solid ring (the legend above still shows the
-earlier dashed art) and a brief whole-ring click pulse. Cardinal blocks indicate
-conservative five-yard melee reach on hostile targets. Rotating triangles
+*Stills from the author's play on 2026-11-12, enlarged 3x; in game the triangles rotate.*
+
+The selected visible target has a solid ring and a brief whole-ring click
+pulse. Cardinal blocks indicate conservative five-yard melee reach on hostile
+targets. Rotating triangles
 indicate a learned ranged damage ability against a hostile target, or a learned
 healing ability against a friendly target. Hunter Auto Shot keeps its native
 range check; Mend Pet and Health Funnel apply only to the player's own pet.

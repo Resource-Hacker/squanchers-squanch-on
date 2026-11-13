@@ -4,7 +4,7 @@ Squanch-On's defining interaction is a **hold-to-open mouseover gate during
 persistent native mouselook**. Camera control continues across both edges of the
 right-button press.
 
-![Steer with mouseover closed, hold right mouse to open it, release to close it.](images/reticle-control.svg)
+![Three real in-game stills of the Horde reticle: steer with mouseover closed, hold right mouse to open it at the dot (red dot and glow on a Clattering Scorpid), and closed again just after an earlier hold.](images/reticle-control.png)
 
 ## Three states, one camera
 
@@ -54,7 +54,7 @@ The screen-center reticle and selected-target nameplate marker have different
 jobs. The first exposes mouseover when held; the second keeps an existing target
 visible and adds range feedback.
 
-![Illustrated range marker legend.](images/range-guide.svg)
+![Range markers in real captures, enlarged 3x: the solid ring in a selected plate, melee blocks, ranged triangles, and the ring around a friendly player's faction emblem under the open gate.](images/range-guide.png)
 
 | Marker | Meaning | Evidence needed |
 | --- | --- | --- |
@@ -64,8 +64,8 @@ visible and adds range feedback.
 | Rotating triangles, friendly | A learned healing ability is in range. | A known spellbook rank with an affirmative native range result. |
 | Friendly ring rotation without triangles | Proximity feedback, also usable for compatible NPCs. | The shared range module places the unit within the friendly threshold (40 yards by default). |
 
-The legend image still shows the earlier dashed ring; the ring is now one solid
-line. The shared range module
+The legend shows stills from the author's play on 2026-11-12; in game the
+triangles rotate. The shared range module
 ([`Range.lua`](../SquanchOn/Range.lua), item list derived from LibRangeCheck-3.0, MIT) combines learned-spell checks,
 item-range checks, interact distance, nameplate visibility and, for group
 members outdoors, the exact group distance. No other addon is needed. In combat
