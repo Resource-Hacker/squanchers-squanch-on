@@ -134,7 +134,7 @@ NP.defaults = {
   -- nameplateShowFriends, nameplateShowAll) and nameplateMotion are not owned.
   cvars = {
     NamePlateHorizontalScale = 1, NamePlateVerticalScale = 1, ShowClassColorInNameplate = 1,
-    clampTargetNameplateToScreen = 1, nameplateGlobalScale = 1, nameplateMaxDistance = 60,
+    clampTargetNameplateToScreen = 1, nameplateGlobalScale = 1, nameplateMaxDistance = 100,
     nameplateMinAlpha = 0.90135484, nameplateMinAlphaDistance = -158489.31924611, nameplateMinScale = 1,
     nameplateMotion = 0, nameplateMotionSpeed = 0.1, nameplateNotSelectedAlpha = 1, nameplateOccludedAlphaMult = 0.4,
     nameplateOtherAtBase = 0, nameplateOtherTopInset = 0.085, nameplateOverlapH = 1, nameplateOverlapV = 0.5,
@@ -248,6 +248,12 @@ function NP:Settings()
       local auras = settings.auras
       if type(auras) == 'table' and auras.timerSize == 8 then auras.timerSize = 6 end
       settings.revision = 3
+    end
+    -- Revision 4 (owner, 2026-11-12): plates show as far out as the game allows.
+    if (settings.revision or 0) < 4 then
+      local cvars = settings.cvars
+      if type(cvars) == 'table' and tonumber(cvars.nameplateMaxDistance) == 60 then cvars.nameplateMaxDistance = 100 end
+      settings.revision = 4
     end
     fill(settings, self.defaults); filled = settings
   end
@@ -481,6 +487,17 @@ function NP:ApplyCVars(zone)
     if current ~= nil then
       if previous[name] == nil then previous[name] = current end
       if not same(current, value) then pcall(SetCVar, name, value) end
+      -- The farthest plate distance the client accepts: a value past its limit is
+      -- refused or clamped, so step down until one holds.
+      if name == 'nameplateMaxDistance' and not same(ask(GetCVar, name), value) then
+        for _, yards in ipairs({ 100, 80, 60, 41, 40 }) do
+          if yards <= (tonumber(value) or 0) then
+            pcall(SetCVar, name, yards)
+            local held = tonumber(ask(GetCVar, name))
+            if held and held >= yards - 0.5 then break end
+          end
+        end
+      end
     end
   end
   -- The rings keep nameplateSelectedScale; it may just have changed.

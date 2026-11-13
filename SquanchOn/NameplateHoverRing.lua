@@ -242,7 +242,7 @@ end
 -- Motion: the ring and emblem appear and leave over 0.2 s; the name
 -- glides between its two places instead of jumping. Alpha and Translation
 -- animations only: nothing is measured and nothing runs per frame in Lua.
-local APPEAR, LEAVE = 0.2, 0.2
+local APPEAR, LEAVE = 0.4, 0.4 -- owner, 2026-11-12
 local function alphaAnim(region, key)
   local group = region[key]
   if not group then
