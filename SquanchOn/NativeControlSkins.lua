@@ -931,6 +931,8 @@ local function skinNavButton(button, glyph)
     if glyph then
         -- The overflow menu's glyph was its art: a label in its place.
         state.label = button:CreateFontString(nil, "OVERLAY")
+        -- A new FontString has no font; paintNavButton sets the real one.
+        state.label:SetFont(ns.DarkSkin:HeadingFont())
         state.label:SetText(glyph)
     end
     local arrow = button.MenuArrowButton
