@@ -190,7 +190,7 @@ NP.defaults = {
     textShadow = { 0, 0, 0, 0.5 },
   },
   auras = {
-    enabled = true, size = 15, perRow = 8, max = 16, y = 35, alpha = 0.7, timer = true, timerSize = 8, stackSize = 10,
+    enabled = true, size = 15, perRow = 8, max = 16, y = 35, alpha = 0.7, timer = true, timerSize = 6, stackSize = 10,
     mine = true, cc = true, defensive = true, tooltip = true,
   },
   target = {
@@ -235,13 +235,19 @@ function NP:Settings()
   if filled ~= settings then
     -- Revision 2: the interrupt hold became holdInterrupted, and the name-only
     -- font follows the previous profile; untouched earlier defaults move along.
-    if settings.revision ~= 2 then
+    if (settings.revision or 0) < 2 then
       if type(settings.cast) == 'table' then settings.cast.hold = nil end
       local big = settings.bigName
       if type(big) == 'table' and big.font == 'Fonts\\ARIALN.TTF' and big.size == 9 then big.font, big.size = nil, nil end
       local icons = settings.indicators
       if type(icons) == 'table' and icons.x == -0.5 and icons.y == -8 then icons.x, icons.y = nil, nil end
       settings.revision = 2
+    end
+    -- Revision 3 (owner, 2026-11-12): debuff countdown text is 6, not 8.
+    if (settings.revision or 0) < 3 then
+      local auras = settings.auras
+      if type(auras) == 'table' and auras.timerSize == 8 then auras.timerSize = 6 end
+      settings.revision = 3
     end
     fill(settings, self.defaults); filled = settings
   end
