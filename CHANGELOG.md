@@ -22,6 +22,8 @@
   another width (text could stop wrapping after turning quests in).
 - Drawer windows much wider than the chat (the talent trees) come up to the
   character sheet's height instead of being shrunk to the chat's width.
+- The world map shows its terrain on the first open after a reload (a loaded
+  terrain layer could stay invisible until the map was reopened).
 
 ## 1.0.2 — 2026-11-12
 
