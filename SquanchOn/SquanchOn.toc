@@ -76,6 +76,7 @@ DrawerMotion.lua
 LayoutWindows.lua
 SocialDrawer.lua
 QuestDrawer.lua
+MapDrawer.lua
 MeterDrawer.lua
 Bags.lua
 OptionsWindow.lua

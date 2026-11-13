@@ -338,11 +338,16 @@ function Drawer:Initialize()
     label:SetText(QUESTS_LABEL or 'Quests')
     if ns.NativeText then ns.NativeText:Header(label,'questHeader') end
     Drawer:HeadingLook(label)
-    local close=CreateFrame('Button',nil,frame,'SecureHandlerClickTemplate')
+    -- A secure action button so MapDrawer.lua can give it a click action on the
+    -- world map's own close button (collapsing the quests closes an attached
+    -- map, in combat too). The wrapped snippet below still owns the drawer.
+    local close=CreateFrame('Button',nil,frame,'SecureActionButtonTemplate')
     close:SetSize(16,16)
     close:SetPoint('TOPRIGHT',frame,'TOPRIGHT',-4,-2)
     close:SetFrameLevel(plate:GetFrameLevel()+1)
     close:RegisterForClicks('LeftButtonUp')
+    -- Any action happens on this same release, whatever ActionButtonUseKeyDown says.
+    close:SetAttribute('useOnKeyDown',false)
     local native=tracker.Header.MinimizeButton
     local function copyArt(getter,setter)
         local source=native and native[getter] and native[getter](native)
@@ -358,9 +363,9 @@ function Drawer:Initialize()
     copyArt('GetNormalTexture','SetNormalTexture')
     copyArt('GetPushedTexture','SetPushedTexture')
     copyArt('GetHighlightTexture','SetHighlightTexture')
-    close:SetFrameRef('drawer',frame)
-    close:SetFrameRef('opener',handle)
-    close:SetAttribute('_onclick',[[
+    SecureHandlerSetFrameRef(close,'drawer',frame)
+    SecureHandlerSetFrameRef(close,'opener',handle)
+    SecureHandlerWrapScript(close,'OnClick',frame,[[
         if button == 'LeftButton' then
             self:GetFrameRef('drawer'):Hide()
             self:GetFrameRef('opener'):Show()

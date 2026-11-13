@@ -5,8 +5,9 @@
 -- place for the whole motion, so layout code that reads its rectangle sees the
 -- same values with or without the motion. Two things play instead:
 --   1. an addon-owned, unprotected proxy (the empty window shell: shared fill
---      and gold rim) grows upward from the drawer's bottom edge, while a
---      render-only Alpha animation holds the drawer invisible;
+--      and gold rim) grows upward from the drawer's bottom edge (or sideways
+--      from the edge it is attached by), while a render-only Alpha animation
+--      holds the drawer invisible;
 --   2. the drawer's content fades in and the proxy fades out.
 -- Nothing writes the drawer's own alpha, so when the animation ends or is
 -- stopped for any reason the drawer shows exactly as it would without it.
@@ -21,7 +22,7 @@ local Motion = {
     grow = .32,     -- the shell unfolds, easing out
     fade = .26,     -- content fades in, starting while the shell still settles
     lead = .6,      -- share of the unfold that passes before the content starts to appear
-    minHeight = 16, -- the rim's two corner caps need this much room
+    minHeight = 16, -- the rim's two corner caps need this much room (either axis)
 }
 ns.DrawerMotion = Motion
 -- Shipped values. Edited ones live in ns.db.windows (only keys that were
@@ -168,7 +169,7 @@ local function anchoredTo(frame, anchor)
     end
 end
 
-local function open(frame, anchor, shell, style)
+local function open(frame, anchor, shell, style, direction)
     if not ns.DarkSkin or not frame:IsVisible() then return end
     if anchor and not anchoredTo(frame, anchor) then return end
     shell = shell or frame
@@ -187,9 +188,20 @@ local function open(frame, anchor, shell, style)
     proxy:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
     proxy:SetScale(shell:GetEffectiveScale() / UIParent:GetEffectiveScale())
     proxy:ClearAllPoints()
-    proxy:SetPoint('BOTTOMLEFT', shell, 'BOTTOMLEFT', 0, 0)
-    proxy:SetPoint('BOTTOMRIGHT', shell, 'BOTTOMRIGHT', 0, 0)
-    proxy:SetHeight(1)
+    -- 'left' grows from the shell's right edge toward the left, 'right' the
+    -- reverse; anything else is the upward unfold from the bottom edge.
+    local sideways = direction == 'left' or direction == 'right'
+    if sideways then
+        local edge = direction == 'left' and 'RIGHT' or 'LEFT'
+        proxy:SetPoint('TOP' .. edge, shell, 'TOP' .. edge, 0, 0)
+        proxy:SetPoint('BOTTOM' .. edge, shell, 'BOTTOM' .. edge, 0, 0)
+    else
+        proxy:SetPoint('BOTTOMLEFT', shell, 'BOTTOMLEFT', 0, 0)
+        proxy:SetPoint('BOTTOMRIGHT', shell, 'BOTTOMRIGHT', 0, 0)
+    end
+    local extent = sideways and proxy.SetWidth or proxy.SetHeight
+    local measure = sideways and shell.GetWidth or shell.GetHeight
+    extent(proxy, 1)
     proxy:SetAlpha(1)
     skin:StylePanelBackground(state.fill, state.border)
 
@@ -200,7 +212,7 @@ local function open(frame, anchor, shell, style)
     fillAlpha = math.min(.98, tonumber(fillAlpha) or .66)
     proxy:SetScript('OnUpdate', function(_, delta)
         elapsed = elapsed + delta
-        local full = shell:GetHeight()
+        local full = measure(shell)
         if elapsed >= total or not full or full <= 0 or not frame:IsVisible() then
             finish(state)
             return
@@ -219,7 +231,7 @@ local function open(frame, anchor, shell, style)
         -- Unfold: a long, soft landing (quartic ease-out).
         local grown = math.min(1, elapsed / Motion.grow)
         local eased = 1 - (1 - grown) ^ 4
-        proxy:SetHeight(math.max(math.min(Motion.minHeight, full), full * eased))
+        extent(proxy, math.max(math.min(Motion.minHeight, full), full * eased))
         -- Hand-over: the window's own translucent shell fades in over the
         -- stand-in. Fading the stand-in linearly would let the two fills add up
         -- unevenly (a visible pulse); this keeps their combined opacity constant.
@@ -237,10 +249,12 @@ end
 -- that anchor (a window shown in combat keeps its native place and opens
 -- instantly). `shell` is the frame whose rectangle is the painted window and
 -- `style` its DarkSkin rim style; they default to the drawer and 'dialog'.
--- Any error means an instant open.
-function Motion:Open(frame, anchor, shell, style)
+-- `direction` 'left' or 'right' slides the shell out sideways from the edge
+-- the drawer is attached by, with the same timing and easing; it defaults to
+-- the upward unfold. Any error means an instant open.
+function Motion:Open(frame, anchor, shell, style, direction)
     load()
     if not self.enabled or not frame or not frame.CreateAnimationGroup then return end
-    local ok = pcall(open, frame, anchor, shell, style)
+    local ok = pcall(open, frame, anchor, shell, style, direction)
     if not ok and states[frame] then pcall(finish, states[frame]) end
 end

@@ -72,9 +72,15 @@ end
 local function maximizedMap(frame)
     return frame == WorldMapFrame and (frame.isMaximized or frame.IsMaximized and frame:IsMaximized())
 end
+-- A window attached to its drawer (Social above chat, the world map beside the
+-- quest list) has one geometry owner: that drawer, never this module or /sqedit.
+local function attached(frame)
+    local social, map = ns.SocialDrawer, ns.MapDrawer
+    if social and social:Owns(frame) then return social end
+    if map and map:Owns(frame) then return map end
+end
 local function editable(frame)
-    return frame and frame:IsVisible() and not maximizedMap(frame)
-        and not (ns.SocialDrawer and ns.SocialDrawer:Owns(frame))
+    return frame and frame:IsVisible() and not maximizedMap(frame) and not attached(frame)
 end
 
 local function applyMaximizedMap(frame, scale)
@@ -152,7 +158,8 @@ function module:IconArtWidth(button, owner) return artWidth(iconFor(button), own
 -- Returns the chat panel while a window still uses its default drawer place.
 -- Only an owner /sqedit record (never an imported legacy one) replaces it.
 -- ns.db.windows.drawers = false keeps windows free; read at each open.
-module.defaults = { drawers = true }
+-- ns.db.windows.mapDrawer = false keeps the world map free (MapDrawer.lua).
+module.defaults = { drawers = true, mapDrawer = true }
 function module:Setting(key)
     local values = ns.db and ns.db.windows
     local value
@@ -354,7 +361,8 @@ function module:Refresh()
 end
 
 function module:Apply(id, frame)
-    if ns.SocialDrawer and ns.SocialDrawer:Owns(frame) then ns.SocialDrawer:Queue();return end
+    local owner = attached(frame)
+    if owner then owner:Queue(); return end
     if self.applying[frame] or not frame:IsVisible() then return end
     -- Placement skipped by combat is repeated when it ends.
     if InCombatLockdown() then self.pending = true; return end
