@@ -369,6 +369,9 @@ local function paintIcon(button,container,frame,unit,aura,key)
 end
 -- The cell constructor and painter, shared with the nameplate debuff row.
 UF.NewAuraIcon,UF.PaintAuraIcon=newIcon,paintIcon
+-- The cell look, for the cells the client's own aura container draws on
+-- nameplates while aura data is secret (NameplateAuras.lua).
+function UF:AuraCellLook() return cellRim,cellSwipe,countFont,desatAll,styleRev end
 local testIcons={
     Buffs={136075,135932,136085,132333,135987,136048,135915,136096},
     Debuffs={136139,136118,136207,132090,136197,135817,136066,136188}}
