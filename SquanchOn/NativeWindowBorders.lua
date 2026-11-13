@@ -241,6 +241,8 @@ local function applyWindow(frame)
     -- MapDrawer.lua makes it close the attached map.
     local title = titleText(owner)
     if title then skin:TitlePlate(owner, title, frame == WorldMapFrame and "Map" or nil) end
+    -- The character sheet also prints the name in its own name line.
+    if frame == CharacterFrame then skin:HoldInvisible(_G.CharacterNameText or frame.NameText) end
     if frame == CharacterFrame then
         for _, slot in ipairs(equipment) do
             local button = _G["Character" .. slot .. "Slot"]

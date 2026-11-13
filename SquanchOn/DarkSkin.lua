@@ -956,9 +956,22 @@ function Skin:TitlePlate(frame, title, text)
         local parent = frame:GetParent()
         if parent and parent ~= UIParent then hooksecurefunc(parent, "SetScale", refit) end
     end
-    if title then title:SetAlpha(0) end
+    if title then self:HoldInvisible(title) end
     followTitle(plate)
     return plate
+end
+-- A native text the plate replaces stays invisible (alpha only: it keeps its
+-- text, anchors and layout), whatever later repaints it; the character sheet
+-- showed its name twice.
+local held = setmetatable({}, weak)
+function Skin:HoldInvisible(region)
+    if not region or not region.SetAlpha then return end
+    region:SetAlpha(0)
+    if held[region] then return end
+    held[region] = true
+    hooksecurefunc(region, "SetAlpha", function(text, alpha)
+        if alpha ~= 0 then text:SetAlpha(0) end
+    end)
 end
 Skin:OnTheme(function()
     for _, plate in pairs(Skin.titlePlates) do paintTitlePlate(plate); fitTitlePlate(plate) end
