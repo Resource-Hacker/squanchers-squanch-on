@@ -18,6 +18,8 @@
 - Map breadcrumbs (World › continent › zone) form an even row; the current
   zone is marked by its white label.
 - Action-slot border masks keep every pixel of the straight edges.
+- The quest list re-lays itself out when a native update measured its text at
+  another width (text could stop wrapping after turning quests in).
 
 ## 1.0.2 — 2026-11-12
 
