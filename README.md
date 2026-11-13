@@ -2,13 +2,23 @@
 
 ![Squanch-On: keep the camera locked, open mouseover only when you mean it. Steer, hold right mouse, release.](docs/images/reticle-control.svg)
 
-**An action-MMO setup for World of Warcraft. Horde first. Hunter first.**
+**A true FPS-style action mode for World of Warcraft: you literally aim.**
+Action-MMO setup · Horde first · Hunter first.
 
-Squanch-On plays WoW like a third-person action game. The camera is always
-locked to the mouse, a fixed Horde reticle sits in the middle of the screen,
-and the unit under its dot is the unit your abilities hit, but only while you
-hold right mouse. The interface (unit frames, nameplates, chat, bags, damage
-meter, camera) is built around keeping your eyes on that reticle.
+Squanch-On plays WoW like a shooter. The camera is locked to the mouse the
+whole time, as in any first- or third-person shooter, and a Horde reticle sits
+dead centre. Its red dot is not decoration: it is drawn on the exact spot the
+game picks units from. Put the dot on an enemy, hold right mouse, press your
+ability, and it goes to what you aimed at. You aim instead of tabbing through
+targets, nothing guesses which unit you meant, and no cursor wanders around
+the screen. It all happens inside WoW's own rules: range, line of sight and
+cooldowns still apply.
+
+That is what makes it different. Other action-camera setups give WoW a locked
+camera and a crosshair, but the game still chooses the target for you, or
+fires at whatever drifts past the middle of the screen. Here the crosshair is
+the aim. The rest of the interface (unit frames, nameplates, chat, bags,
+damage meter, camera) is built around keeping your eyes on it.
 
 It is made by a Horde Hunter for that character, and it shows:
 
@@ -39,7 +49,7 @@ colours), hostile-target debuffs, pet/party/raid frames, profile switching and
 import, theme recolouring, the camera while mounted or in combat and most bag
 interactions have not been verified. See [compatibility](docs/COMPATIBILITY.md#verification-status).
 
-## A reticle no other addon has
+## A reticle you actually aim with, unlike any other addon
 
 Action-combat setups for WoW usually do one of three things:
 
