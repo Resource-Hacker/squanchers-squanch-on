@@ -185,6 +185,31 @@ local function clickable(button)
     return button
 end
 
+-- Measured in game (2026-11-12, /sqmap): on the first open after a reload the
+-- terrain layer can stay at alpha 0 although its tiles are loaded
+-- (isWaitingForLoad nil, layer and global alpha 1); only the pins and the
+-- canvas background drew. The layer's own RefreshAlpha (Blizzard_MapCanvas
+-- DetailLayer: loaded -> layerAlpha * globalAlpha) puts it right. For the
+-- first two seconds after an open, a loaded layer still at 0 gets that call;
+-- textures only, nothing protected, nothing kept running afterwards.
+local watcher = CreateFrame('Frame')
+watcher:Hide()
+watcher:SetScript('OnUpdate', function(frame, elapsed)
+    frame.left = (frame.left or 0) - elapsed
+    local map = WorldMapFrame
+    if frame.left <= 0 or not (map and map:IsShown() and map.detailLayerPool) then frame:Hide(); return end
+    for layer in map.detailLayerPool:EnumerateActive() do
+        if layer.IsFullyLoaded and layer:IsFullyLoaded() and layer:GetAlpha() < 0.01
+            and (layer:GetLayerAlpha() or 0) * (layer:GetGlobalAlpha() or 0) > 0 then
+            layer:RefreshAlpha()
+        end
+    end
+end)
+function Drawer:WatchTerrain()
+    watcher.left = 2
+    watcher:Show()
+end
+
 function Drawer:Initialize()
     if self.ready then return true end
     local map, quests, skin = WorldMapFrame, ns.QuestDrawer, ns.DarkSkin
@@ -239,6 +264,7 @@ function Drawer:Initialize()
     map:HookScript('OnShow', function()
         self:Opened()
         self:SyncArrow()
+        self:WatchTerrain()
     end)
     map:HookScript('OnHide', function()
         self.finalHeight = nil
