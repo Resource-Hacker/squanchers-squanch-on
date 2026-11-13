@@ -417,17 +417,23 @@ function NP:Debug()
     local ok, value = pcall(region.GetText, region)
     return ok and ('"' .. show(value) .. '"') or 'shown'
   end
-  print(('Squanch-On plates: started=%s active=%d zone=%s combat=%s'):format(tostring(self.started), self.count, tostring(self.zone), tostring(self.combat)))
+  -- game: the client's own alpha on the plate's NamePlate frame, which this
+  -- plate inherits; it drops to about the line-of-sight factor while the
+  -- client sees the unit behind a wall.
+  print(('Squanch-On plates: started=%s active=%d zone=%s combat=%s lineOfSight=%s'):format(tostring(self.started), self.count,
+    tostring(self.zone), tostring(self.combat), fact(GetCVar, 'nameplateOccludedAlphaMult')))
   for frame in pairs(self.active) do
     local unit = frame.unit
     local bar = frame.Health and frame.Health:IsShown()
     local cast = frame.Castbar and frame.Castbar:IsShown()
-    print(('%s oUF=%s kind=%s size=%s class=%s reaction=%s attack=%s player=%s bar=%s colour=%s name=%s level=%s alpha=%s'):format(
+    local plate = frame:GetParent()
+    print(('%s oUF=%s kind=%s size=%s class=%s reaction=%s attack=%s player=%s bar=%s colour=%s name=%s level=%s alpha=%s game=%s'):format(
       show(unit), show(frame.__unit), tostring(frame.npKind), tostring(frame.npSize or 'normal'),
       unit and fact(UnitClassification, unit) or '-', unit and fact(UnitReaction, unit, 'player') or '-',
       unit and fact(UnitCanAttack, 'player', unit) or '-', unit and fact(UnitIsPlayer, unit) or '-',
       tostring(bar), tostring(frame.npColorSource or 'unset'),
-      text(frame.Name, cast and 'casting' or 'unknown'), text(frame.Level, bar and 'level off' or 'no bar'), tostring(frame.npAlpha)))
+      text(frame.Name, cast and 'casting' or 'unknown'), text(frame.Level, bar and 'level off' or 'no bar'), tostring(frame.npAlpha),
+      plate and fact(plate.GetAlpha, plate) or '-'))
   end
 end
 

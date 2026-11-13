@@ -240,6 +240,11 @@ end
 -- RANGE_KEEP seconds; otherwise the last answer stands. Called from the shared
 -- ticker and on target, cast and combat edges; plates with icons re-assert the
 -- plate alpha so the icon rims, which ignore parent alpha, follow the game's own fade.
+-- Line of sight is that fade: the client multiplies its NamePlate frame (this
+-- frame's parent) by nameplateOccludedAlphaMult while it sees the unit hidden
+-- behind walls, and no API answers it otherwise. Real plates inherit it on top
+-- of everything here, the target included; a preview plate has no such parent,
+-- so a made-up `occluded` unit takes the same factor here.
 local RANGE_KEEP = 1.5
 local function apply(frame, key, widget, value, force)
   if widget and (force or frame[key] ~= value) then frame[key] = value; widget:SetAlpha(value) end
@@ -278,6 +283,7 @@ function Auras:Alpha(frame, force, probe)
     if inRange then plate, bar, casting, icons = inPlate, inBar, inCast, inIcons
     else plate, bar, casting, icons = outPlate, outBar, outCast, outIcons end
   end
+  if frame.npFake and frame.npFake.occluded then plate = plate * (tonumber(all.cvars.nameplateOccludedAlphaMult) or 1) end
   apply(frame, 'npAlpha', frame, plate, force or (frame.npAuras or 0) > 0)
   apply(frame, 'npBarAlpha', frame.Health, bar, force)
   apply(frame, 'npCastAlpha', cast, casting, force)

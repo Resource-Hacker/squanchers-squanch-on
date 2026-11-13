@@ -172,7 +172,6 @@ add(ROOT, 'Game settings', {
   cvar('nameplateOtherTopInset', 'Top screen inset', -1, 0.5, 0.005),
   cvar('nameplateSelectedScale', 'Selected plate scale', 0.5, 2, 0.05),
   cvar('nameplateMinAlpha', 'Distant plate opacity', 0, 1, 0.05),
-  cvar('nameplateOccludedAlphaMult', 'Hidden-behind-wall opacity', 0, 1, 0.05),
 })
 
 -- Per kind of plate -----------------------------------------------------------
@@ -329,6 +328,13 @@ add(AURAS, 'Opacity', {
   { 'alpha.aurasOutOfRange', 'slider', 'Icons out of range', alpha() },
   { 'alpha.rangeYards', 'slider', 'Range (yards)', slider(5, 100, 5, { integer = true }) },
   { 'alpha.nonTargetMultiplier', 'slider', 'Out-of-range plates while you have a target', alpha() },
+  -- The game's own line-of-sight fade (CVar nameplateOccludedAlphaMult). The
+  -- client applies it to its NamePlate frame, the parent of these plates, so it
+  -- multiplies every rule on this page, in range or not, target included.
+  { 'cvars.nameplateOccludedAlphaMult', 'slider', 'Out of line of sight', alpha({ combatSafe = false,
+    keywords = 'cvar nameplateOccludedAlphaMult line of sight occluded behind wall building',
+    desc = 'Multiplies a plate whose unit the game sees as hidden behind walls, in range or not. The game decides which units are hidden and fades them itself (game setting nameplateOccludedAlphaMult); 100% turns it off. Applies when combat ends.',
+    apply = function() if NP:IsActive() then NP:ApplyCVars() end; repaint() end }) },
   { 'alpha.notInCombatEnabled', 'toggle', 'Dim enemies outside your fight' },
   { 'alpha.notInCombat', 'slider', 'Enemy outside your fight', alpha() },
 })

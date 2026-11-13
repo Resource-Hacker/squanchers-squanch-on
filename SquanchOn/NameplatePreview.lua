@@ -53,6 +53,7 @@ local CASES = {
   case('Friendly Horde, target', { target = true }, HORDE),
   case('Friendly player, mouseover', { hover = true, health = 60 }, HORDE),
   case('Other target, out of range', { otherTarget = true, inRange = false }),
+  case('Behind a wall, in range', { occluded = true }),
   case('Aggro flash (loops)', { playerCombat = true, combat = true, threat = 3, zone = 'party', aggroLoop = true }),
   case('Cast finished (flash, fade)', { playerCombat = true, combat = true, threat = 0, cast = { name = 'Fireball', icon = 135812, time = 1.5 } }),
   case('Interrupted cast', { playerCombat = true, combat = true, threat = 0, cast = { name = 'Heal', icon = 135915, time = 2.5, interrupted = true } }),
