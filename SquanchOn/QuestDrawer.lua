@@ -192,7 +192,7 @@ function Drawer:Layout()
     local available=math.max(64,(UIParent:GetHeight()*UIParent:GetEffectiveScale()
         -anchorTop*anchorScale)/scale-8)
     local contentWidth=width-23 -- collapse control18 and right gutter5
-    self.available=available
+    self.available,self.contentWidth=available,contentWidth
     self.viewport:SetWidth(contentWidth)
     tracker:SetClampedToScreen(false)
     tracker:SetScale(1)
@@ -242,9 +242,39 @@ end
 -- What only the drawer owns after a native pass: collapsed quests, dividers,
 -- the painted shell and the drawer's height. Runs at the end of each native
 -- pass, before that frame is drawn; combat defers it to PLAYER_REGEN_ENABLED.
+-- True when a native pass measured text at another width than the drawer's:
+-- a module that lost the drawer's width, or a quest line wider than its block
+-- (seen after turning quests in: text no longer wrapped and ran past the rim).
+local function measuredElsewhere(self)
+    local width=self.contentWidth
+    if not width then return false end
+    local tracker=self.tracker
+    if math.abs(tracker:GetWidth()-width)>.5 then return true end
+    for _,module in ipairs(tracker.modules or {}) do
+        if module:IsShown() and math.abs(module:GetWidth()-(width-(module.leftMargin or 0)))>.5 then return true end
+        local block=module.firstBlock
+        while block do
+            if block.used then
+                for _,line in pairs(block.usedLines or {}) do
+                    local text=line.used and line.Text
+                    if text and text:IsShown() and text:GetLeft() and line:GetRight() and text:GetRight()>line:GetRight()+.5 then return true end
+                end
+                if block.HeaderText and block.HeaderText:GetRight() and block:GetRight() and block.HeaderText:GetRight()>block:GetRight()+.5 then return true end
+            end
+            block=block.nextBlock
+        end
+    end
+    return false
+end
 function Drawer:Refit()
     if not self.ready then return end
     if InCombatLockdown() then self.fitPending=true;return end
+    -- Measured at a wrong width: one full layout re-measures through the
+    -- native owner (at most twice a second, so it can never loop).
+    if measuredElsewhere(self) and (not self.healedAt or GetTime()-self.healedAt>.5) then
+        self.healedAt=GetTime()
+        self:RequestLayout()
+    end
     local tracker,frame,skin=self.tracker,self.frame,ns.DarkSkin
     -- Also after native managed-frame/header update callbacks.
     self:AlignNative()
