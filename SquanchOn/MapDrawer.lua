@@ -10,22 +10,28 @@
 -- Sequence: the quest list first pulls up (or unfolds, when collapsed) to at
 -- least the top of the character sheet as it opens above chat, then the map
 -- slides out from the list's edge at exactly the list's height. When the map
--- closes the list returns to its own height.
+-- closes the list returns to its own height. While the list pulls up the map
+-- is held invisible (DrawerMotion's delay) at the size it will have when the
+-- list arrives; it is not rescaled with every step of the pull-up.
 --
 -- Opening and closing: an arrow on the quest list's side toward the screen
 -- centre (the minimap panel's side arrow, DarkSkin:DrawerArrow) pulls the map
--- out; while the map is out the arrow is hidden. The map's own title plate
--- ("Map", NativeWindowBorders.lua) and the quest drawer's close button close it.
+-- out; while the map is out that arrow is hidden and a second one, on the
+-- map's edge beside the list and pointing back at it, slides the map back in.
+-- The map's own title plate ("Map", NativeWindowBorders.lua) and the quest
+-- drawer's close button close it too. Blizzard's quest-panel toggle on the
+-- map's corner is hidden while the map is this drawer: the quests are beside it.
 --
 -- Taint: nothing here calls a map method, writes a map field or shows or hides
--- a UI panel. Addon code may not show or hide panels in combat
+-- a UI panel (the quest-panel toggle is a plain overlay button of the map,
+-- not a panel). Addon code may not show or hide panels in combat
 -- (UIParentPanelManager CheckProtectedFunctionsAllowed), and a map shown from
 -- addon code acquires its pins on a tainted path, where SetPassThroughButtons
--- is blocked in combat. So the arrow, the click on the Map plate and the quest
--- drawer's close button are secure action buttons that click Blizzard's own
--- buttons. Secure buttons are shown, hidden and moved only out of combat, and
--- are never anchored to the map: that would protect the map, which must stay
--- movable in combat (Fit).
+-- is blocked in combat. So both arrows, the click on the Map plate and the
+-- quest drawer's close button are secure action buttons that click Blizzard's
+-- own buttons. Secure buttons are shown, hidden and moved only out of combat,
+-- and are never anchored to the map: that would protect the map, which must
+-- stay movable in combat (Fit).
 local _, ns = ...
 local Drawer = {}
 ns.MapDrawer = Drawer
@@ -84,7 +90,16 @@ local function place(self)
     local room = toLeft and left or UIParent:GetWidth() - right
     -- Exactly the quest list's height (bottoms and tops level), at the map's own
     -- aspect, unless the room toward the centre is narrower than that width.
-    local tall = drawer:GetHeight() * drawer:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    -- During the pull-up before the slide (Opened) that is the height the list
+    -- is growing to: the map, held invisible meanwhile, keeps one scale instead
+    -- of being rescaled on every step (opened that way, the frame-buffered map
+    -- showed its pins on bare parchment, without its detail tiles).
+    local listHeight = drawer:GetHeight()
+    if self.finalHeight then
+        if InCombatLockdown() or listHeight >= self.finalHeight - .5 then self.finalHeight = nil
+        else listHeight = self.finalHeight end
+    end
+    local tall = listHeight * drawer:GetEffectiveScale() / UIParent:GetEffectiveScale()
     local scale = math.max(.1, math.min((room - MARGIN) / width, tall / height))
     if math.abs(map:GetScale() - scale) > .0005 then map:SetScale(scale) end
     local point, relativePoint = 'BOTTOMLEFT', 'BOTTOMRIGHT'
@@ -123,13 +138,18 @@ function Drawer:Opened()
     local map, quests = WorldMapFrame, ns.QuestDrawer
     if not self:Owns(map) then return end
     local drawer, delay = quests.frame, 0
+    self.finalHeight = nil
     if not map:IsMaximized() then
         local collapsed, before, reach = not drawer:IsShown(), drawer:GetHeight(), reachHeight()
         quests:SetReach(reach)
         if not InCombatLockdown() and (collapsed or reach and reach > before + .5) then
             delay = ns.DrawerMotion:Unfold() or 0
+            -- Where the pull-up ends (QuestDrawer:SetReach's target); place()
+            -- sizes the held map for it.
+            if delay > 0 and reach then self.finalHeight = math.max(reach, quests.naturalHeight or before) end
         end
     end
+    self.openedAt, self.openDelay = GetTime(), delay
     self:Fit()
     -- Plays only when the map really sits on the drawer (DrawerMotion's anchor
     -- check). Legal in combat: an addon-owned stand-in is sized and the map gets
@@ -201,6 +221,18 @@ function Drawer:Initialize()
     closer:HookScript('OnEnter', function() light(true) end)
     closer:HookScript('OnLeave', function() light(false) end)
     self.closer = closer
+    -- The way back: the same drawer arrow on the map's edge beside the list,
+    -- pointing at the list, clicking the map's close button. Also a child of
+    -- the quest list placed by rectangle (PlaceCloser), drawn above the map.
+    local back = skin:DrawerArrow(quests.frame, 'Map', 'SecureActionButtonTemplate')
+    back:Hide()
+    back:SetAttribute('useOnKeyDown', false)
+    back:SetAttribute('type', 'click')
+    back:SetAttribute('clickbutton', self.closeTarget)
+    -- A map closed in combat leaves it shown (it then clicks nothing) until
+    -- combat ends; its art and name stay invisible meanwhile (SyncArrow).
+    back:HookScript('OnEnter', function() if back.arrow:GetAlpha() == 0 then back.label:Hide() end end)
+    self.back = back
     -- Panel management re-anchors the map to its native place whenever panels
     -- change; place it back at once, before a frame is drawn there.
     hooksecurefunc(map, 'SetPoint', function() self:Fit() end)
@@ -209,12 +241,24 @@ function Drawer:Initialize()
         self:SyncArrow()
     end)
     map:HookScript('OnHide', function()
+        self.finalHeight = nil
         self:KeepWindowed()
         ns.QuestDrawer:SetReach(nil)
         self:SyncArrow()
         self:QueueCloser()
     end)
+    -- Blizzard's quest-panel toggle on the canvas corner (WorldMapMixin:
+    -- AddOverlayFrames). QuestLogOwnerMixin:SynchronizeDisplayState shows it
+    -- on every open of the windowed map; it stays hidden while the map is
+    -- this drawer and native otherwise (the setting applies at the next open).
+    -- A plain unprotected button: hiding it is allowed in combat.
+    local toggle = map.SidePanelToggle
+    local function hideToggle()
+        if toggle:IsShown() and self:Owns(map) and not map:IsMaximized() then toggle:Hide() end
+    end
+    if toggle then toggle:HookScript('OnShow', hideToggle) end
     self.ready = true
+    if toggle then hideToggle() end
     self:KeepWindowed()
     return true
 end
@@ -223,34 +267,74 @@ end
 -- map is shown it is hidden; in combat, where a secure button cannot be
 -- hidden, it is turned back instead (still the same toggle) until combat ends.
 function Drawer:SyncArrow()
-    local arrow = self.arrow
+    local arrow, back = self.arrow, self.back
     if not arrow then return end
     local open = WorldMapFrame:IsShown()
-    ns.DarkSkin:PointDrawerArrow(arrow, (leftward(panelRect()) ~= open) and 'left' or 'right')
+    local toLeft = leftward(panelRect())
+    ns.DarkSkin:PointDrawerArrow(arrow, (toLeft ~= open) and 'left' or 'right')
+    -- The way back points at the list. Its art goes as the map closes: in
+    -- combat it cannot be hidden, otherwise PlaceCloser hides it next frame
+    -- (texture alpha is not protected). A map reopened before then finds it
+    -- still in place: its art returns with the map's content.
+    ns.DarkSkin:PointDrawerArrow(back, toLeft and 'right' or 'left')
+    if not open then
+        back.arrow:SetAlpha(0); back.label:Hide()
+    elseif back:IsShown() and back.arrow:GetAlpha() == 0 then
+        back.arrow:SetAlpha(1)
+        ns.DrawerMotion:Reveal(back.arrow, self.openDelay)
+    end
     if InCombatLockdown() then self.pending = true; return end
     arrow:SetShown(enabled() and self.openTarget ~= nil and not open)
 end
 
 -- The closer covers the map's title plate while the map is out beside the
--- list. Out of combat only: a map opened in combat gets its click when combat
--- ends (M, Escape, its X and the list's close button work throughout), and one
--- closed in combat leaves the closer, which then clicks nothing, until then.
+-- list; the way-back arrow sits on the map's edge beside the list. Out of
+-- combat only: a map opened in combat gets them when combat ends (M, Escape,
+-- its X and the list's close button work throughout), and one closed in combat
+-- leaves them, clicking nothing, until then.
 function Drawer:PlaceCloser()
-    local closer, map, drawer = self.closer, WorldMapFrame, ns.QuestDrawer.frame
+    local closer, back, map, drawer = self.closer, self.back, WorldMapFrame, ns.QuestDrawer.frame
     if not closer then return end
     if InCombatLockdown() then self.pending = true; return end
-    local plate = ns.DarkSkin.titlePlates[map.BorderFrame]
+    local skin = ns.DarkSkin
+    local plate = skin.titlePlates[map.BorderFrame]
     local open = self:Owns(map) and self.closeTarget and map:IsShown() and not map:IsMaximized()
+    local dleft, dbottom = drawer:GetLeft(), drawer:GetBottom()
     local left, bottom, width, height
     if open and plate and plate:IsVisible() then left, bottom, width, height = plate:GetRect() end
-    local dleft, dbottom = drawer:GetLeft(), drawer:GetBottom()
-    if not (left and dleft and dbottom) then closer:Hide(); return end
-    local k = plate:GetEffectiveScale() / drawer:GetEffectiveScale()
-    closer:ClearAllPoints()
-    closer:SetPoint('BOTTOMLEFT', drawer, 'BOTTOMLEFT', left * k - dleft, bottom * k - dbottom)
-    closer:SetSize(width * k, height * k)
-    closer:SetFrameLevel(self.arrow:GetFrameLevel())
-    closer:Show()
+    if left and dleft and dbottom then
+        local k = plate:GetEffectiveScale() / drawer:GetEffectiveScale()
+        closer:ClearAllPoints()
+        closer:SetPoint('BOTTOMLEFT', drawer, 'BOTTOMLEFT', left * k - dleft, bottom * k - dbottom)
+        closer:SetSize(width * k, height * k)
+        closer:SetFrameLevel(self.arrow:GetFrameLevel())
+        closer:Show()
+    else
+        closer:Hide()
+    end
+    left, bottom, width, height = nil, nil, nil, nil
+    if open then left, bottom, width, height = map:GetRect() end
+    if not (left and dleft and dbottom) then back:Hide(); return end
+    -- The opener's place on the list's side (Attach), mirrored onto the map:
+    -- as far inside the map's edge that meets the list as the opener sits
+    -- outside the list, centred on the map's height. List frame units, like
+    -- the opener's offset.
+    local k = map:GetEffectiveScale() / drawer:GetEffectiveScale()
+    local inset = skin.styles.compact.offset - skin.styles.compact.edge * 4.5 / 13 + 2
+    local x = leftward(panelRect()) and (left + width) * k - inset or left * k + inset
+    back:ClearAllPoints()
+    back:SetPoint('CENTER', drawer, 'BOTTOMLEFT', x - dleft, (bottom + height / 2) * k - dbottom)
+    -- Above the map and its border frame (HIGH), so it shows over the canvas.
+    local rim = skin.byFrame[map.BorderFrame] and skin.byFrame[map.BorderFrame].dialog
+    back:SetFrameStrata(map.BorderFrame:GetFrameStrata())
+    back:SetFrameLevel((rim or map.BorderFrame):GetFrameLevel() + 3)
+    back.arrow:SetAlpha(1)
+    if not back:IsShown() then
+        back:Show()
+        -- It appears with the map's content: the open motion's remaining hold, then its fade.
+        local delay = self.openedAt and (self.openDelay or 0) - (GetTime() - self.openedAt) or 0
+        ns.DrawerMotion:Reveal(back.arrow, math.max(0, delay))
+    end
 end
 -- The plate's rectangle settles with the map's placement: read it next frame.
 function Drawer:QueueCloser()
@@ -279,7 +363,9 @@ end
 
 hooksecurefunc(ns.QuestDrawer, 'Layout', function() Drawer:Attach() end)
 -- The map's height follows the list's in the same frame: after each native
--- quest pass (Refit) and each step of the pull-up (FitReach).
+-- quest pass (Refit) and each step of a pull-up (FitReach) that runs while the
+-- map is shown (after combat); the pull-up that precedes the slide is
+-- absorbed by place()'s final height.
 hooksecurefunc(ns.QuestDrawer, 'Refit', function() Drawer:Fit() end)
 hooksecurefunc(ns.QuestDrawer, 'FitReach', function() Drawer:Fit() end)
 

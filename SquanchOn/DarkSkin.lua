@@ -978,10 +978,10 @@ Skin:OnTheme(function()
 end)
 
 -- THE DRAWER ARROW: the minimap panel's side handle (the damage meter's, the
--- quest list's map arrow). The tinted scrollbar arrow, 18 x 22, its name shown
--- above it while the mouse is over it. `template` makes it, e.g., a secure
--- action button. Callers anchor it, act on its click and turn it with
--- PointDrawerArrow.
+-- quest list's map arrows). The tinted scrollbar arrow (handle.arrow), 18 x 22,
+-- its name (handle.label) shown above it while the mouse is over it.
+-- `template` makes it, e.g., a secure action button. Callers anchor it, act on
+-- its click and turn it with PointDrawerArrow.
 function Skin:DrawerArrow(parent, name, template)
     local handle = CreateFrame("Button", nil, parent, template)
     handle.ignoreInLayout = true
@@ -995,6 +995,7 @@ function Skin:DrawerArrow(parent, name, template)
     local color = self.headerTextColor
     local label = ns.OptionWidgets:Label(handle, name, 10, color[1], color[2], color[3])
     label:SetPoint("BOTTOM", handle, "TOP", 0, 2); label:Hide()
+    handle.label = label
     handle:HookScript("OnEnter", function() label:Show() end)
     handle:HookScript("OnLeave", function() label:Hide() end)
     handle:HookScript("OnHide", function() label:Hide() end)

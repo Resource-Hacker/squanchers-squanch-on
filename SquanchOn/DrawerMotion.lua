@@ -264,6 +264,17 @@ local function open(frame, anchor, shell, style, direction, delay)
     C_Timer.After(delay + total + .1, function() finish(state) end)
 end
 
+-- A region outside the drawer that belongs to it (the map's way-back arrow on
+-- the quest list): held invisible for `delay` plus the drawer's hold, then
+-- faded in with its content. Render-only, like the drawer's own animation.
+function Motion:Reveal(region, delay)
+    load()
+    if not self.enabled or not region or not region.CreateAnimationGroup then return end
+    local group = rimGroups[region]
+    if not group then group = alphaGroup(region); rimGroups[region] = group end
+    play(group, math.max(0, tonumber(delay) or 0))
+end
+
 -- Call from the drawer's OnShow, after its placement code. Plays at most once
 -- per shown state. With `anchor`, it plays only when the drawer really sits on
 -- that anchor (a drawer combat leaves unplaced keeps its native place and opens
