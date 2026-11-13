@@ -89,6 +89,19 @@ changes are preserved. Explicit-unit macros retain their own targeting rules.
 Opening the gate does not cast a spell or automatically select a hard target.
 [Controls, safeguards and implementation details →](docs/RETICLE.md)
 
+## In motion
+
+Real captures from the author's play on 2026-11-12, shown as they happened
+(cropped and scaled; chat removed).
+
+| Ranged triangles turn into melee blocks | A hostile under the reticle, then selected |
+| --- | --- |
+| ![Hunter's Mark on a Makrura Clacker: the target ring in its nameplate carries rotating ranged triangles, then switches to four static melee blocks as the Orc closes in.](docs/images/gifs/target-ring-ranged-to-melee.gif) | ![A red chevron marks a hostile Clattering Scorpid under the reticle; selecting it nests the target ring in its nameplate.](docs/images/gifs/hostile-chevron-then-target-ring.gif) |
+| **A ranged pull** | **A vendor selected** |
+| ![Ranged pull on a Makrura Clacker: Hunter's Mark on the plate and as a timed aura on the target frame, player and target frames below.](docs/images/gifs/combat-ranged-pull-unit-frames.gif) | ![A friendly vendor selected: the target ring sits in her plate with the goods-bag icon above; interacting opens the themed merchant window.](docs/images/gifs/npc-vendor-ring-icon-merchant.gif) |
+| **Bags slide out beside the minimap** | **A kill and the loot window** |
+| ![The bag window fades in as a drawer left of the minimap, with search, Sort and gold-rimmed slots.](docs/images/gifs/drawer-bags-open.gif) | ![Killing blow on a Makrura Clacker, then the themed loot window opens.](docs/images/gifs/loot-window-kill.gif) |
+
 ## In game
 
 <table>
