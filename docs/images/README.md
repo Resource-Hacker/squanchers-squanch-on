@@ -25,3 +25,6 @@ retain Blizzard Entertainment's rights. Screenshot game content is not relicense
 The repository does not distribute extracted Blizzard textures as addon assets.
 
 `ui-bags-minimap-meter.png`, `ui-character-drawer.png`, `ui-hud-strip.png` and `ui-settings-graphics.png` are the author's Forever captures of version 1.0, 2026-11-12, cropped only. Other players' and NPCs' names appear as the game showed them.
+
+`gifs/*.gif` are the author's Forever gameplay, recorded 2026-11-12 between 15:56 and 17:26 at 5120x1440 and 60 fps (video only), then cropped, scaled and converted to GIF; nothing in them is retouched. Chat lines are cropped out. Other players' and NPCs' names appear as the game showed them.
+
