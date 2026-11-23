@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 40, scale = 1, pitch = 0, rev = 1, follow = false}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 40, scale = 1, pitch = 0, rev = 1, follow = false, sample = true}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -884,7 +884,11 @@ local function command(rate, mode, elapsed)
   end
 end
 local function stopConverge()
-  conv.rate, conv.ramp, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, huge
+  if conv.sample then
+    conv.sample = nil
+    if not gateOpen() and addon.ApplyCursorCentering then addon:ApplyCursorCentering(false) end
+  end
+  conv.rate, conv.ramp, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, nil, huge
 end
 -- A zoom gesture begins; its choices stay until it settles. The wheel calls
 -- this before the client moves, so the plate is recorded where the owner aimed.
@@ -898,7 +902,24 @@ local function beginConverge(zoom, from)
     if from >= 0.05 then conv.applied = convergeAngle(shoulderAt(from), select(3, reticleUnit())) end
   end
   conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
-  conv.bias = conv.applied - convergeAngle(shoulderAt(from), conv.distance)
+  local sampling = conv.source == "fallback"
+  -- A reading from the last few seconds stands in until a new one arrives
+  -- (zooming in and out on the same thing, with the reticle a little off it).
+  if sampling and conv.lastYards and GetTime() - conv.lastAt < 8 then
+    conv.distance, conv.source = conv.lastYards, "recent reticle sample"
+  end
+  conv.beginApplied, conv.beginOffset = conv.applied, shoulderAt(from)
+  conv.bias = conv.applied - convergeAngle(conv.beginOffset, conv.distance)
+  -- Nothing told us what the reticle is on: open the client's centred
+  -- mouseover for a few frames (measured: the unit under the reticle answers
+  -- on the second frame) and take that unit's distance. Only the CVar is
+  -- touched, so the reticle, plates and bindings never see the gate as open.
+  conv.sample = nil
+  if sampling and cfg.converge.sample ~= false and not gateOpen()
+    and addon.ApplyCursorCentering and IsMouselooking and IsMouselooking() then
+    addon:ApplyCursorCentering(true)
+    conv.sample = 0
+  end
   conv.lockX = nil
   conv.leadAngle = from < 0.05 and 0 or convergeAngle(shoulderAt(from), conv.distance)
   if conv.plate then
@@ -940,6 +961,24 @@ local function stepConverge(zoom, elapsed)
   end
   conv.facing, conv.elapsed = facing, elapsed
 
+  if conv.sample then
+    conv.sample = conv.sample + 1
+    local yards
+    if UnitExists("mouseover") and addon.Range then
+      local ok, low, high = pcall(addon.Range.Bracket, addon.Range, "mouseover")
+      -- Only a two-sided reading: "within 5" alone was seen for a unit 22 yards away.
+      if ok and low and high then yards = (low + high) / 2 end
+    end
+    if yards or conv.sample >= 6 then
+      conv.sample = nil
+      if not gateOpen() then addon:ApplyCursorCentering(false) end
+      if yards then
+        conv.distance, conv.source, conv.unit = max(1, yards), "reticle sample", "mouseover"
+        conv.lastYards, conv.lastAt = conv.distance, GetTime()
+        conv.bias = conv.beginApplied - convergeAngle(conv.beginOffset, conv.distance)
+      end
+    end
+  end
   local moving = was ~= nil and abs(zoom - was) > 0.0005
   local resumed = moving and conv.quiet > 0.15
   conv.quiet = moving and 0 or conv.quiet + elapsed
