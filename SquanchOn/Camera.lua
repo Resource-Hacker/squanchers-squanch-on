@@ -890,6 +890,13 @@ end
 -- this before the client moves, so the plate is recorded where the owner aimed.
 local function beginConverge(zoom, from)
   conv.live, conv.quiet = true, 0
+  -- First zoom of a session begun in third person: the view as it stands is
+  -- taken as already converged, so going to first person turns back by that
+  -- amount instead of leaving the reticle's subject to slide once.
+  if not conv.based then
+    conv.based = true
+    if from >= 0.05 then conv.applied = convergeAngle(shoulderAt(from), select(3, reticleUnit())) end
+  end
   conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
   conv.bias = conv.applied - convergeAngle(shoulderAt(from), conv.distance)
   conv.lockX = nil
