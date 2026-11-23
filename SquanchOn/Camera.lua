@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = false, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 4, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 5, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -1101,7 +1101,11 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   elseif busy then Camera.quiet = 0
   else
     Camera.quiet = Camera.quiet + elapsed
-    if Camera.quiet > FOCUS_SETTLE and not (cfg.converge.heldGate and gateOpen()) then endFocus() end
+    -- The engine swings the view back when its focus is released, so a zoom
+    -- onto a selected target keeps the focus until that target changes.
+    local c = cfg.converge
+    local targeted = c.heldFocus and not c.heldSoft and UnitExists("target")
+    if Camera.quiet > FOCUS_SETTLE and not targeted and not (c.heldGate and gateOpen()) then endFocus() end
     if Camera.quiet > 0.5 then
       stopConverge()              -- the next gesture picks its distance afresh; offset changes made while asleep are not turned
       applyZoom(zoom, true)       -- land on the exact curve values before sleeping
@@ -1389,6 +1393,9 @@ local function normalize(config)
   -- view swing back when the focus is released after a zoom; the turn by the
   -- target's distance stays where the zoom left it.
   if config.converge.rev < 4 then config.converge.focus, config.converge.rev = nil, 4 end
+  -- rev 5: focus back on. It is what brings the reticle onto the target; the
+  -- swing back is now prevented by holding it while that target stays selected.
+  if config.converge.rev < 5 then config.converge.focus, config.converge.rev = nil, 5 end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
@@ -1442,7 +1449,7 @@ function Camera:Enable()
     if addon.SetMouseoverHeld then hooksecurefunc(addon, "SetMouseoverHeld", gateChanged) end
   end
   for _, event in ipairs({"PLAYER_ENTERING_WORLD", "PLAYER_MOUNT_DISPLAY_CHANGED", "UNIT_ENTERED_VEHICLE",
-    "UNIT_EXITED_VEHICLE", "PLAYER_CONTROL_GAINED", "CINEMATIC_STOP", "PLAYER_LOGOUT"}) do
+    "UNIT_EXITED_VEHICLE", "PLAYER_CONTROL_GAINED", "CINEMATIC_STOP", "PLAYER_LOGOUT", "PLAYER_TARGET_CHANGED"}) do
     pcall(events.RegisterEvent, events, event)
   end
   self.active = true
@@ -1458,6 +1465,10 @@ events:SetScript("OnEvent", function(self, event)
     return
   end
   if event == "PLAYER_LOGOUT" then endFocus(); return end
+  if event == "PLAYER_TARGET_CHANGED" then
+    if cfg and cfg.converge.heldFocus and not cfg.converge.heldSoft then endFocus() end
+    return
+  end
   lastZoom = nil
   Camera:Wake()
 end)

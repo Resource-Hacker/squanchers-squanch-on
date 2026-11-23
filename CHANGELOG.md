@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Camera: zooming with a target selected no longer swings the view back when
-  the zoom stops (the game's target focus is now off by default for zooms).
+  the zoom stops; the camera stays on that target until you change target.
 - Camera: with nothing selected, holding the reticle open now picks up the
   unit in front of you and keeps the camera on it until you let go (new
   option under Aim convergence, on by default).
