@@ -162,6 +162,15 @@ Options:Category({ id = 'camera', title = 'Camera', order = 30,
 local function command(name, done)
     return function() Camera:Command(name); return done end
 end
+-- Aim convergence rows: fields of the camera config's `converge` table.
+local AIM = 'Aim convergence'
+local function converge(key, spec)
+    spec.id, spec.section, spec.combatSafe, spec.disabled, spec.apply = 'camera.converge.' .. key, AIM, true, notReady, changed
+    spec.get = function() local cfg = Camera:Config(); return cfg and cfg.converge and cfg.converge[key] end
+    spec.set = function(_, value) config().converge[key] = value end
+    spec.default = function() return shipped().converge[key] end
+    return spec
+end
 Options:Add('camera', {
     { id = 'camera.status', type = 'note', label = 'Status', section = 'Status', keywords = 'status active waiting off dynamiccam',
         text = function()
@@ -180,6 +189,19 @@ Options:Add('camera', {
         get = function() local cfg = Camera:Config(); return cfg and cfg.enabled == true or false end,
         set = function(_, on) config().enabled = on end,
         apply = function(_, on) if on then Camera:Enable() else Camera:Disable(false) end end },
+
+    converge('enabled', { type = 'toggle', label = 'Aim convergence',
+        desc = 'While the camera zooms, it turns so that what is under the reticle stays there although the shoulder offset changes.',
+        keywords = 'aim convergence reticle centre center zoom shoulder drift parallax' }),
+    converge('focus', { type = 'toggle', label = 'Use target focus when something is selected',
+        desc = "With a target selected, the client's target focus is on for the length of the zoom and then put back as it was.",
+        keywords = 'aim convergence target focus selected enemy friendly' }),
+    converge('strength', { type = 'slider', label = 'Focus strength', min = 0, max = 1, step = 0.05,
+        desc = 'How strongly target focus turns the camera sideways onto the target during a zoom.',
+        keywords = 'aim convergence target focus strength yaw' }),
+    converge('distance', { type = 'slider', label = 'Convergence distance (yards)', min = 5, max = 60, step = 1,
+        desc = 'The reticle keeps pointing at the spot this far in front of the character while the zoom changes.',
+        keywords = 'aim convergence distance yards range' }),
 
     { id = 'camera.takeover', type = 'action', label = 'Take over from DynamicCam', button = 'Take over', section = 'DynamicCam',
         desc = 'Imports the DynamicCam profile if needed and disables DynamicCam; a reload then lets Squanch-On drive. Same as /sqms camera takeover.',

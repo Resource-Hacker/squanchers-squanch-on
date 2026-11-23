@@ -16,6 +16,7 @@ local Camera = {}
 addon.Camera = Camera
 
 local abs, min, max, huge = math.abs, math.min, math.max, math.huge
+local asin, deg = math.asin, math.deg
 local GetCameraZoom, GetCVar, GetTime = GetCameraZoom, GetCVar, GetTime
 local YAW, PITCH = "cameraYawMoveSpeed", "cameraPitchMoveSpeed"
 local POPUP = "EXPERIMENTAL_CVAR_CONFIRMATION_NEEDED"
@@ -289,7 +290,11 @@ local function build(profile, defaults)
     zoom = {reactive = saved.reactiveZoomEnabled ~= false, addAlways = pick(saved.reactiveZoomAddIncrementsAlways, 1),
       addIncrements = pick(saved.reactiveZoomAddIncrements, 2.5), incAddDifference = pick(saved.reactiveZoomIncAddDifference, 1.2),
       maxZoomTime = pick(saved.reactiveZoomMaxZoomTime, 0.1), easing = saved.reactiveZoomEasingFunc or "OutQuad",
-      restore = profile.zoomRestoreSetting or "adaptive", transitionEasing = "InOutQuad"}}
+      restore = profile.zoomRestoreSetting or "adaptive", transitionEasing = "InOutQuad"},
+    -- Aim convergence (original). scale: yards of sideways camera shift per
+    -- unit of shoulder offset, negative to turn the other way. pitch: target
+    -- focus pitch strength while a zoom is in progress.
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -743,6 +748,78 @@ local function stepFade()
   return true
 end
 
+-- ---------------------------------------------------------------------------
+-- Aim convergence: what is under the reticle stays there while the zoom, and
+-- with it the shoulder offset, changes.
+-- ---------------------------------------------------------------------------
+-- With a target selected the engine's target focus is switched on for the
+-- length of the zoom and then put back exactly. The values to put back live in
+-- the saved settings, so a session that ends mid-zoom is repaired at next login.
+local FOCUS = {"test_cameraTargetFocusEnemyStrengthYaw", "test_cameraTargetFocusEnemyStrengthPitch", "test_cameraTargetFocusEnemyEnable",
+  "test_cameraTargetFocusInteractStrengthYaw", "test_cameraTargetFocusInteractStrengthPitch", "test_cameraTargetFocusInteractEnable"}
+local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom stops
+local function endFocus()
+  local c = cfg and cfg.converge
+  local held = type(c) == "table" and c.held
+  if not held then return end
+  c.held = nil
+  for name, value in pairs(held) do setCVar(name, value) end
+end
+local function beginFocus()
+  local c = cfg.converge
+  if not (c.enabled and c.focus) or c.held or transFn then return end
+  if not UnitExists("target") or UnitIsUnit("target", "player") then return end
+  local held = {}
+  for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end
+  c.held = held
+  for index, name in ipairs(FOCUS) do
+    if held[name] ~= nil then
+      local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
+      setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
+    end
+  end
+  Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
+end
+
+-- Fixed-distance part: the camera is turned so that the centre ray keeps
+-- crossing the character's forward line `distance` yards ahead. The ray passes
+-- the pivot at the shoulder offset, so the angle is asin(offset / distance);
+-- each frame the camera is turned by the change of that angle. The turn is
+-- commanded as a speed and accounted over time, like the situation rotations.
+local CONVERGE_MAX_RATE = 120       -- degrees per second
+local conv = {owed = 0, rate = 0}
+local function convergeAngle(zoom)
+  local c = cfg.converge
+  -- First person has no shoulder offset whatever the curve says at zoom 0.
+  local offset = zoom < 0.05 and 0 or (resolve("test_cameraOverShoulder", zoom) or 0)
+  return deg(asin(max(-1, min(1, offset * c.scale / max(1, c.distance)))))
+end
+local function stopConverge()
+  if conv.rate ~= 0 then drive("yaw", 0) end
+  conv.owed, conv.rate, conv.angle = 0, 0, nil
+end
+local function stepConverge(zoom, elapsed)
+  -- Not during a situation's own turn or setting transition.
+  if not cfg.converge.enabled or transFn or #turns > 0 then
+    if conv.angle then stopConverge() end
+    return false
+  end
+  local angle = convergeAngle(zoom)
+  conv.owed = conv.owed + angle - (conv.angle or angle) - conv.rate * elapsed
+  conv.angle = angle
+  local rate = 0
+  -- Core.lua's cursor return holds the turn speed at its minimum for this
+  -- frame: a speed factor computed against it would be wrong on the next.
+  if abs(conv.owed) > 0.002 and not speedsHeld then
+    rate = max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, conv.owed / max(elapsed, 1 / 120)))
+  end
+  if rate ~= conv.rate then
+    conv.rate = rate
+    drive("yaw", rate)              -- positive: the camera orbits right, the view turns left
+  end
+  return abs(conv.owed) > 0.002
+end
+
 local lastZoom
 driver:SetScript("OnUpdate", function(self, elapsed)
   local zoom = GetCameraZoom()
@@ -750,6 +827,7 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   if stepTransition(zoom) then busy = true end
   if stepTurns(elapsed) then busy = true end
   if stepFade() then busy = true end
+  if stepConverge(zoom, elapsed) then busy = true end
   -- Changes below a two-thousandth of a yard do not keep the driver awake; the
   -- forced pass before sleeping lands on the exact values.
   if not lastZoom or abs(zoom - lastZoom) > 0.0005 then
@@ -758,7 +836,9 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   elseif busy then Camera.quiet = 0
   else
     Camera.quiet = Camera.quiet + elapsed
+    if Camera.quiet > FOCUS_SETTLE then endFocus() end
     if Camera.quiet > 0.5 then
+      stopConverge()              -- offset changes made while asleep are not turned
       applyZoom(zoom, true)       -- land on the exact curve values before sleeping
       self:Hide()
     end
@@ -778,6 +858,7 @@ local function wheel(zoomIn, increments)
   increments = increments or 1
   local native = zoomIn and nativeZoomIn or nativeZoomOut
   if not Camera.active then return native(increments) end
+  beginFocus()
   if not zoomSetting("reactive") or increments ~= 1 then
     stopEase()
     Camera:Wake()
@@ -850,6 +931,7 @@ end
 local function change(old, new)
   local zoom = GetCameraZoom()
   stopEase()
+  endFocus(); stopConverge()
   local settingView, viewInstant = false, false
   if old then
     lastSituationZoom[old] = zoom
@@ -1025,6 +1107,8 @@ local function normalize(config)
   end
   config.zoom = type(config.zoom) == "table" and config.zoom or {}
   for key, value in pairs(shipped.zoom) do if config.zoom[key] == nil then config.zoom[key] = value end end
+  config.converge = type(config.converge) == "table" and config.converge or {}
+  for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
   for _, situation in ipairs(config.situations) do
@@ -1043,6 +1127,7 @@ end
 
 local hooked
 function Camera:Enable()
+  if cfg and not self.active then endFocus() end     -- a zoom the last session did not finish
   if self.active or not cfg or not cfg.enabled then return end
   if dynamicCamLoaded() then           -- one camera owner at a time
     if not self.blocked then
@@ -1075,7 +1160,7 @@ function Camera:Enable()
     end
   end
   for _, event in ipairs({"PLAYER_ENTERING_WORLD", "PLAYER_MOUNT_DISPLAY_CHANGED", "UNIT_ENTERED_VEHICLE",
-    "UNIT_EXITED_VEHICLE", "PLAYER_CONTROL_GAINED", "CINEMATIC_STOP"}) do
+    "UNIT_EXITED_VEHICLE", "PLAYER_CONTROL_GAINED", "CINEMATIC_STOP", "PLAYER_LOGOUT"}) do
     pcall(events.RegisterEvent, events, event)
   end
   self.active = true
@@ -1090,6 +1175,7 @@ events:SetScript("OnEvent", function(self, event)
     for name, text in pairs(deferred) do deferred[name] = nil; setCVar(name, text) end
     return
   end
+  if event == "PLAYER_LOGOUT" then endFocus(); return end
   lastZoom = nil
   Camera:Wake()
 end)
@@ -1099,6 +1185,7 @@ function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
   if not self.active then return end
+  endFocus(); stopConverge()
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -1111,12 +1198,14 @@ end
 function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
+    stopConverge()
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()
     events:UnregisterAllEvents(); sitEvents:UnregisterAllEvents()
     awaitingRegen = nil
     clear(deferred)
+    endFocus()                         -- after the clear: a write refused in combat is deferred again
     if ticker then ticker:Cancel(); ticker = nil end
     if CameraZoomIn == zoomInHook then CameraZoomIn = nativeZoomIn end
     if CameraZoomOut == zoomOutHook then CameraZoomOut = nativeZoomOut end
@@ -1178,6 +1267,7 @@ end
 local function replace(fresh)
   if Camera.active and current then change(current, nil) end
   flushTransition()
+  endFocus()
   fresh.previous, fresh.legacyFraming, fresh.enabled = cfg.previous, cfg.legacyFraming, cfg.enabled
   fresh.receipt = fresh.receipt or cfg.receipt
   addon.db.camera, cfg = fresh, fresh
@@ -1247,5 +1337,9 @@ function Camera:Command(command)
       tostring(GetCVar("test_cameraOverShoulder")), resolve("test_cameraOverShoulder", zoom) or 0,
       tostring(GetCVar("cameraFov")), resolve("cameraFov", zoom) or 0, tostring(GetCVar("test_cameraDynamicPitch")),
       current and current.name or "none", self:IsAwake() and "running" or "asleep", errors, waiting))
+  local c = cfg.converge
+  print(("Aim convergence: %s; distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
+    :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
+      tostring(c.pitch), c.held and ", held now" or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end
