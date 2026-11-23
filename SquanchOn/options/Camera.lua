@@ -200,11 +200,8 @@ Options:Add('camera', {
         desc = 'How strongly target focus turns the camera sideways onto the target during a zoom.',
         keywords = 'aim convergence target focus strength yaw' }),
     converge('distance', { type = 'slider', label = 'Fallback distance (yards)', min = 5, max = 60, step = 1,
-        desc = 'Used when no nameplate near the reticle can be followed and its unit has no known range: the reticle keeps pointing at the spot this far in front of the character while the zoom changes.',
+        desc = 'With nothing selected, the reticle keeps pointing at the spot this far in front of the character while the zoom changes. Set it to about how far away the things you aim at usually are.',
         keywords = 'aim convergence fallback distance yards range nameplate' }),
-    converge('follow', { type = 'toggle', label = 'Follow the unit under the open reticle',
-        desc = "While the reticle's mouseover is held open and nothing is selected, the camera turns sideways to keep the unit under it at the aim point. It stops the moment the mouseover closes.",
-        keywords = 'aim follow mouseover reticle open track unit nameplate' }),
 
     { id = 'camera.takeover', type = 'action', label = 'Take over from DynamicCam', button = 'Take over', section = 'DynamicCam',
         desc = 'Imports the DynamicCam profile if needed and disables DynamicCam; a reload then lets Squanch-On drive. Same as /sqms camera takeover.',

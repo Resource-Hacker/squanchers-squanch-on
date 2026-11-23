@@ -796,6 +796,7 @@ end
 -- differences are ever commanded and first person always wants zero, so
 -- in/out cycles cannot creep and the owner's own turning is never undone.
 local CONVERGE_MAX_RATE = 600       -- degrees per second; the first-person step must land in one frame at 240 fps
+local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
 local LOCK_GAIN = 0.35              -- share of the plate error closed per frame
 local LOCK_SPAN = 100               -- degrees assumed across the screen width; the loop absorbs the error
 local conv = {applied = 0, rate = 0, read = 0, quiet = huge}
@@ -805,6 +806,9 @@ local function shoulderAt(zoom) return zoom < 0.05 and 0 or (resolve("test_camer
 local function convergeAngle(offset, distance)
   return deg(asin(max(-1, min(1, offset * cfg.converge.scale / max(1, distance)))))
 end
+-- NOTE (measured in game 2026-11-22): this client refuses to measure nameplates
+-- ("Can't measure restricted regions"), so the plate lock and the follow path
+-- below never engage; the distance path does the work. Kept for clients that allow it.
 -- Screen X of a unit's nameplate in scale-1 units. Errors on restricted plates
 -- (and returns nothing once the plate left the unit): call through pcall.
 local function plateX(plate, unit)
@@ -878,17 +882,20 @@ local function readFacing()
   local ok, facing = pcall(GetPlayerFacing)
   if ok and type(facing) == "number" and not secret(facing) then return deg(facing) end
 end
-local function command(rate, mode)
-  conv.counted = mode ~= "follow"
+-- Turns the view by rate x elapsed degrees now (positive: to the left).
+-- FlipCameraYaw is exact and lands in this frame. MoveView turns were measured
+-- (120 fps capture) to kick by several degrees whenever one starts, which made
+-- the turn arrive wrong and late.
+local function command(rate, mode, elapsed)
   conv.mode = mode
-  if rate ~= conv.rate then
-    conv.rate = rate
-    drive("yaw", rate)              -- positive: the camera orbits right, the view turns left
+  local step = rate * (elapsed or 0)
+  if step ~= 0 then
+    FlipCameraYaw(step)
+    if mode ~= "follow" then conv.applied = conv.applied + step end
   end
 end
 local function stopConverge()
-  if conv.rate ~= 0 then drive("yaw", 0) end
-  conv.rate, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, huge
+  conv.rate, conv.ramp, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, huge
 end
 -- A zoom gesture begins; its choices stay until it settles. The wheel calls
 -- this before the client moves, so the plate is recorded where the owner aimed.
@@ -956,14 +963,14 @@ local function stepConverge(zoom, elapsed)
     if ok and x then
       local _, _, width = screen()
       local rate = lockRate(x, aimX(), width, elapsed)
-      command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), "follow")
+      command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), "follow", elapsed)
       conv.lockX = nil                -- the zoom lock starts again from where following leaves the plate
       conv.bias = conv.applied - convergeAngle(offset, conv.distance or c.distance)
       return true
     end
   end
   if not conv.live then
-    command(0, gate and "follow (no plate)" or nil)
+    command(0, gate and "follow (no plate)" or nil, elapsed)
     return gate
   end
 
@@ -1004,12 +1011,20 @@ local function stepConverge(zoom, elapsed)
     conv.leadAngle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
     local owed = wanted - conv.applied
     busy = abs(owed) > 0.002
-    if busy then rate = owed / max(elapsed, 1 / 120) end
+    -- Leaving or entering first person the client slides the shoulder offset
+    -- in over about 75 ms (measured), so the turn it calls for is spread over
+    -- the same time; ordinary zoom steps are applied as they come.
+    if abs(owed) > 0.3 and not conv.ramp then conv.ramp = abs(owed) / FIRST_PERSON_TIME end
+    if not busy then conv.ramp = nil end
+    if busy then
+      rate = owed / elapsed
+      if conv.ramp then rate = max(-conv.ramp, min(conv.ramp, rate)) end
+    end
   end
   -- Core.lua's cursor return holds the turn speed at its minimum for this
   -- frame: a speed factor computed against it would be wrong on the next.
   if speedsHeld then rate = 0 end
-  command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), x and "plate lock" or "distance")
+  command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), x and "plate lock" or "distance", elapsed)
   if not busy and conv.quiet > 0.5 then conv.live, conv.plate = nil, nil end
   return busy or gate
 end
