@@ -630,13 +630,17 @@ function UF:Configure_Power(frame)
     elseif frame.USE_MINI_POWERBAR then
         setSize(power,math.max(1,frame.POWERBAR_WIDTH-2*B),math.max(1,H-2*inset))
         local right=frame.ORIENTATION=='RIGHT'
+        -- Hung by its bottom edge on a whole pixel. Centred, a bar an odd
+        -- number of pixels tall straddles the grid: its top and right rim
+        -- vanish and a see-through row opens above it (seen on the pet frame).
+        local m=self.pixelMult or 1
+        local y=math.floor((self:Scale((H-B)/2)-power:GetHeight()/2)/m+.5)*m
+        local x=self:Scale(2*B+4)
         if frame.ORIENTATION=='MIDDLE' then
-            setPoint(power,'LEFT',frame,'BOTTOMLEFT',2*B+4,(H-B)/2)
-            setPoint(power,'RIGHT',frame,'BOTTOMRIGHT',-(2*B+4),(H-B)/2)
-        else
-            setPoint(power,right and 'LEFT' or 'RIGHT',frame,right and 'BOTTOMLEFT' or 'BOTTOMRIGHT',
-                (right and 1 or -1)*(2*B+4),(H-B)/2)
-        end
+            power:SetPoint('BOTTOMLEFT',frame,'BOTTOMLEFT',x,y)
+            power:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-x,y)
+        elseif right then power:SetPoint('BOTTOMLEFT',frame,'BOTTOMLEFT',x,y)
+        else power:SetPoint('BOTTOMRIGHT',frame,'BOTTOMRIGHT',-x,y) end
         power:SetFrameLevel(50)
     elseif frame.USE_POWERBAR_OFFSET then
         local offset=frame.POWERBAR_OFFSET;local sign=frame.ORIENTATION=='RIGHT' and -1 or 1
@@ -715,15 +719,16 @@ function UF:Configure_CustomTexts(frame)
     end
     if frame.squancherKey=='pet' then
         -- Owner: the pet's name is centred on the health area (beside the
-        -- portrait), and the happiness face sits against the left end of the
-        -- energy bar at the bar's height.
+        -- portrait), and the happiness face sits in the top left corner of
+        -- the portrait box, inside its rim, twice the energy bar's height.
         for _,fs in pairs({frame.Name,frame.customTexts['Unit name']}) do
             fs:ClearAllPoints();fs:SetPoint('CENTER',frame.Health,'CENTER',0,0);fs:SetJustifyH('CENTER')
         end
         local face,config=frame.customTexts.Happiness,c.customTexts and c.customTexts.Happiness
         if face and config and frame.USE_POWERBAR then
-            self:ApplyFont(face,config.font or self.db.font,math.max(4,frame.Power:GetHeight()),config.fontOutline or self.db.fontOutline)
-            face:ClearAllPoints();face:SetPoint('RIGHT',frame.Power,'LEFT',-1,0)
+            self:ApplyFont(face,config.font or self.db.font,math.max(4,2*frame.Power:GetHeight()),config.fontOutline or self.db.fontOutline)
+            local box=frame.Portrait or frame
+            face:ClearAllPoints();face:SetPoint('TOPLEFT',box,'TOPLEFT',self:Scale(1),-self:Scale(1))
         end
     end
 end
