@@ -81,7 +81,8 @@ end
 local function signature(state)
     probed=0
     local frame=state.frame
-    if not push(state.host) or not push(state.classFill,state.host:GetEffectiveScale()) then return nil end
+    local hostScale=state.host:GetEffectiveScale()
+    if not push(frame,hostScale) or not push(state.classFill,hostScale) then return nil end
     for _,key in ipairs(cutKeys) do
         local bar=frame[key]
         local included=bar and bar:IsShown() and (key~='Power' or not frame.POWERBAR_DETACHED)
@@ -106,7 +107,10 @@ local function fitPieces(state)
     hidePieces(state)
     local bounds=rectangle(state.classFill,state.host:GetEffectiveScale())
     local scale=state.host:GetEffectiveScale()
-    local origin=rectangle(state.host)
+    -- Pieces hang off the unit frame's own corner. The host's rectangle can
+    -- stay unresolved (seen on the target frame: nil for a whole session), and
+    -- a texture anchored to it is then never drawn.
+    local origin=rectangle(state.frame,scale)
     if not bounds or not origin or not number(scale) or scale<=0 then return end
     local rects={bounds}
     for _,key in ipairs(cutKeys) do
@@ -129,7 +133,7 @@ local function fitPieces(state)
         end
         local texture=piece.class
         texture:ClearAllPoints()
-        texture:SetPoint('BOTTOMLEFT',state.host,'BOTTOMLEFT',
+        texture:SetPoint('BOTTOMLEFT',state.frame,'BOTTOMLEFT',
             (rect[1]-origin[1])/scale,(rect[2]-origin[2])/scale)
         texture:SetSize((rect[3]-rect[1])/scale,(rect[4]-rect[2])/scale)
     end

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Target frame: the class/reaction colour fill under the bars was missing
+  (only the thin highlight showed); it now fills to the bottom rim like the
+  player frame.
 - Menu icons: the Friends button is exactly the size of the other icons and
   sits on the same spacing.
 - Menu icons: the green latency line under the game menu button is gone (the
