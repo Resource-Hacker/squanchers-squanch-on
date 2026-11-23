@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pet marker: the claw above your pet is half its old size and shows the
+  pet's threat: pulsing orange in combat, red while it holds aggro, orange
+  while it is losing it, and a larger pulsing yellow once the mob is on you.
 - Target frame: the class/reaction colour fill under the bars was missing
   (only the thin highlight showed); it now fills to the bottom rim like the
   player frame.

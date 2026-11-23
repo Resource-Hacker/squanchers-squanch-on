@@ -366,7 +366,7 @@
       "files": [
         {
           "path": "SquanchOn/HordeReticle.lua",
-          "sha256": "895c09efa2e60b63f2f0e3e96ecf72af1d95109824f6b949c96dd2a23858ede5"
+          "sha256": "d65e30ebb118b52b9894fa372b5a465c53526c6762d10b30cb9d33d9e37c2dbd"
         },
         {
           "path": "SquanchOn/HordeReticleData.lua",

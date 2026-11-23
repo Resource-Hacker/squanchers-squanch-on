@@ -204,6 +204,20 @@ local function updatePet()
     frame:SetPoint("CENTER", plate or group, "CENTER", 0, 40)
   end
   frame.unit = petUnit
+  -- Owner: half the imported 50px claw; white at rest, then by the pet's
+  -- threat on its mob (the pet's target, else mine): red while it holds
+  -- aggro, orange while it is losing it, pulsing yellow at 1.25 size once the
+  -- mob is on me, pulsing orange for any other pet combat.
+  local state
+  if plate and yes(_G.UnitAffectingCombat, "pet") then
+    local mob = yes(_G.UnitCanAttack, "pet", "pettarget") and "pettarget" or "target"
+    local pet = number(_G.UnitThreatSituation, "pet", mob)
+    local me = number(_G.UnitThreatSituation, "player", mob)
+    state = pet == 3 and "holds" or pet == 2 and "losing" or me and me >= 2 and "onMe" or "combat"
+  end
+  frame.petState = state
+  local size = frame.data.width * 0.5 * (state == "onMe" and 1.25 or 1)
+  frame.fillWidth, frame.fillHeight = size, size
   active(frame, plate ~= nil)
 end
 
@@ -332,6 +346,15 @@ local function render(now, elapsed)
         local p = pulse(now - (module.frames["No Combat"].shownAt or now), 2)
         frame.texture:SetVertexColor(color[1] * (1 - p), color[2] * (1 - p),
           color[3] * (1 - p), color[4] + (1 - color[4]) * p)
+      elseif id == "Pet Tracker" then
+        local state, color = frame.petState, d.color
+        local red, green, blue, alpha = color[1], color[2], color[3], color[4]
+        if state then
+          red, green, blue, alpha = 1, 0.5, 0, 1
+          if state == "holds" then green = 0.08 elseif state == "onMe" then green = 0.9 end
+          if state == "combat" or state == "onMe" then alpha = 0.45 + 0.55 * pulse(now, 0.8) end
+        end
+        frame.texture:SetVertexColor(red, green, blue, alpha)
       elseif id == "Mouseover Glow" or id == "Mouseover Dot" or id == "Target Range" then
         local color = d.color
         local red, green, blue = color[1], color[2], color[3]
