@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 3, follow = true, soft = false, softMode = "engine"}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 3, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -790,7 +790,8 @@ local function beginFocus(reticle)
     for index, name in ipairs(FOCUS) do
       if held[name] ~= nil then
         local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
-        setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
+        -- Held by the reticle the pull is stronger, so a walking unit cannot outpace it.
+        setCVar(name, kind == 1 and (reticle and soft and c.followStrength or c.strength) or kind == 2 and c.pitch or 1)
       end
     end
   end
@@ -1613,7 +1614,7 @@ function Camera:Command(command)
   local c = cfg.converge
   print(("Aim convergence: %s; fallback distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
-      tostring(c.pitch), c.held and ", held now" or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
+      tostring(c.pitch), c.held and (", held now, yaw CVar " .. tostring(GetCVar(FOCUS[1]))) or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
   print(("Aim convergence yaw: %s; now=%s; last zoom: unit=%s, distance=%s (%s); wanted=%s; applied=%.3f; frames read back from facing=%d; follow=%s, gate %s (at zoom start: gate %s, mouseover %s)")
     :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
       conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none",
