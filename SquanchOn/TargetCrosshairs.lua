@@ -357,9 +357,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   -- cut ends stay on the bar's edges instead of sliding into the bar.
   local pulseScale = 1
   local function layoutPiece(texture)
-    local size, d = ringSize, texture.inflate or 0
+    -- The click pulse is a real resize: the ring is laid out smaller, with the
+    -- bar's cut where the bar is, exactly as a smaller ring at rest would be.
+    local size, d = ringSize and ringSize * pulseScale, texture.inflate or 0
     local active = cutOn and size and size > 0 or false
-    local y, band = active and cutY / pulseScale, active and cutHeight / pulseScale
+    local y, band = active and cutY, active and cutHeight
     if texture.laidSize == size and texture.laidInflate == d and texture.laidY == y and texture.laidBand == band then return end
     texture.laidSize, texture.laidInflate, texture.laidY, texture.laidBand = size, d, y, band
     local twin = texture.twin
@@ -559,13 +561,23 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local clickAnimation = ringFrame:CreateAnimationGroup()
   local resizes = {}
   for order, scale in ipairs({0.75, 1 / 0.75}) do
-    local resize = clickAnimation:CreateAnimation("Scale")
+    -- A timer only: the size itself is laid out each frame (followPulse). A
+    -- Scale animation transformed the cut pieces and bent the split ends in.
+    local resize = clickAnimation:CreateAnimation("Animation")
     resizes[order] = resize
     resize:SetOrder(order)
-    resize:SetScale(scale, scale)
     resize:SetDuration(order == 1 and 0.18 or 0.26)
     resize:SetSmoothing(order == 1 and "OUT" or "IN_OUT")
-    resize:SetOrigin("CENTER", 0, 0)
+  end
+  local function sizePulse()
+    ringFrame:ClearAllPoints()
+    if pulseScale == 1 then
+      ringFrame:SetAllPoints(display)
+    else
+      ringFrame:SetPoint("CENTER", display, "CENTER")
+      ringFrame:SetSize(display:GetWidth() * pulseScale, display:GetHeight() * pulseScale)
+    end
+    layoutPieces()
   end
   -- The ring's current animated scale, from each step's smoothed progress.
   local function followPulse()
@@ -577,7 +589,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     end
     if scale ~= pulseScale then
       pulseScale = scale
-      if cutOn then layoutPieces() end
+      sizePulse()
     end
   end
   clickAnimation:SetScript("OnUpdate", followPulse)
@@ -590,7 +602,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     clickAnimation:Stop()
     if pulseScale ~= 1 then
       pulseScale = 1
-      if cutOn then layoutPieces() end
+      sizePulse()
     end
   end
   clickAnimation:SetScript("OnFinished", function()
@@ -640,12 +652,6 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       clearClick()
       clickGUID = guid
       self.clickFeedbackActive = true
-      -- Owner: the whole ring shrinks a little and returns, evenly in both
-      -- directions (a height-only squeeze turned it into a pinched ellipse,
-      -- seen in a 60 fps capture). The bar's cut follows the scale every frame
-      -- (followPulse), so the ring stays a circle behind the bar throughout.
-      resizes[1]:SetScale(0.75, 0.75)
-      resizes[2]:SetScale(1 / 0.75, 1 / 0.75)
       clickAnimation:Play()
       self.lastClickFeedbackSource = source
       self.clickFeedbackCount = (self.clickFeedbackCount or 0) + 1
