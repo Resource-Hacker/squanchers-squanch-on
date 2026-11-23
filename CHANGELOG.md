@@ -22,6 +22,11 @@
   another width (text could stop wrapping after turning quests in).
 - Drawer windows much wider than the chat (the talent trees) come up to the
   character sheet's height instead of being shrunk to the chat's width.
+- Camera: "Aim convergence" (Camera page, off by default). Zooming between
+  first person and third person turns the camera with the shoulder offset so
+  what the reticle is on stays under it. With a target the game's own target
+  focus does the turning for the length of the zoom; "Soft targeting while
+  zooming" does the same for the unit in front of you with nothing selected.
 - The click pulse on a selected target resizes the ring itself, so a ring
   split by the health bar shrinks and returns as a plain circle.
 - The world map shows its terrain on the first open after a reload (a loaded

@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 2, follow = false}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 2, follow = false, soft = false, softMode = "engine"}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -763,22 +763,34 @@ local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
   if not held then return end
-  c.held = nil
+  c.held, c.heldSoft, c.heldFocus = nil, nil, nil
   for name, value in pairs(held) do setCVar(name, value) end
 end
+-- Soft targeting (option): with nothing selected, the client's soft target
+-- picks the unit in front of the character for the length of the zoom, which
+-- gives the zoom a unit to work with. softMode "engine" also switches the
+-- target focus on for it; "distance" only reads that unit's range.
+local SOFT = {"SoftTargetEnemy", "SoftTargetFriend"}
 local function beginFocus()
   local c = cfg.converge
-  if not (c.enabled and c.focus) or c.held or transFn then return end
-  if not UnitExists("target") or UnitIsUnit("target", "player") then return end
+  if not c.enabled or c.held or transFn then return end
+  local target = UnitExists("target") and not UnitIsUnit("target", "player")
+  local soft = not target and c.soft and true or false
+  if not (target and c.focus or soft) then return end
+  local focus = target or c.softMode ~= "distance"
   local held = {}
-  for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end
-  c.held = held
-  for index, name in ipairs(FOCUS) do
-    if held[name] ~= nil then
-      local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
-      setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
+  if focus then for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end end
+  if soft then for _, name in ipairs(SOFT) do held[name] = GetCVar(name) end end
+  c.held, c.heldSoft, c.heldFocus = held, soft or nil, focus or nil
+  if focus then
+    for index, name in ipairs(FOCUS) do
+      if held[name] ~= nil then
+        local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
+        setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
+      end
     end
   end
+  if soft then for _, name in ipairs(SOFT) do if held[name] ~= nil then setCVar(name, 3) end end end
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 
@@ -837,8 +849,9 @@ end
 -- the open reticle's mouseover or the selected target; its range gives the distance.
 local function reticleUnit()
   local c = cfg.converge
-  if c.held then return nil, nil, c.distance, "target focus" end
-  local unit = gateOpen() and UnitExists("mouseover") and "mouseover" or UnitExists("target") and "target" or nil
+  if c.heldFocus and not c.heldSoft then return nil, nil, c.distance, "target focus" end
+  local unit = gateOpen() and UnitExists("mouseover") and "mouseover" or UnitExists("target") and "target"
+    or c.heldSoft and (UnitExists("softenemy") and "softenemy" or UnitExists("softfriend") and "softfriend") or nil
   if unit and addon.Range then
     local ok, low, high = pcall(addon.Range.Bracket, addon.Range, unit)
     local yards = ok and (low and high and (low + high) / 2 or high or low and low * 1.2)
@@ -972,6 +985,24 @@ local function stepConverge(zoom, elapsed)
   end
 
   -- Zoom gesture.
+  local softUnit = c.heldSoft and (UnitExists("softenemy") and "softenemy" or UnitExists("softfriend") and "softfriend") or nil
+  -- The client's target focus is turning the camera onto the target (or the
+  -- soft target): our own turn would only fight it.
+  if c.heldFocus and (softUnit or not c.heldSoft) then
+    conv.mode, conv.source, conv.unit = "target focus", softUnit and "soft target focus" or "target focus", softUnit or "target"
+    conv.bias = conv.applied - convergeAngle(offset, conv.distance)
+    conv.leadAngle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
+    if conv.quiet > 0.5 then conv.live = nil end
+    return false
+  end
+  -- The soft target answers a frame or two after it is switched on.
+  if softUnit and conv.source == "fallback" and addon.Range then
+    local ok, low, high = pcall(addon.Range.Bracket, addon.Range, softUnit)
+    if ok and low and high then
+      conv.distance, conv.source, conv.unit = max(1, (low + high) / 2), softUnit .. " range", softUnit
+      conv.bias = conv.beginApplied - convergeAngle(conv.beginOffset, conv.distance)
+    end
+  end
   local rate, busy = 0, false
   local x
   if conv.plate then
