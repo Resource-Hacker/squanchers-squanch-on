@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pet frame: the name is centred on the health area and the happiness face
+  sits at the left end of the energy bar, at the bar's height.
 - Pet marker: the claw above your pet is half its old size and shows the
   pet's threat: pulsing orange in combat, red while it holds aggro, orange
   while it is losing it, and a larger pulsing yellow once the mob is on you.

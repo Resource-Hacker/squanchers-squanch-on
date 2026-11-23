@@ -246,7 +246,7 @@ local function installTags()
             local happiness=happinessAPI()
             if public(happiness) and happiness then
                 local left=(3-happiness)*.1875
-                return string.format('|TInterface\\PetPaperDollFrame\\UI-PetHappiness:16:16:0:0:128:64:%d:%d:0:23|t',left*128,(left+.1875)*128)
+                return string.format('|TInterface\\PetPaperDollFrame\\UI-PetHappiness:0:0:0:0:128:64:%d:%d:0:23|t',left*128,(left+.1875)*128)
             end
         end
         return ''
@@ -712,6 +712,19 @@ function UF:Configure_CustomTexts(frame)
     end
     for key,fs in pairs(frame.customTexts) do
         if not c.customTexts[key] then frame:Untag(fs);fs:SetText('');fs:Hide() end
+    end
+    if frame.squancherKey=='pet' then
+        -- Owner: the pet's name is centred on the health area (beside the
+        -- portrait), and the happiness face sits against the left end of the
+        -- energy bar at the bar's height.
+        for _,fs in pairs({frame.Name,frame.customTexts['Unit name']}) do
+            fs:ClearAllPoints();fs:SetPoint('CENTER',frame.Health,'CENTER',0,0);fs:SetJustifyH('CENTER')
+        end
+        local face,config=frame.customTexts.Happiness,c.customTexts and c.customTexts.Happiness
+        if face and config and frame.USE_POWERBAR then
+            self:ApplyFont(face,config.font or self.db.font,math.max(4,frame.Power:GetHeight()),config.fontOutline or self.db.fontOutline)
+            face:ClearAllPoints();face:SetPoint('RIGHT',frame.Power,'LEFT',-1,0)
+        end
     end
 end
 
