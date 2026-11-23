@@ -980,12 +980,36 @@ local function gaugeRead(zoom, facing)
   return deg(right - rest), deg(right)
 end
 
+local function sameValue(a, b)
+  if a == b then return true end
+  local x, y = tonumber(a), tonumber(b)
+  return x ~= nil and y ~= nil and abs(x - y) < 0.0001
+end
 local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
   if not held then return end
   c.held, c.heldSoft, c.heldFocus, c.heldGate = nil, nil, nil, nil
-  for name, value in pairs(held) do setCVar(name, value) end
+  for name, value in pairs(held) do
+    setCVar(name, value)
+    -- The client refuses some of these in combat without a word (seen once,
+    -- from a situation change in combat): such a value is put back when
+    -- combat ends, or it would stay as the hold left it.
+    if not sameValue(GetCVar(name), tostring(value)) then
+      deferred[name] = tostring(value)
+      if not awaitingRegen then
+        awaitingRegen = true
+        events:RegisterEvent("PLAYER_REGEN_ENABLED")
+      end
+    end
+  end
+end
+-- The value a hold puts back: one still waiting to be put back counts, not
+-- what an earlier hold left behind.
+local function heldValue(name)
+  local waiting = deferred[name]
+  deferred[name] = nil
+  return waiting or GetCVar(name)
 end
 -- The engine's focus for a unit without a position. reticle: the open reticle
 -- asks; the engine's soft target, its cone at the narrowest, then takes the
@@ -1003,9 +1027,9 @@ local function beginFocus(reticle)
   if not (target and c.focus or soft) then return end
   local focus = target or reticle or c.softMode ~= "distance"
   local held = {}
-  if focus then for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end end
-  if soft then for _, name in ipairs(SOFT) do held[name] = GetCVar(name) end end
-  if reticle and soft then for _, name in ipairs(SOFT) do held[name .. "Arc"] = GetCVar(name .. "Arc") end end
+  if focus then for _, name in ipairs(FOCUS) do held[name] = heldValue(name) end end
+  if soft then for _, name in ipairs(SOFT) do held[name] = heldValue(name) end end
+  if reticle and soft then for _, name in ipairs(SOFT) do held[name .. "Arc"] = heldValue(name .. "Arc") end end
   c.held, c.heldSoft, c.heldFocus, c.heldGate = held, soft or nil, focus or nil, reticle and soft or nil
   if focus then
     for index, name in ipairs(FOCUS) do

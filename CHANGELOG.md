@@ -15,6 +15,9 @@
   quick zoom is corrected; those readings are now ignored.
 - Camera options: the Aim convergence section is rearranged around the above
   (stay, follow, catch-up, a limit for the turn).
+- Camera: a game setting borrowed for a zoom or for the open reticle that the
+  game refuses to put back in combat is now put back when combat ends, instead
+  of staying changed.
 - Pet frame: the name is centred on the health area and the happiness face
   sits in the top left corner of the portrait box.
 - Short power bars (the pet's energy bar) sit on whole pixels, so their rim is
