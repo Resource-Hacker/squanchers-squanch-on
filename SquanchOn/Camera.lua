@@ -917,6 +917,14 @@ local function beginConverge(zoom, from)
   conv.sample = nil
   if sampling and cfg.converge.sample ~= false and not gateOpen()
     and addon.ApplyCursorCentering and IsMouselooking and IsMouselooking() then
+    -- The sample must not be seen: the unit tooltip it would raise is hidden
+    -- for as long as it runs and a moment after.
+    if not conv.tooltipHooked and GameTooltip then
+      conv.tooltipHooked = true
+      GameTooltip:HookScript("OnShow", function(tooltip)
+        if conv.sample or (conv.sampled and GetTime() - conv.sampled < 0.15) then tooltip:Hide() end
+      end)
+    end
     addon:ApplyCursorCentering(true)
     conv.sample = 0
   end
@@ -970,7 +978,7 @@ local function stepConverge(zoom, elapsed)
       if ok and low and high then yards = (low + high) / 2 end
     end
     if yards or conv.sample >= 6 then
-      conv.sample = nil
+      conv.sample, conv.sampled = nil, GetTime()
       if not gateOpen() then addon:ApplyCursorCentering(false) end
       if yards then
         conv.distance, conv.source, conv.unit = max(1, yards), "reticle sample", "mouseover"
