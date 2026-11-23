@@ -785,6 +785,9 @@ local function beginFocus(reticle)
   local held = {}
   if focus then for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end end
   if soft then for _, name in ipairs(SOFT) do held[name] = GetCVar(name) end end
+  -- Held by the reticle, the soft target's cone is at its narrowest (0), so
+  -- the unit the game picks is the one under the reticle as often as it can be.
+  if reticle and soft then for _, name in ipairs(SOFT) do held[name .. "Arc"] = GetCVar(name .. "Arc") end end
   c.held, c.heldSoft, c.heldFocus, c.heldGate = held, soft or nil, focus or nil, reticle and soft or nil
   if focus then
     for index, name in ipairs(FOCUS) do
@@ -796,6 +799,7 @@ local function beginFocus(reticle)
     end
   end
   if soft then for _, name in ipairs(SOFT) do if held[name] ~= nil then setCVar(name, 3) end end end
+  if reticle and soft then for _, name in ipairs(SOFT) do if held[name .. "Arc"] ~= nil then setCVar(name .. "Arc", 0) end end end
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 
