@@ -824,38 +824,27 @@ local function screen()
 end
 local function gateOpen() return addon.IsNativeMouseoverOpen and addon:IsNativeMouseoverOpen() and true or false end
 local function mouseoverPlate()
+  if true then return end           -- plates cannot be measured on this client (see reticleUnit)
   if not (gateOpen() and UnitExists("mouseover")) then return end
   local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
   local unit = ok and plate and plate.namePlateUnitToken
   if type(unit) == "string" and not secret(unit) and pcall(plateX, plate, unit) then return plate, unit end
 end
 -- The unit the reticle is on when a zoom starts: plate, unit, yards, source.
+-- This client refuses to measure nameplates ("Can't measure restricted
+-- regions", checked in game with the reticle open on an NPC), and each refused
+-- call counts as a UI error, so no plate is ever measured. The unit comes from
+-- the open reticle's mouseover or the selected target; its range gives the distance.
 local function reticleUnit()
   local c = cfg.converge
   if c.held then return nil, nil, c.distance, "target focus" end
-  if not (C_NamePlate and C_NamePlate.GetNamePlates) then return nil, nil, c.distance, "fallback" end
-  local plate, unit = mouseoverPlate()
-  if not plate then
-    local cx, cy, width, height = screen()
-    local best
-    for _, candidate in ipairs(C_NamePlate.GetNamePlates()) do
-      local token = candidate.namePlateUnitToken
-      if type(token) == "string" and not secret(token) and not UnitIsUnit(token, "player") then
-        local ok, x, y = pcall(plateX, candidate, token)
-        -- Plates sit above the head, so the vertical allowance is the wider one.
-        if ok and x and abs(y - cy) <= height * 0.3 then
-          local dx = abs(x - cx)
-          if dx <= width * 0.15 and (not best or dx < best) then best, plate, unit = dx, candidate, token end
-        end
-      end
-    end
-  end
+  local unit = gateOpen() and UnitExists("mouseover") and "mouseover" or UnitExists("target") and "target" or nil
   if unit and addon.Range then
     local ok, low, high = pcall(addon.Range.Bracket, addon.Range, unit)
     local yards = ok and (low and high and (low + high) / 2 or high or low and low * 1.2)
-    if yards then return plate, unit, max(1, yards), "plate range" end
+    if yards then return nil, unit, max(1, yards), unit .. " range" end
   end
-  return plate, unit, c.distance, "fallback"
+  return nil, unit, c.distance, "fallback"
 end
 -- Turn speed that brings a plate from x to goal; zero inside one physical pixel.
 local function lockRate(x, goal, width, elapsed)
