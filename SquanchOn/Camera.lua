@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 2, follow = false, soft = false, softMode = "engine"}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 3, follow = true, soft = false, softMode = "engine"}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -763,7 +763,7 @@ local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
   if not held then return end
-  c.held, c.heldSoft, c.heldFocus = nil, nil, nil
+  c.held, c.heldSoft, c.heldFocus, c.heldGate = nil, nil, nil, nil
   for name, value in pairs(held) do setCVar(name, value) end
 end
 -- Soft targeting (option): with nothing selected, the client's soft target
@@ -771,17 +771,21 @@ end
 -- gives the zoom a unit to work with. softMode "engine" also switches the
 -- target focus on for it; "distance" only reads that unit's range.
 local SOFT = {"SoftTargetEnemy", "SoftTargetFriend"}
-local function beginFocus()
+-- reticle: the open reticle asks (follow option). The client cannot tell an
+-- addon where a nameplate is on screen, so following the unit under the
+-- reticle is left to the engine: its soft target takes the unit in front and
+-- its target focus keeps the camera on it until the reticle closes.
+local function beginFocus(reticle)
   local c = cfg.converge
   if not c.enabled or c.held or transFn then return end
   local target = UnitExists("target") and not UnitIsUnit("target", "player")
-  local soft = not target and c.soft and true or false
+  local soft = not target and (c.soft or reticle) and true or false
   if not (target and c.focus or soft) then return end
-  local focus = target or c.softMode ~= "distance"
+  local focus = target or reticle or c.softMode ~= "distance"
   local held = {}
   if focus then for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end end
   if soft then for _, name in ipairs(SOFT) do held[name] = GetCVar(name) end end
-  c.held, c.heldSoft, c.heldFocus = held, soft or nil, focus or nil
+  c.held, c.heldSoft, c.heldFocus, c.heldGate = held, soft or nil, focus or nil, reticle and soft or nil
   if focus then
     for index, name in ipairs(FOCUS) do
       if held[name] ~= nil then
@@ -911,6 +915,7 @@ local function beginConverge(zoom, from)
     if from >= 0.05 then conv.applied = convergeAngle(shoulderAt(from), select(3, reticleUnit())) end
   end
   conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
+  conv.beginGate, conv.beginMouse = gateOpen(), UnitExists("mouseover") and true or false
   conv.beginApplied, conv.beginOffset = conv.applied, shoulderAt(from)
   conv.bias = conv.applied - convergeAngle(conv.beginOffset, conv.distance)
   conv.lockX = nil
@@ -1003,6 +1008,15 @@ local function stepConverge(zoom, elapsed)
       conv.bias = conv.beginApplied - convergeAngle(conv.beginOffset, conv.distance)
     end
   end
+  -- The reticle opened on a unit (or moved to another) after the gesture
+  -- began: its distance takes over from here, without a jump.
+  if conv.unit ~= "mouseover" and not c.heldSoft and gateOpen() and UnitExists("mouseover") then
+    local _, unit, yards, source = reticleUnit()
+    if unit == "mouseover" then
+      conv.unit, conv.distance, conv.source = unit, yards, source
+      conv.bias = conv.applied - convergeAngle(offset, yards)
+    end
+  end
   local rate, busy = 0, false
   local x
   if conv.plate then
@@ -1059,8 +1073,11 @@ end
 -- Core's gate changes: following starts with it and stops on the very call.
 local function gateChanged()
   if not (Camera.active and cfg and cfg.converge.follow) then return end
-  if gateOpen() then Camera:Wake()
-  elseif conv.mode == "follow" then command(0, nil) end
+  if gateOpen() then beginFocus(true); Camera:Wake()
+  else
+    if cfg.converge.heldGate then endFocus() end
+    if conv.mode == "follow" then command(0, nil) end
+  end
 end
 
 local lastZoom
@@ -1079,7 +1096,7 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   elseif busy then Camera.quiet = 0
   else
     Camera.quiet = Camera.quiet + elapsed
-    if Camera.quiet > FOCUS_SETTLE then endFocus() end
+    if Camera.quiet > FOCUS_SETTLE and not (cfg.converge.heldGate and gateOpen()) then endFocus() end
     if Camera.quiet > 0.5 then
       stopConverge()              -- the next gesture picks its distance afresh; offset changes made while asleep are not turned
       applyZoom(zoom, true)       -- land on the exact curve values before sleeping
@@ -1360,6 +1377,9 @@ local function normalize(config)
     if config.converge.distance == 40 then config.converge.distance = nil end
     config.converge.rev = 2
   end
+  -- rev 3: the open reticle follows the unit under it (owner request); the
+  -- stored false was the default of an option that could not work.
+  if config.converge.rev < 3 then config.converge.follow, config.converge.rev = nil, 3 end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
@@ -1594,10 +1614,11 @@ function Camera:Command(command)
   print(("Aim convergence: %s; fallback distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
       tostring(c.pitch), c.held and ", held now" or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
-  print(("Aim convergence yaw: %s; now=%s; last zoom: unit=%s, distance=%s (%s); wanted=%s; applied=%.3f; frames read back from facing=%d; follow=%s, gate %s")
+  print(("Aim convergence yaw: %s; now=%s; last zoom: unit=%s, distance=%s (%s); wanted=%s; applied=%.3f; frames read back from facing=%d; follow=%s, gate %s (at zoom start: gate %s, mouseover %s)")
     :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
       conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none",
       conv.wanted and ("%.3f"):format(conv.wanted) or "none (plate lock or idle)", conv.applied, conv.read,
-      c.follow and "on" or "off", gateOpen() and "open" or "closed"))
+      c.follow and "on" or "off", gateOpen() and "open" or "closed",
+      conv.beginGate and "open" or "closed", conv.beginMouse and "yes" or "no"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Camera: with nothing selected, holding the reticle open now picks up the
+  unit in front of you and keeps the camera on it until you let go (new
+  option under Aim convergence, on by default).
 - Pet frame: the name is centred on the health area and the happiness face
   sits in the top left corner of the portrait box.
 - Short power bars (the pet's energy bar) sit on whole pixels, so their rim is
