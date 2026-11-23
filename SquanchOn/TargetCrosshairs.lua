@@ -640,12 +640,12 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       clearClick()
       clickGUID = guid
       self.clickFeedbackActive = true
-      -- Owner: a ring split by the bar meets it at the bar's ends; a uniform
-      -- shrink slid those ends inward along the bar. A split ring therefore
-      -- pulses toward the bar (height only) and its ends stay where they are.
-      local across = cutOn and 1 or 0.75
-      resizes[1]:SetScale(across, 0.75)
-      resizes[2]:SetScale(1 / across, 1 / 0.75)
+      -- Owner: the whole ring shrinks a little and returns, evenly in both
+      -- directions (a height-only squeeze turned it into a pinched ellipse,
+      -- seen in a 60 fps capture). The bar's cut follows the scale every frame
+      -- (followPulse), so the ring stays a circle behind the bar throughout.
+      resizes[1]:SetScale(0.75, 0.75)
+      resizes[2]:SetScale(1 / 0.75, 1 / 0.75)
       clickAnimation:Play()
       self.lastClickFeedbackSource = source
       self.clickFeedbackCount = (self.clickFeedbackCount or 0) + 1
