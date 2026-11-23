@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Menu icons: the green latency line under the game menu button is gone (the
+  button's tooltip still shows latency).
 - Chat header: the tab row is narrower and fitted to the menu icons, each icon
   centred in its own cell with even space all round; Friends matches them.
 - Quest mobs: an enemy you still need for a quest shows a small skull on its

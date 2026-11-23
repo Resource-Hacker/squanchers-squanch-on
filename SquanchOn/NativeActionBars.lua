@@ -612,6 +612,13 @@ function Bars:Initialize()
         if MicroMenuContainer.ApplySystemAnchor then hooksecurefunc(MicroMenuContainer, "ApplySystemAnchor", function() self:LayoutMicroMenu() end) end
         if MicroMenu.UpdateScale then hooksecurefunc(MicroMenu, "UpdateScale", function() self:LayoutMicroMenu() end) end
         observeHover(MicroMenuContainer)
+        -- The game menu button's latency bar rides the header's bottom rim; the
+        -- button's tooltip still reports latency.
+        local latency = MainMenuMicroButton and MainMenuMicroButton.MainMenuBarPerformanceBar or MainMenuBarPerformanceBar
+        if latency then
+            latency:Hide()
+            hooksecurefunc(latency, "Show", latency.Hide)
+        end
         -- Chat geometry and tab changes move the room this row may use.
         if ns.DarkSkin then
             hooksecurefunc(ns.DarkSkin, "LayoutChat", function() self:QueueMicroMenu() end)
