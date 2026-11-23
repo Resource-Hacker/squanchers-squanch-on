@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 3, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
+    converge = {enabled = false, focus = false, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 4, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -1385,6 +1385,10 @@ local function normalize(config)
   -- rev 3: the open reticle follows the unit under it (owner request); the
   -- stored false was the default of an option that could not work.
   if config.converge.rev < 3 then config.converge.follow, config.converge.rev = nil, 3 end
+  -- rev 4: target focus off for zooms (owner request). The engine lets the
+  -- view swing back when the focus is released after a zoom; the turn by the
+  -- target's distance stays where the zoom left it.
+  if config.converge.rev < 4 then config.converge.focus, config.converge.rev = nil, 4 end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
