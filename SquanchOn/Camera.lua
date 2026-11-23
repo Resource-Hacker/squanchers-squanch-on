@@ -291,10 +291,11 @@ local function build(profile, defaults)
       addIncrements = pick(saved.reactiveZoomAddIncrements, 2.5), incAddDifference = pick(saved.reactiveZoomIncAddDifference, 1.2),
       maxZoomTime = pick(saved.reactiveZoomMaxZoomTime, 0.1), easing = saved.reactiveZoomEasingFunc or "OutQuad",
       restore = profile.zoomRestoreSetting or "adaptive", transitionEasing = "InOutQuad"},
-    -- Aim convergence (original). scale: yards of sideways camera shift per
+    -- Aim convergence (original). distance: used when no nameplate is near the
+    -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 40, scale = 1, pitch = 0, rev = 1, follow = false}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -781,43 +782,233 @@ local function beginFocus()
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 
--- Fixed-distance part: the camera is turned so that the centre ray keeps
--- crossing the character's forward line `distance` yards ahead. The ray passes
--- the pivot at the shoulder offset, so the angle is asin(offset / distance);
--- each frame the camera is turned by the change of that angle. The turn is
--- commanded as a speed and accounted over time, like the situation rotations.
+-- Yaw part, three sources, one yaw command:
+-- * Follow (option, off by default): while the reticle's mouseover gate is
+--   open and nothing is selected, the mouseover unit's nameplate is held at the
+--   aim point's X. Like the owner's own turning, this is not counted below.
+-- * Plate lock: during a zoom the nameplate nearest the reticle is held at the
+--   X it had when the zoom started. No distance is needed.
+-- * Distance: without a measurable plate the camera is turned so that the
+--   centre ray keeps crossing the character's forward line `distance` yards
+--   ahead (that unit's range bracket, else the fallback slider). The ray passes
+--   the pivot at the shoulder offset, so the angle is asin(offset / distance).
+-- conv.applied is the yaw the two zoom sources have turned in total; only
+-- differences are ever commanded and first person always wants zero, so
+-- in/out cycles cannot creep and the owner's own turning is never undone.
 local CONVERGE_MAX_RATE = 120       -- degrees per second
-local conv = {owed = 0, rate = 0}
-local function convergeAngle(zoom)
+local LOCK_GAIN = 0.35              -- share of the plate error closed per frame
+local LOCK_SPAN = 100               -- degrees assumed across the screen width; the loop absorbs the error
+local conv = {applied = 0, rate = 0, read = 0, quiet = huge}
+local function secret(value) return issecretvalue and issecretvalue(value) end
+-- First person has no shoulder offset whatever the curve says at zoom 0.
+local function shoulderAt(zoom) return zoom < 0.05 and 0 or (resolve("test_cameraOverShoulder", zoom) or 0) end
+local function convergeAngle(offset, distance)
+  return deg(asin(max(-1, min(1, offset * cfg.converge.scale / max(1, distance)))))
+end
+-- Screen X of a unit's nameplate in scale-1 units. Errors on restricted plates
+-- (and returns nothing once the plate left the unit): call through pcall.
+local function plateX(plate, unit)
+  if plate.namePlateUnitToken ~= unit or not plate:IsShown() then return end
+  local x, y = plate:GetCenter()
+  local scale = plate:GetEffectiveScale()
+  return x * scale, y * scale
+end
+local function screen()
+  local scale = WorldFrame:GetEffectiveScale()
+  local cx, cy = WorldFrame:GetCenter()
+  return cx * scale, cy * scale, WorldFrame:GetWidth() * scale, WorldFrame:GetHeight() * scale
+end
+local function gateOpen() return addon.IsNativeMouseoverOpen and addon:IsNativeMouseoverOpen() and true or false end
+local function mouseoverPlate()
+  if not (gateOpen() and UnitExists("mouseover")) then return end
+  local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
+  local unit = ok and plate and plate.namePlateUnitToken
+  if type(unit) == "string" and not secret(unit) and pcall(plateX, plate, unit) then return plate, unit end
+end
+-- The unit the reticle is on when a zoom starts: plate, unit, yards, source.
+local function reticleUnit()
   local c = cfg.converge
-  -- First person has no shoulder offset whatever the curve says at zoom 0.
-  local offset = zoom < 0.05 and 0 or (resolve("test_cameraOverShoulder", zoom) or 0)
-  return deg(asin(max(-1, min(1, offset * c.scale / max(1, c.distance)))))
-end
-local function stopConverge()
-  if conv.rate ~= 0 then drive("yaw", 0) end
-  conv.owed, conv.rate, conv.angle = 0, 0, nil
-end
-local function stepConverge(zoom, elapsed)
-  -- Not during a situation's own turn or setting transition.
-  if not cfg.converge.enabled or transFn or #turns > 0 then
-    if conv.angle then stopConverge() end
-    return false
+  if c.held then return nil, nil, c.distance, "target focus" end
+  if not (C_NamePlate and C_NamePlate.GetNamePlates) then return nil, nil, c.distance, "fallback" end
+  local plate, unit = mouseoverPlate()
+  if not plate then
+    local cx, cy, width, height = screen()
+    local best
+    for _, candidate in ipairs(C_NamePlate.GetNamePlates()) do
+      local token = candidate.namePlateUnitToken
+      if type(token) == "string" and not secret(token) and not UnitIsUnit(token, "player") then
+        local ok, x, y = pcall(plateX, candidate, token)
+        -- Plates sit above the head, so the vertical allowance is the wider one.
+        if ok and x and abs(y - cy) <= height * 0.3 then
+          local dx = abs(x - cx)
+          if dx <= width * 0.15 and (not best or dx < best) then best, plate, unit = dx, candidate, token end
+        end
+      end
+    end
   end
-  local angle = convergeAngle(zoom)
-  conv.owed = conv.owed + angle - (conv.angle or angle) - conv.rate * elapsed
-  conv.angle = angle
-  local rate = 0
-  -- Core.lua's cursor return holds the turn speed at its minimum for this
-  -- frame: a speed factor computed against it would be wrong on the next.
-  if abs(conv.owed) > 0.002 and not speedsHeld then
-    rate = max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, conv.owed / max(elapsed, 1 / 120)))
+  if unit and addon.Range then
+    local ok, low, high = pcall(addon.Range.Bracket, addon.Range, unit)
+    local yards = ok and (low and high and (low + high) / 2 or high or low and low * 1.2)
+    if yards then return plate, unit, max(1, yards), "plate range" end
   end
+  return plate, unit, c.distance, "fallback"
+end
+-- Turn speed that brings a plate from x to goal; zero inside one physical pixel.
+local function lockRate(x, goal, width, elapsed)
+  local pixels = GetPhysicalScreenSize and GetPhysicalScreenSize() or 1920
+  if abs(x - goal) * pixels <= width then return 0 end
+  -- Plate right of the goal: the view turns right, which is a negative yaw.
+  return (goal - x) / width * LOCK_SPAN * LOCK_GAIN / max(elapsed, 1 / 120)
+end
+-- The aim point's X: the client's cursor centre plus the owner's aim offset.
+local function aimX()
+  local cx = screen()
+  if GetCursorCenterPosition then
+    local ok, x = pcall(GetCursorCenterPosition)
+    if ok and type(x) == "number" then cx = x end
+  end
+  local reticle = addon.HordeReticle
+  local group = reticle and reticle.group
+  return cx + (tonumber(addon.db and addon.db.aimXOffset) or 0) * (group or UIParent):GetEffectiveScale()
+end
+-- The character faces along the camera while mouselooking, so its facing reads
+-- the camera yaw back (degrees, growing to the left).
+local function readFacing()
+  if not (IsMouselooking and IsMouselooking()) then return end
+  local ok, facing = pcall(GetPlayerFacing)
+  if ok and type(facing) == "number" and not secret(facing) then return deg(facing) end
+end
+local function command(rate, mode)
+  conv.counted = mode ~= "follow"
+  conv.mode = mode
   if rate ~= conv.rate then
     conv.rate = rate
     drive("yaw", rate)              -- positive: the camera orbits right, the view turns left
   end
-  return abs(conv.owed) > 0.002
+end
+local function stopConverge()
+  if conv.rate ~= 0 then drive("yaw", 0) end
+  conv.rate, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, huge
+end
+-- A zoom gesture begins; its choices stay until it settles. The wheel calls
+-- this before the client moves, so the plate is recorded where the owner aimed.
+local function beginConverge(zoom, from)
+  conv.live, conv.quiet = true, 0
+  conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
+  conv.bias = conv.applied - convergeAngle(shoulderAt(from), conv.distance)
+  conv.lockX = nil
+  if conv.plate then
+    local ok, x = pcall(plateX, conv.plate, conv.unit)
+    conv.lockX = ok and x or nil
+  end
+end
+local function armConverge()
+  if cfg.converge.enabled and not conv.live and not transFn and #turns == 0 then
+    local zoom = GetCameraZoom()
+    beginConverge(zoom, zoom)
+  end
+end
+local function stepConverge(zoom, elapsed)
+  local c = cfg.converge
+  local was = conv.seen
+  conv.seen = zoom
+  -- Not during a situation's own turn or setting transition.
+  if not (c.enabled or c.follow) or transFn or #turns > 0 then
+    if conv.live or conv.rate ~= 0 then stopConverge() end
+    return false
+  end
+  -- What the last frame's command turned. The client may have used that
+  -- frame's time or this one's; when the facing moved by an amount inside that
+  -- window it is taken as exact, anything else (the owner turning, no
+  -- mouselook) falls back to this frame's time and is never corrected for.
+  local facing = readFacing()
+  if conv.rate ~= 0 and conv.counted then
+    local step = conv.rate * elapsed
+    local other = conv.rate * (conv.elapsed or elapsed)
+    if facing and conv.facing and abs(step) >= 0.05 then
+      local moved = (facing - conv.facing + 180) % 360 - 180
+      local slack = 0.15 * max(abs(step), abs(other)) + 0.02
+      if moved >= min(step, other) - slack and moved <= max(step, other) + slack then
+        step, conv.read = moved, conv.read + 1
+      end
+    end
+    conv.applied = conv.applied + step
+  end
+  conv.facing, conv.elapsed = facing, elapsed
+
+  local moving = was ~= nil and abs(zoom - was) > 0.0005
+  local resumed = moving and conv.quiet > 0.15
+  conv.quiet = moving and 0 or conv.quiet + elapsed
+  local offset = shoulderAt(zoom)
+  if c.enabled and moving and not conv.live then    -- a zoom the wheel did not start
+    -- Leaving first person, the first frame may already carry the offset.
+    beginConverge(zoom, was < 0.05 and was or zoom)
+    resumed = false
+  end
+
+  -- Follow the unit under the open reticle.
+  local gate = c.follow and gateOpen()
+  if gate and not speedsHeld and not UnitExists("target") then
+    local plate, unit = mouseoverPlate()
+    local ok, x
+    if plate then ok, x = pcall(plateX, plate, unit) end
+    if ok and x then
+      local _, _, width = screen()
+      local rate = lockRate(x, aimX(), width, elapsed)
+      command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), "follow")
+      conv.lockX = nil                -- the zoom lock starts again from where following leaves the plate
+      conv.bias = conv.applied - convergeAngle(offset, conv.distance or c.distance)
+      return true
+    end
+  end
+  if not conv.live then
+    command(0, gate and "follow (no plate)" or nil)
+    return gate
+  end
+
+  -- Zoom gesture.
+  local rate, busy = 0, false
+  local x
+  if conv.plate then
+    local ok, value = pcall(plateX, conv.plate, conv.unit)
+    x = ok and value
+    if not x then                     -- plate gone: carry on by distance from the yaw turned so far
+      conv.plate = nil
+      conv.bias = conv.applied - convergeAngle(offset, conv.distance)
+    end
+  end
+  if x and zoom < 0.05 then           -- first person: back to zero; the lock starts from here
+    conv.lockX, x = x, nil
+  elseif not x then conv.lockX = nil end
+  if x then
+    if resumed or not conv.lockX then conv.lockX = x end
+    conv.wanted = nil
+    if conv.quiet < 0.15 then
+      local _, _, width = screen()
+      rate = lockRate(x, conv.lockX, width, elapsed)
+      busy = rate ~= 0
+    end
+    -- What the lock turned is the base for a later hand-over to the distance.
+    conv.bias = conv.applied - convergeAngle(offset, conv.distance)
+  else
+    local wanted = zoom < 0.05 and 0 or conv.bias + convergeAngle(offset, conv.distance)
+    conv.wanted = wanted
+    local owed = wanted - conv.applied
+    busy = abs(owed) > 0.002
+    if busy then rate = owed / max(elapsed, 1 / 120) end
+  end
+  -- Core.lua's cursor return holds the turn speed at its minimum for this
+  -- frame: a speed factor computed against it would be wrong on the next.
+  if speedsHeld then rate = 0 end
+  command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), x and "plate lock" or "distance")
+  if not busy and conv.quiet > 0.5 then conv.live, conv.plate = nil, nil end
+  return busy or gate
+end
+-- Core's gate changes: following starts with it and stops on the very call.
+local function gateChanged()
+  if not (Camera.active and cfg and cfg.converge.follow) then return end
+  if gateOpen() then Camera:Wake()
+  elseif conv.mode == "follow" then command(0, nil) end
 end
 
 local lastZoom
@@ -838,7 +1029,7 @@ driver:SetScript("OnUpdate", function(self, elapsed)
     Camera.quiet = Camera.quiet + elapsed
     if Camera.quiet > FOCUS_SETTLE then endFocus() end
     if Camera.quiet > 0.5 then
-      stopConverge()              -- offset changes made while asleep are not turned
+      stopConverge()              -- the next gesture picks its distance afresh; offset changes made while asleep are not turned
       applyZoom(zoom, true)       -- land on the exact curve values before sleeping
       self:Hide()
     end
@@ -859,6 +1050,7 @@ local function wheel(zoomIn, increments)
   local native = zoomIn and nativeZoomIn or nativeZoomOut
   if not Camera.active then return native(increments) end
   beginFocus()
+  armConverge()
   if not zoomSetting("reactive") or increments ~= 1 then
     stopEase()
     Camera:Wake()
@@ -1108,6 +1300,8 @@ local function normalize(config)
   config.zoom = type(config.zoom) == "table" and config.zoom or {}
   for key, value in pairs(shipped.zoom) do if config.zoom[key] == nil then config.zoom[key] = value end end
   config.converge = type(config.converge) == "table" and config.converge or {}
+  -- The first default distance (25) was too short for the untargeted fallback.
+  if config.converge.rev == nil and config.converge.distance == 25 then config.converge.distance = nil end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
@@ -1158,6 +1352,7 @@ function Camera:Enable()
     for _, name in ipairs({"MoveViewInStart", "MoveViewOutStart", "SetView", "ResetView"}) do
       if _G[name] then hooksecurefunc(name, wake) end
     end
+    if addon.SetMouseoverHeld then hooksecurefunc(addon, "SetMouseoverHeld", gateChanged) end
   end
   for _, event in ipairs({"PLAYER_ENTERING_WORLD", "PLAYER_MOUNT_DISPLAY_CHANGED", "UNIT_ENTERED_VEHICLE",
     "UNIT_EXITED_VEHICLE", "PLAYER_CONTROL_GAINED", "CINEMATIC_STOP", "PLAYER_LOGOUT"}) do
@@ -1338,8 +1533,13 @@ function Camera:Command(command)
       tostring(GetCVar("cameraFov")), resolve("cameraFov", zoom) or 0, tostring(GetCVar("test_cameraDynamicPitch")),
       current and current.name or "none", self:IsAwake() and "running" or "asleep", errors, waiting))
   local c = cfg.converge
-  print(("Aim convergence: %s; distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
+  print(("Aim convergence: %s; fallback distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
       tostring(c.pitch), c.held and ", held now" or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
+  print(("Aim convergence yaw: %s; now=%s; last zoom: unit=%s, distance=%s (%s); wanted=%s; applied=%.3f; frames read back from facing=%d; follow=%s, gate %s")
+    :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
+      conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none",
+      conv.wanted and ("%.3f"):format(conv.wanted) or "none (plate lock or idle)", conv.applied, conv.read,
+      c.follow and "on" or "off", gateOpen() and "open" or "closed"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end
