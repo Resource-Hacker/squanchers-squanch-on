@@ -107,17 +107,16 @@ Real captures from the author's play on 2026-11-12, shown as they happened
 <table>
   <tr>
     <td width="58%"><img src="docs/images/horde-reticle-gameplay.png" alt="Durotar at sunset behind the author's orc, with the Horde reticle at the screen centre and an inset of its game pixels at 6x." width="580"></td>
-    <td width="42%"><img src="docs/images/target-ring-gameplay.png" alt="Selected Duokna nameplate with the dashed target ring and merchant icon." width="360"></td>
+    <td width="42%"><img src="docs/images/target-ring-gameplay.png" alt="A selected weapon merchant: the solid target ring sits in her nameplate, cut around the health bar, with the anvil icon above." width="360"></td>
   </tr>
   <tr>
     <td><strong>The world reticle.</strong> The Horde emblem marks the aim point while you steer (mouseover closed, so no dot). In game it is roughly 42 pixels tall on a 1440-pixel-high screen; the inset shows its actual pixels at 6x.</td>
-    <td><strong>The selected-target ring.</strong> A separate marker follows the target's visible nameplate. The ring is now one solid line inside the selected plate; this capture shows the earlier dashed art.</td>
+    <td><strong>The selected-target ring.</strong> One solid ring inside the selected plate, cut around the health bar. Here on a weapon merchant, with her interaction icon above.</td>
   </tr>
 </table>
 
-The reticle shot is a 1.0 screenshot from 2026-11-12. The target-ring capture is
-from the author's earlier setup, with Plater nameplates. A still image does not
-demonstrate the hold/release transition or certify the rewrite.
+Both are real screenshots of the current addon (2026-11-12 and 2026-11-22). A
+still image does not demonstrate the hold/release transition.
 [Image provenance and credits](docs/images/README.md).
 
 ## Read range at a glance
