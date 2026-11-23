@@ -795,7 +795,7 @@ end
 -- conv.applied is the yaw the two zoom sources have turned in total; only
 -- differences are ever commanded and first person always wants zero, so
 -- in/out cycles cannot creep and the owner's own turning is never undone.
-local CONVERGE_MAX_RATE = 120       -- degrees per second
+local CONVERGE_MAX_RATE = 600       -- degrees per second; the first-person step must land in one frame at 240 fps
 local LOCK_GAIN = 0.35              -- share of the plate error closed per frame
 local LOCK_SPAN = 100               -- degrees assumed across the screen width; the loop absorbs the error
 local conv = {applied = 0, rate = 0, read = 0, quiet = huge}
@@ -897,6 +897,7 @@ local function beginConverge(zoom, from)
   conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
   conv.bias = conv.applied - convergeAngle(shoulderAt(from), conv.distance)
   conv.lockX = nil
+  conv.leadAngle = from < 0.05 and 0 or convergeAngle(shoulderAt(from), conv.distance)
   if conv.plate then
     local ok, x = pcall(plateX, conv.plate, conv.unit)
     conv.lockX = ok and x or nil
@@ -983,9 +984,16 @@ local function stepConverge(zoom, elapsed)
   if x then
     if resumed or not conv.lockX then conv.lockX = x end
     conv.wanted = nil
+    -- The turn the offset change calls for is applied in the same frame as the
+    -- offset (by the unit's estimated distance); the plate only trims what that
+    -- estimate got wrong. Waiting for the plate to move first made the turn
+    -- arrive visibly after the zoom.
+    local angle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
+    local lead = conv.leadAngle and (angle - conv.leadAngle) / max(elapsed, 1 / 120) or 0
+    conv.leadAngle = angle
     if conv.quiet < 0.15 then
       local _, _, width = screen()
-      rate = lockRate(x, conv.lockX, width, elapsed)
+      rate = lead + lockRate(x, conv.lockX, width, elapsed)
       busy = rate ~= 0
     end
     -- What the lock turned is the base for a later hand-over to the distance.
@@ -993,6 +1001,7 @@ local function stepConverge(zoom, elapsed)
   else
     local wanted = zoom < 0.05 and 0 or conv.bias + convergeAngle(offset, conv.distance)
     conv.wanted = wanted
+    conv.leadAngle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
     local owed = wanted - conv.applied
     busy = abs(owed) > 0.002
     if busy then rate = owed / max(elapsed, 1 / 120) end
