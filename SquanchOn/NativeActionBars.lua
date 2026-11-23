@@ -350,8 +350,13 @@ function Bars:LayoutMicroMenu()
     -- toast shows or hides, and must not carry the micro buttons with it.
     local widths = {}
     if friends then
-        -- Friends' art fills its button: the button itself is the art box.
-        skin:PinChatFriends((friendCell - seam - 2 * MARGIN * px) / useScale, (header - 2 * MARGIN * px) / useScale, useScale, MARGIN * px)
+        -- Friends' art has margins of its own (measured in game: it spans 81%
+        -- of its button's width and 89% of its height). The button is sized so
+        -- the art is exactly a micro icon's box, on the same pixels.
+        local FRIEND_W, FRIEND_H = 0.81, 0.893
+        local artWidth, artHeight = friendCell - seam - 2 * MARGIN * px, header - (2 * MARGIN + 1) * px
+        local width = artWidth / FRIEND_W
+        skin:PinChatFriends(width / useScale, artHeight / FRIEND_H / useScale, useScale, (MARGIN - 1) * px - (width - artWidth) / 2, px)  -- measured: one pixel right puts it two pixels off the seam, like the rest
         widths[1] = friendCell
     end
     point(MicroMenuContainer, "RIGHT", strip, "RIGHT", -(widths[1] or 0), 0)

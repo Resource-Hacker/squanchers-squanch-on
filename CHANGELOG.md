@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Menu icons: the Friends button is exactly the size of the other icons and
+  sits on the same spacing.
 - Menu icons: the green latency line under the game menu button is gone (the
   button's tooltip still shows latency).
 - Chat header: the tab row is narrower and fitted to the menu icons, each icon

@@ -1376,7 +1376,7 @@ end
 
 -- Friends is the strip's last cell: a micro-button-sized cell with no chrome
 -- of its own. Native click, tooltip, count and toasts stay with the button.
-function Skin:PinChatFriends(width, height, cellScale, gap)
+function Skin:PinChatFriends(width, height, cellScale, gap, lift)
     local friends, strip = QuickJoinToastButton, self.chatIconStrip
     if not friends or not strip or friends.squancherPinning then return end
     -- A plain button: a toast's ChatAlertFrame:UpdateAnchors re-anchors it in
@@ -1387,13 +1387,13 @@ function Skin:PinChatFriends(width, height, cellScale, gap)
         if friends:IsShown() then self.chatFriendsHidden = true; friends:Hide() end
         return
     end
-    if width then self.chatIconCell = { width, height, cellScale, gap or 0 } end
-    local cell = self.chatIconCell or { 32, 40, 0.5, 0 }
+    if width then self.chatIconCell = { width, height, cellScale, gap or 0, lift or 0 } end
+    local cell = self.chatIconCell or { 32, 40, 0.5, 0, 0 }
     friends.squancherPinning = true
     friends:SetParent(self.chatPanel);friends:ClearAllPoints()
     friends:SetSize(cell[1], cell[2]);friends:SetScale(cell[3])
     -- One pixel clear of the right rim, like every cell's art.
-    friends:SetPoint("RIGHT", strip, "RIGHT", -(cell[4] or 0) / cell[3], 0)
+    friends:SetPoint("RIGHT", strip, "RIGHT", -(cell[4] or 0) / cell[3], (cell[5] or 0) / cell[3])
     friends:SetFrameStrata("LOW")
     friends:SetFrameLevel(self.chatPanel:GetFrameLevel() + 8)
     friends.squancherPinning = nil
