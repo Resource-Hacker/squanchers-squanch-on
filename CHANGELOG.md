@@ -2,11 +2,19 @@
 
 ## Unreleased
 
-- Camera: zooming with a target selected no longer swings the view back when
-  the zoom stops; the camera stays on that target until you change target.
-- Camera: with nothing selected, holding the reticle open now picks up the
-  unit in front of you and keeps the camera on it until you let go (new
-  option under Aim convergence, on by default).
+- Camera: zooming with a target selected turns the view onto it, and the view
+  now stays there when the zoom stops instead of swinging back. Where the game
+  tells addons where a unit stands the turn is worked out from that and is
+  exact; for other units the game's own target focus does the turning and is
+  taken over as a real turn. Your character keeps its own facing; part of your
+  next mouse turns lines the two up again.
+- Camera: with nothing selected, holding the reticle open follows the unit
+  that comes under it, also while it walks, until you let go.
+- Camera: quick wheel zooming no longer flickers the shoulder offset and field
+  of view. The game reports a false zoom distance for a frame or two while a
+  quick zoom is corrected; those readings are now ignored.
+- Camera options: the Aim convergence section is rearranged around the above
+  (stay, follow, catch-up, a limit for the turn).
 - Pet frame: the name is centred on the health area and the happiness face
   sits in the top left corner of the portrait box.
 - Short power bars (the pet's energy bar) sit on whole pixels, so their rim is

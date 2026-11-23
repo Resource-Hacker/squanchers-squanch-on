@@ -295,7 +295,8 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1, pitch = 0, rev = 5, follow = true, followStrength = 3, soft = false, softMode = "engine"}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 7, follow = true, soft = false, softMode = "engine",
+      aim = true, aimLimit = 30, catchUp = true, stay = true}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -753,12 +754,232 @@ end
 -- Aim convergence: what is under the reticle stays there while the zoom, and
 -- with it the shoulder offset, changes.
 -- ---------------------------------------------------------------------------
--- With a target selected the engine's target focus is switched on for the
--- length of the zoom and then put back exactly. The values to put back live in
--- the saved settings, so a session that ends mid-zoom is repaired at next login.
+-- Measured in game on 2026-11-23 (the navigation marker of a far waypoint
+-- shows where the view really points):
+-- * FlipCameraYaw turns the camera only, exactly, on the next frame. The
+--   character keeps its facing, the mouse then turns both together, and
+--   nothing an addon may call brings the two back in line (moving does not,
+--   nor does restarting mouselook; a reload does). conv.applied is that
+--   angle, camera minus facing, summed over every turn made here.
+-- * The camera sits beside a pivot about PIVOT yards ahead of the character,
+--   by the shoulder setting times the scale setting (1.11 on an orc). A point
+--   D yards from the pivot is on the reticle when the camera looks
+--   asin(side / D) left of its bearing, whatever the zoom.
+-- * UnitPosition answers for few units only (there: the boars around, not
+--   the scorpids beside them, no pet, no other player). Where it does, in
+--   combat too, the turn that puts the unit on the reticle is exact.
+-- * The engine's target focus works on every attackable target and on the
+--   soft target. It swivels the camera where it stands, up to about 20
+--   degrees, onto the unit (fully from a strength of about 0.6; a strength
+--   above 1 adds nothing), allows for the turns made here, and when released
+--   lets go as a critically damped spring of 0.07 s: the view swings back.
+--   A swivel is not a turn about the character: only for far units are the
+--   two alike, a near unit needs a much larger turn to stay on the reticle.
+-- What a zoom or the open reticle does with that:
+-- * Aim: a unit with a position is turned onto by a real turn and held there.
+-- * Focus and carry: any other target is caught by the engine's focus. While
+--   that is on, the swivel it holds is read from the marker and taken over
+--   bit by bit as a real turn, the engine keeping the unit on the reticle all
+--   the while. At the release what little swivel is left is turned in step
+--   with the engine letting go, so nothing swings back.
+-- * Distance: with no unit, the centre ray keeps crossing the character's
+--   forward line `distance` yards ahead.
+-- * Catch-up: a view turned onto a unit is off the character's facing.
+--   Afterwards a share of the owner's own turning closes that gap instead of
+--   moving the view.
+-- The focus values to put back live in the saved settings, so a session that
+-- ends mid-zoom is repaired at next login.
 local FOCUS = {"test_cameraTargetFocusEnemyStrengthYaw", "test_cameraTargetFocusEnemyStrengthPitch", "test_cameraTargetFocusEnemyEnable",
   "test_cameraTargetFocusInteractStrengthYaw", "test_cameraTargetFocusInteractStrengthPitch", "test_cameraTargetFocusInteractEnable"}
+local SOFT = {"SoftTargetEnemy", "SoftTargetFriend"}
 local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom stops
+local CARRY_TIME = 0.25             -- seconds: time constant of taking the engine's swivel over as a turn
+local CARRY_RATE = 20               -- degrees per second at most: the engine needs time to follow each turn
+local PROBE_RATE, PROBE_TURN, PROBE_WAIT = 15, 0.25, 0.2   -- a first slow turn, and the wait for the engine's answer
+local AWAY_LIMIT = 75               -- degrees the view is ever turned away from the character's own line
+local CARRY_REST = 0.6              -- degrees of swivel a release may still find
+local CARRY_PATIENCE = 1.3          -- seconds a release waits for the swivel to come down to that
+local CARRY_SETTLE = 0.15           -- seconds without a turn before the release, for the engine to catch up
+local RELEASE_TIME = 0.07           -- seconds: the engine lets its focus go as e0 (1 + t/T) exp(-t/T)
+local CONVERGE_MAX_RATE = 600       -- degrees per second
+local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
+local AIM_TIME = 0.07               -- seconds: time constant of the turn onto a unit during a zoom
+local AIM_SETTLE = 0.25             -- seconds an aim keeps turning after the zoom stopped
+local FOLLOW_TIME = 0.035           -- the same for the open reticle
+local PIVOT = 0.5                   -- yards from the character's position to the camera's pivot, ahead
+local CATCH_UP = 0.3                -- share of the owner's turning that goes into realigning
+local GAUGE_YARDS = {400, 200, 100, 60}
+local sin, cos, tan, atan, rad, sqrt, exp, atan2 = math.sin, math.cos, math.tan, math.atan, math.rad, math.sqrt, math.exp, math.atan2
+local conv = {applied = 0, quiet = huge}
+local gauge, carry = {}, {}
+local function wrap(angle) return (angle + 180) % 360 - 180 end
+-- Yards north and west of a unit, or nothing where the client keeps them back.
+local function position(unit)
+  local ok, north, west = pcall(UnitPosition, unit)
+  if ok and not secret(north) and not secret(west) and type(north) == "number" and type(west) == "number" then return north, west end
+end
+-- First person has no shoulder offset whatever the curve says at zoom 0.
+local function shoulderAt(zoom) return zoom < 0.05 and 0 or (resolve("test_cameraOverShoulder", zoom) or 0) end
+local function convergeAngle(offset, distance)
+  return deg(asin(max(-1, min(1, offset * cfg.converge.scale / max(1, distance)))))
+end
+local function gateOpen() return addon.IsNativeMouseoverOpen and addon:IsNativeMouseoverOpen() and true or false end
+-- The character's facing in degrees, growing to the left. Only the mouse turns
+-- it, and only while mouselooking is the camera tied to it.
+local function readFacing()
+  if not (IsMouselooking and IsMouselooking()) then return end
+  local ok, facing = pcall(GetPlayerFacing)
+  if ok and not secret(facing) and type(facing) == "number" then return deg(facing) end
+end
+local function turn(step)
+  if step ~= 0 then
+    FlipCameraYaw(step)
+    conv.applied = conv.applied + step
+  end
+end
+-- A unit is about to be turned onto, off the resting line: that line is noted
+-- once, as the angle beyond the plain convergence.
+local function leaveHome(offset)
+  if conv.home == nil then conv.home = conv.applied - convergeAngle(offset, cfg.converge.distance) end
+end
+
+-- The angle, camera minus facing, that puts a unit on the reticle, and the
+-- unit's distance from the pivot.
+local function aimAngle(unit, facing, zoom)
+  local north, west = position("player")
+  local unitNorth, unitWest = position(unit)
+  if not (north and unitNorth) then return end
+  local heading = rad(facing)
+  north, west = unitNorth - north - PIVOT * cos(heading), unitWest - west - PIVOT * sin(heading)
+  local distance = sqrt(north * north + west * west)
+  if distance < 3 then return end     -- on top of the character: no sensible angle
+  return wrap(deg(atan2(west, north)) + convergeAngle(shoulderAt(zoom), distance) - facing), distance
+end
+-- The unit a zoom turns onto by its position.
+local function aimUnit()
+  if gateOpen() and UnitExists("mouseover") and position("mouseover") then return "mouseover" end
+  if UnitExists("target") and not UnitIsUnit("target", "player") and position("target") then return "target" end
+end
+-- The unit the open reticle follows by its position: the one that comes
+-- under it, and from then on that same unit for as long as the reticle stays
+-- open, by its nameplate when the reticle slips off the model (it does: the
+-- reticle keeps its height while the unit walks nearer or further).
+local function sameUnit(unit, guid)
+  if not UnitExists(unit) then return false end
+  local ok, other = pcall(UnitGUID, unit)
+  return ok and not secret(other) and other == guid
+end
+local function followUnit()
+  local guid = conv.followGUID
+  if guid then
+    if sameUnit("mouseover", guid) and position("mouseover") then return "mouseover" end
+    local token = conv.followToken
+    if not (token and sameUnit(token, guid)) then
+      token = nil
+      for index = 1, 40 do
+        if sameUnit("nameplate" .. index, guid) then token = "nameplate" .. index; break end
+      end
+      conv.followToken = token
+    end
+    if token and position(token) then return token end
+    conv.followGUID, conv.followToken = nil, nil      -- gone: the next unit under the reticle is picked up
+  end
+  if UnitExists("mouseover") and position("mouseover") then
+    local ok, found = pcall(UnitGUID, "mouseover")
+    conv.followGUID, conv.followToken = ok and not secret(found) and found or nil, nil
+    return "mouseover"
+  end
+end
+-- Without positions: the unit whose range estimates the distance. unit, yards, source.
+local function reticleUnit()
+  local c = cfg.converge
+  if c.heldFocus and not c.heldSoft then return nil, c.distance, "target focus" end
+  local unit = gateOpen() and UnitExists("mouseover") and "mouseover" or UnitExists("target") and "target"
+    or c.heldSoft and (UnitExists("softenemy") and "softenemy" or UnitExists("softfriend") and "softfriend") or nil
+  if unit and addon.Range then
+    local ok, low, high = pcall(addon.Range.Bracket, addon.Range, unit)
+    local yards = ok and (low and high and (low + high) / 2 or high or low and low * 1.2)
+    if yards then return unit, max(1, yards), unit .. " range" end
+  end
+  return unit, c.distance, "fallback"
+end
+
+-- The gauge: a waypoint far along the view. Its navigation marker shows, one
+-- frame later, where the view points. The owner's own waypoint and tracked
+-- quest are put back when it ends.
+local function gaugeEnd()
+  local saved = gauge.saved
+  if not saved then return end
+  gauge.saved = nil
+  pcall(function()
+    C_SuperTrack.SetSuperTrackedUserWaypoint(false)
+    if saved.point then C_Map.SetUserWaypoint(saved.point) else C_Map.ClearUserWaypoint() end
+    if saved.user and saved.point then C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+    elseif saved.quest and saved.quest ~= 0 then C_SuperTrack.SetSuperTrackedQuestID(saved.quest) end
+  end)
+end
+-- heading: degrees, where the view is taken to point.
+local function gaugeBegin(heading)
+  local saved = gauge.saved           -- set anew while one is up: what was there before stays noted
+  local ok, set = pcall(function()
+    local track, map = C_SuperTrack, C_Map
+    if not (track and map and C_Navigation and C_Navigation.GetFrame and UiMapPoint) then return false end
+    if track.IsSuperTrackingCorpse and track.IsSuperTrackingCorpse() then return false end
+    local north, west = position("player")
+    local id = map.GetBestMapForUnit("player")
+    if not (north and id) or (map.CanSetUserWaypointOnMap and not map.CanSetUserWaypointOnMap(id)) then return false end
+    local spot = map.GetPlayerMapPosition(id, "player")
+    local width, height = map.GetMapWorldSize(id)
+    if not (spot and width and height) or width <= 0 or height <= 0 then return false end
+    local toNorth, toWest = cos(rad(heading)), sin(rad(heading))
+    for _, yards in ipairs(GAUGE_YARDS) do
+      -- Map x grows to the east and y to the south.
+      local x, y = spot.x - toWest * yards / width, spot.y - toNorth * yards / height
+      if x > 0.002 and x < 0.998 and y > 0.002 and y < 0.998 then
+        gauge.saved = saved or {point = map.HasUserWaypoint() and map.GetUserWaypoint() or nil,
+          user = track.IsSuperTrackingUserWaypoint() and true or false, quest = track.GetSuperTrackedQuestID()}
+        map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(id, x, y))
+        track.SetSuperTrackedUserWaypoint(true)
+        gauge.north, gauge.west = north + toNorth * yards, west + toWest * yards
+        return true
+      end
+    end
+    return false
+  end)
+  if ok and set then return true end
+  gaugeEnd()
+  return false
+end
+-- Degrees the engine's focus has the camera swivelled to the left, and how far
+-- right of the view axis the marker stands; nothing until the marker shows
+-- the gauge. facing: the character's, as of the frame the marker shows.
+local function gaugeRead(zoom, facing)
+  local navigation = C_Navigation
+  local frame = navigation.GetFrame()
+  if not frame or navigation.HasValidScreenPosition() == false or navigation.WasClampedToScreen() then return end
+  local north, west = position("player")
+  if not north then return end
+  local heading = rad(facing)
+  north, west = gauge.north - north - PIVOT * cos(heading), gauge.west - west - PIVOT * sin(heading)
+  local distance = sqrt(north * north + west * west)
+  local yards = navigation.GetDistance()
+  if not yards or abs(yards - distance) > max(3, distance * 0.05) then return end   -- still what was tracked before
+  local x = frame:GetCenter()
+  if not x then return end
+  local scale = WorldFrame:GetEffectiveScale()
+  -- Units per unit of tangent. Flips of known size at seven fields of view
+  -- gave a vertical angle of 0.6263 x cameraFov + 0.52 degrees.
+  local focal = WorldFrame:GetHeight() * scale / 2 / tan(rad(0.6263 * (tonumber(GetCVar("cameraFov")) or 90) + 0.52) / 2)
+  local centre = WorldFrame:GetCenter()
+  local right = atan((x * frame:GetEffectiveScale() - centre * scale) / focal)
+  -- Where the marker would stand without the swivel: the camera looks along
+  -- the character's facing plus the turns made here, from beside and behind
+  -- the pivot.
+  local off = rad(facing + conv.applied) - atan2(west, north)
+  local rest = atan2(distance * sin(off) - shoulderAt(zoom) * cfg.converge.scale, distance * cos(off) + zoom)
+  return deg(right - rest), deg(right)
+end
+
 local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
@@ -766,18 +987,17 @@ local function endFocus()
   c.held, c.heldSoft, c.heldFocus, c.heldGate = nil, nil, nil, nil
   for name, value in pairs(held) do setCVar(name, value) end
 end
--- Soft targeting (option): with nothing selected, the client's soft target
--- picks the unit in front of the character for the length of the zoom, which
--- gives the zoom a unit to work with. softMode "engine" also switches the
--- target focus on for it; "distance" only reads that unit's range.
-local SOFT = {"SoftTargetEnemy", "SoftTargetFriend"}
--- reticle: the open reticle asks (follow option). The client cannot tell an
--- addon where a nameplate is on screen, so following the unit under the
--- reticle is left to the engine: its soft target takes the unit in front and
--- its target focus keeps the camera on it until the reticle closes.
+-- The engine's focus for a unit without a position. reticle: the open reticle
+-- asks; the engine's soft target, its cone at the narrowest, then takes the
+-- unit in front and the focus keeps the view on it until the reticle closes.
+-- Soft targeting while zooming (option) does the same for the length of a
+-- zoom; softMode "distance" only reads that unit's range.
 local function beginFocus(reticle)
   local c = cfg.converge
-  if not c.enabled or c.held or transFn then return end
+  if not c.enabled or transFn then return end
+  carry.since, carry.still = nil, nil   -- a release that was waiting: the gesture goes on
+  if c.held then return end
+  if not reticle and c.aim and aimUnit() then return end           -- a unit with a position is aimed at by a real turn
   local target = UnitExists("target") and not UnitIsUnit("target", "player")
   local soft = not target and (c.soft or reticle) and true or false
   if not (target and c.focus or soft) then return end
@@ -785,150 +1005,183 @@ local function beginFocus(reticle)
   local held = {}
   if focus then for _, name in ipairs(FOCUS) do held[name] = GetCVar(name) end end
   if soft then for _, name in ipairs(SOFT) do held[name] = GetCVar(name) end end
-  -- Held by the reticle, the soft target's cone is at its narrowest (0), so
-  -- the unit the game picks is the one under the reticle as often as it can be.
   if reticle and soft then for _, name in ipairs(SOFT) do held[name .. "Arc"] = GetCVar(name .. "Arc") end end
   c.held, c.heldSoft, c.heldFocus, c.heldGate = held, soft or nil, focus or nil, reticle and soft or nil
   if focus then
     for index, name in ipairs(FOCUS) do
       if held[name] ~= nil then
         local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
-        -- Held by the reticle the pull is stronger, so a walking unit cannot outpace it.
-        setCVar(name, kind == 1 and (reticle and soft and c.followStrength or c.strength) or kind == 2 and c.pitch or 1)
+        setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
       end
     end
   end
   if soft then for _, name in ipairs(SOFT) do if held[name] ~= nil then setCVar(name, 3) end end end
   if reticle and soft then for _, name in ipairs(SOFT) do if held[name .. "Arc"] ~= nil then setCVar(name .. "Arc", 0) end end end
+  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.calm = 0, nil, 0, 0, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
-
--- Yaw part, three sources, one yaw command:
--- * Follow (option, off by default): while the reticle's mouseover gate is
---   open and nothing is selected, the mouseover unit's nameplate is held at the
---   aim point's X. Like the owner's own turning, this is not counted below.
--- * Plate lock: during a zoom the nameplate nearest the reticle is held at the
---   X it had when the zoom started. No distance is needed.
--- * Distance: without a measurable plate the camera is turned so that the
---   centre ray keeps crossing the character's forward line `distance` yards
---   ahead (that unit's range bracket, else the fallback slider). The ray passes
---   the pivot at the shoulder offset, so the angle is asin(offset / distance).
--- conv.applied is the yaw the two zoom sources have turned in total; only
--- differences are ever commanded and first person always wants zero, so
--- in/out cycles cannot creep and the owner's own turning is never undone.
-local CONVERGE_MAX_RATE = 600       -- degrees per second; the first-person step must land in one frame at 240 fps
-local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
-local LOCK_GAIN = 0.35              -- share of the plate error closed per frame
-local LOCK_SPAN = 100               -- degrees assumed across the screen width; the loop absorbs the error
-local conv = {applied = 0, rate = 0, read = 0, quiet = huge}
-local function secret(value) return issecretvalue and issecretvalue(value) end
--- First person has no shoulder offset whatever the curve says at zoom 0.
-local function shoulderAt(zoom) return zoom < 0.05 and 0 or (resolve("test_cameraOverShoulder", zoom) or 0) end
-local function convergeAngle(offset, distance)
-  return deg(asin(max(-1, min(1, offset * cfg.converge.scale / max(1, distance)))))
-end
--- NOTE (measured in game 2026-11-22): this client refuses to measure nameplates
--- ("Can't measure restricted regions"), so the plate lock and the follow path
--- below never engage; the distance path does the work. Kept for clients that allow it.
--- Screen X of a unit's nameplate in scale-1 units. Errors on restricted plates
--- (and returns nothing once the plate left the unit): call through pcall.
-local function plateX(plate, unit)
-  if plate.namePlateUnitToken ~= unit or not plate:IsShown() then return end
-  local x, y = plate:GetCenter()
-  local scale = plate:GetEffectiveScale()
-  return x * scale, y * scale
-end
-local function screen()
-  local scale = WorldFrame:GetEffectiveScale()
-  local cx, cy = WorldFrame:GetCenter()
-  return cx * scale, cy * scale, WorldFrame:GetWidth() * scale, WorldFrame:GetHeight() * scale
-end
-local function gateOpen() return addon.IsNativeMouseoverOpen and addon:IsNativeMouseoverOpen() and true or false end
-local function mouseoverPlate()
-  if true then return end           -- plates cannot be measured on this client (see reticleUnit)
-  if not (gateOpen() and UnitExists("mouseover")) then return end
-  local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, "mouseover")
-  local unit = ok and plate and plate.namePlateUnitToken
-  if type(unit) == "string" and not secret(unit) and pcall(plateX, plate, unit) then return plate, unit end
-end
--- The unit the reticle is on when a zoom starts: plate, unit, yards, source.
--- This client refuses to measure nameplates ("Can't measure restricted
--- regions", checked in game with the reticle open on an NPC), and each refused
--- call counts as a UI error, so no plate is ever measured. The unit comes from
--- the open reticle's mouseover or the selected target; its range gives the distance.
-local function reticleUnit()
+-- The zoom is over or the reticle closed. A swivel that is still large is
+-- carried a moment longer first.
+local function releaseFocus()
   local c = cfg.converge
-  if c.heldFocus and not c.heldSoft then return nil, nil, c.distance, "target focus" end
-  local unit = gateOpen() and UnitExists("mouseover") and "mouseover" or UnitExists("target") and "target"
-    or c.heldSoft and (UnitExists("softenemy") and "softenemy" or UnitExists("softfriend") and "softfriend") or nil
-  if unit and addon.Range then
-    local ok, low, high = pcall(addon.Range.Bracket, addon.Range, unit)
-    local yards = ok and (low and high and (low + high) / 2 or high or low and low * 1.2)
-    if yards then return nil, unit, max(1, yards), unit .. " range" end
+  if not c.held then return end
+  if not (c.heldFocus and c.stay and gauge.saved) then
+    endFocus(); gaugeEnd()
+    return
   end
-  return nil, unit, c.distance, "fallback"
+  carry.since = carry.since or 0
+  Camera:Wake()
 end
--- Turn speed that brings a plate from x to goal; zero inside one physical pixel.
-local function lockRate(x, goal, width, elapsed)
-  local pixels = GetPhysicalScreenSize and GetPhysicalScreenSize() or 1920
-  if abs(x - goal) * pixels <= width then return 0 end
-  -- Plate right of the goal: the view turns right, which is a negative yaw.
-  return (goal - x) / width * LOCK_SPAN * LOCK_GAIN / max(elapsed, 1 / 120)
-end
--- The aim point's X: the client's cursor centre plus the owner's aim offset.
-local function aimX()
-  local cx = screen()
-  if GetCursorCenterPosition then
-    local ok, x = pcall(GetCursorCenterPosition)
-    if ok and type(x) == "number" then cx = x end
+-- Carry: while the engine's focus is on, the swivel it holds is taken over as
+-- a real turn. The engine sees each turn and swivels that much less, keeping
+-- the unit on the reticle throughout. How much less tells how near the unit
+-- is: one degree per degree for a far unit, a fraction for a near one, which
+-- would take a turn right around the character to stay on the reticle. So a
+-- zoom first waits for the swivel to settle, turns a little, and reads the
+-- answer: it then carries the rest at that ratio, or leaves the swivel as
+-- it is and only keeps the view's direction at the release. The open reticle
+-- just follows.
+local function stepCarry(zoom, elapsed)
+  local c = cfg.converge
+  local release = carry.release
+  if release then                   -- the focus is off: the rest of its swivel is turned as the engine lets go
+    release.time = release.time + elapsed
+    local t = release.time / RELEASE_TIME
+    local due = t > 10 and release.turn or release.turn * (1 - (1 + t) * exp(-t))
+    local step = due - release.done
+    release.done = due
+    turn(step)
+    if conv.bias then conv.bias = conv.bias + step end   -- a zoom begun meanwhile must not turn this back
+    if t > 10 then carry.release = nil; return false end
+    return true
   end
-  local reticle = addon.HordeReticle
-  local group = reticle and reticle.group
-  return cx + (tonumber(addon.db and addon.db.aimXOffset) or 0) * (group or UIParent):GetEffectiveScale()
-end
--- The character faces along the camera while mouselooking, so its facing reads
--- the camera yaw back (degrees, growing to the left).
-local function readFacing()
-  if not (IsMouselooking and IsMouselooking()) then return end
-  local ok, facing = pcall(GetPlayerFacing)
-  if ok and type(facing) == "number" and not secret(facing) then return deg(facing) end
-end
--- Turns the view by rate x elapsed degrees now (positive: to the left).
--- FlipCameraYaw is exact and lands in this frame. MoveView turns were measured
--- (120 fps capture) to kick by several degrees whenever one starts, which made
--- the turn arrive wrong and late.
-local function command(rate, mode, elapsed)
-  conv.mode = mode
-  local step = rate * (elapsed or 0)
-  if step ~= 0 then
-    FlipCameraYaw(step)
-    if mode ~= "follow" then conv.applied = conv.applied + step end
+  if not (c.held and c.heldFocus) then
+    gaugeEnd()
+    carry.psi, carry.since, carry.facing, carry.still = nil, nil, nil, nil
+    return false
   end
+  local facing = readFacing()
+  local psi
+  if c.stay and facing then
+    if not gauge.saved then
+      if (carry.retry or 0) <= GetTime() then
+        if gaugeBegin(facing + conv.applied + (carry.psi or 0)) then carry.blind = 0
+        else carry.retry, conv.handed = GetTime() + 1, "no waypoint can be set here: the view swings back" end
+      end
+    else
+      local ok, value, right = pcall(gaugeRead, zoom, carry.facing or facing)
+      if ok and value then
+        psi, carry.blind = value, 0
+        -- The view has turned far from the waypoint: a new one, along the view, for the next frames.
+        if abs(right) > 25 then gaugeBegin(facing + conv.applied + psi) end
+      else
+        carry.blind = (carry.blind or 0) + 1
+        if carry.blind > 8 then gaugeBegin(facing + conv.applied + (carry.psi or 0)); carry.blind = 0 end
+      end
+    end
+  end
+  carry.facing = facing
+  if psi then
+    local was = carry.psi
+    carry.psi = psi
+    carry.time = (carry.time or 0) + elapsed
+    local offset = shoulderAt(zoom)
+    leaveHome(offset)
+    local rate, ratio = CARRY_RATE, carry.ratio or 1
+    if c.heldGate then carry.stage = "go"
+    elseif not carry.stage then           -- settle: until the zoom and the swivel stand still
+      carry.calm = was and conv.quiet > 0.05 and abs(psi - was) < 12 * elapsed and (carry.calm or 0) + elapsed or 0
+      if carry.calm > 0.1 then carry.stage, carry.mark, carry.from, carry.at = "probe", psi, carry.total, carry.time end
+      rate = 0
+    elseif carry.stage == "probe" then    -- a little, slowly; then the engine's answer
+      local since = carry.time - carry.at
+      rate = since < PROBE_TURN and PROBE_RATE or 0
+      if conv.quiet == 0 then             -- the zoom moves again: its own shift of the unit would spoil the answer
+        carry.stage, carry.calm, rate = nil, 0, 0
+      elseif since >= PROBE_TURN + PROBE_WAIT then
+        local turned = carry.total - carry.from
+        local gain = abs(turned) > 1 and (carry.mark - psi) / turned or 1
+        -- All of it at this ratio: more than the owner allows per zoom means a unit too near (or out of the focus's reach).
+        if gain < 0.12 or abs(carry.total) + abs(psi) / gain > c.aimLimit then carry.stage = "given"
+        else carry.stage, carry.ratio = "go", 1 / max(0.34, min(1, gain)) end
+        ratio = carry.ratio or 1
+      end
+    end
+    -- A release that is due: no more turns, so that the swivel read at the end is where the engine has settled.
+    if carry.still then rate = 0 end
+    local step = carry.stage == "given" and 0 or psi * ratio * (1 - exp(-elapsed / CARRY_TIME))
+    local limit = rate * elapsed
+    step = max(-limit, min(limit, step))
+    -- A zoom turns by no more than the owner allows; nothing ever turns far off the character's own line.
+    local away = conv.applied - convergeAngle(offset, c.distance) - conv.home
+    if (not c.heldGate and abs(carry.total + step) > c.aimLimit) or abs(away + step) > AWAY_LIMIT then step = 0 end
+    turn(step)
+    carry.total = carry.total + step
+  end
+  if carry.since then
+    carry.since = carry.since + elapsed
+    local left = gauge.saved and carry.psi or 0
+    local given = carry.stage == "given"
+    local due = given or (carry.stage == "go" and abs(left) <= CARRY_REST) or carry.since > CARRY_PATIENCE
+    if due and not given and gauge.saved and carry.psi then
+      carry.still = (carry.still or 0) + elapsed
+      due = carry.still > CARRY_SETTLE
+    else carry.still = nil end        -- the swivel grew again (the unit walks): carried on
+    if due then
+      -- What is left of the swivel is turned one for one as the engine lets
+      -- go: the view keeps its direction. After a full carry that is a rest
+      -- of a degree and the unit stays on the reticle; for a unit that was
+      -- not carried it is the whole swivel, and the unit, seen from a camera
+      -- that has moved round, slips off by part of it.
+      local rest = left
+      if not c.heldGate and abs(carry.total + rest) > c.aimLimit then rest = 0 end
+      conv.handed = ("%.1f degrees turned in place of the game's focus%s"):format(carry.total + rest,
+        rest == 0 and abs(left) > 0.3 and (": more than the limit, %.1f swing back"):format(left)
+        or given and ": the view stays; the unit is too near (or too far to the side) to be held on the reticle within the limit" or "")
+      endFocus(); gaugeEnd()
+      carry.psi, carry.since, carry.facing, carry.still = nil, nil, nil, nil
+      if abs(rest) < 0.05 then return false end
+      carry.release = {turn = rest, time = 0, done = 0}
+      conv.live = nil                 -- the gesture is over: the plain convergence must not turn this back
+      return stepCarry(zoom, elapsed) -- in step with the engine: this frame's turn lands with its first step
+    end
+  end
+  return true
+end
+
+-- Turns toward the wanted angle: what that angle moved since the last frame
+-- (a walking unit, the owner's own turning) at once, and a share of the rest
+-- per frame, so a unit in motion is held without trailing behind it.
+local function track(wanted, elapsed, time)
+  local owed = wrap(wanted - conv.applied)
+  local moved = conv.tracked and wrap(wanted - conv.tracked) or 0
+  conv.tracked = wanted
+  if abs(moved) > 3 then moved = 0 end          -- another unit or a jump: nothing to carry over
+  local share = 1 - exp(-elapsed / time)
+  local step = abs(owed) < 0.01 and owed or owed * share + moved * (1 - share)
+  local limit = CONVERGE_MAX_RATE * elapsed
+  turn(max(-limit, min(limit, step)))
 end
 local function stopConverge()
-  conv.rate, conv.ramp, conv.live, conv.facing, conv.plate, conv.mode, conv.quiet = 0, nil, nil, nil, nil, nil, huge
+  conv.ramp, conv.live, conv.aim, conv.mode, conv.quiet = nil, nil, nil, nil, huge
 end
--- A zoom gesture begins; its choices stay until it settles. The wheel calls
--- this before the client moves, so the plate is recorded where the owner aimed.
+-- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
-  conv.live, conv.quiet = true, 0
-  -- First zoom of a session begun in third person: the view as it stands is
-  -- taken as already converged, so going to first person turns back by that
-  -- amount instead of leaving the reticle's subject to slide once.
-  if not conv.based then
-    conv.based = true
-    if from >= 0.05 then conv.applied = convergeAngle(shoulderAt(from), select(3, reticleUnit())) end
+  local c = cfg.converge
+  conv.live, conv.quiet, conv.aim, conv.tracked = true, 0, nil, nil
+  local facing = readFacing()
+  local unit = facing and not c.held and aimUnit()
+  local wanted, distance
+  if unit then wanted, distance = aimAngle(unit, facing, from) end
+  if wanted then
+    conv.unit, conv.distance, conv.source = unit, distance, unit .. " position"
+    -- Far off to the side it is not what the owner is looking at: the zoom
+    -- then only keeps its own point steady, by that unit's true distance.
+    if c.aim and abs(wrap(wanted - conv.applied)) <= c.aimLimit and abs(wanted) <= AWAY_LIMIT then conv.aim = unit end
+  else
+    conv.unit, conv.distance, conv.source = reticleUnit()
   end
-  conv.plate, conv.unit, conv.distance, conv.source = reticleUnit()
-  conv.beginGate, conv.beginMouse = gateOpen(), UnitExists("mouseover") and true or false
-  conv.beginApplied, conv.beginOffset = conv.applied, shoulderAt(from)
-  conv.bias = conv.applied - convergeAngle(conv.beginOffset, conv.distance)
-  conv.lockX = nil
-  conv.leadAngle = from < 0.05 and 0 or convergeAngle(shoulderAt(from), conv.distance)
-  if conv.plate then
-    local ok, x = pcall(plateX, conv.plate, conv.unit)
-    conv.lockX = ok and x or nil
-  end
+  conv.bias = conv.applied - convergeAngle(shoulderAt(from), conv.distance)
 end
 local function armConverge()
   if cfg.converge.enabled and not conv.live and not transFn and #turns == 0 then
@@ -936,72 +1189,90 @@ local function armConverge()
     beginConverge(zoom, zoom)
   end
 end
+-- Back to the resting line with the owner's own turning. True while there is
+-- a gap this could close, so the driver keeps watching the facing.
+local function catchUp(c, facing, steered, offset)
+  if conv.home == nil then return false end
+  local extra = conv.applied - convergeAngle(offset, c.distance) - conv.home
+  if abs(extra) < 0.05 then conv.home = nil; return false end
+  -- Not while the reticle is held open: there the aim must move exactly as the mouse does.
+  if not (c.catchUp and facing) or gateOpen() then return false end
+  local share = min(abs(extra), abs(steered) * CATCH_UP)
+  if share > 0 and abs(steered) < 30 then turn(extra > 0 and -share or share) end
+  return true
+end
 local function stepConverge(zoom, elapsed)
   local c = cfg.converge
   local was = conv.seen
   conv.seen = zoom
   -- Not during a situation's own turn or setting transition.
   if not (c.enabled or c.follow) or transFn or #turns > 0 then
-    if conv.live or conv.rate ~= 0 then stopConverge() end
+    if conv.live then stopConverge() end
+    conv.steer, conv.watch, conv.followGUID, conv.followToken = nil, nil, nil, nil
     return false
   end
-  -- What the last frame's command turned. The client may have used that
-  -- frame's time or this one's; when the facing moved by an amount inside that
-  -- window it is taken as exact, anything else (the owner turning, no
-  -- mouselook) falls back to this frame's time and is never corrected for.
   local facing = readFacing()
-  if conv.rate ~= 0 and conv.counted then
-    local step = conv.rate * elapsed
-    local other = conv.rate * (conv.elapsed or elapsed)
-    if facing and conv.facing and abs(step) >= 0.05 then
-      local moved = (facing - conv.facing + 180) % 360 - 180
-      local slack = 0.15 * max(abs(step), abs(other)) + 0.02
-      if moved >= min(step, other) - slack and moved <= max(step, other) + slack then
-        step, conv.read = moved, conv.read + 1
-      end
-    end
-    conv.applied = conv.applied + step
-  end
-  conv.facing, conv.elapsed = facing, elapsed
-
+  local steered = conv.steer and facing and wrap(facing - conv.steer) or 0
+  conv.steer = facing
   local moving = was ~= nil and abs(zoom - was) > 0.0005
-  local resumed = moving and conv.quiet > 0.15
   conv.quiet = moving and 0 or conv.quiet + elapsed
   local offset = shoulderAt(zoom)
   if c.enabled and moving and not conv.live then    -- a zoom the wheel did not start
     -- Leaving first person, the first frame may already carry the offset.
     beginConverge(zoom, was < 0.05 and was or zoom)
-    resumed = false
   end
 
-  -- Follow the unit under the open reticle.
-  local gate = c.follow and gateOpen()
-  if gate and not speedsHeld and not UnitExists("target") then
-    local plate, unit = mouseoverPlate()
-    local ok, x
-    if plate then ok, x = pcall(plateX, plate, unit) end
-    if ok and x then
-      local _, _, width = screen()
-      local rate = lockRate(x, aimX(), width, elapsed)
-      command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), "follow", elapsed)
-      conv.lockX = nil                -- the zoom lock starts again from where following leaves the plate
-      conv.bias = conv.applied - convergeAngle(offset, conv.distance or c.distance)
+  -- The open reticle follows the unit under it.
+  local gate = c.enabled and c.follow and gateOpen()
+  if gate and facing and not c.held and not UnitExists("target") then
+    local unit = c.aim and followUnit() or nil
+    local wanted, distance
+    if unit then wanted, distance = aimAngle(unit, facing, zoom) end
+    -- Never far off the character's own line: beyond that the view goes with the mouse again.
+    if wanted and abs(wanted) <= AWAY_LIMIT then
+      leaveHome(offset)
+      if conv.mode ~= "follow" or conv.followed ~= conv.followGUID then conv.tracked = nil end
+      conv.followed = conv.followGUID
+      track(wanted, elapsed, FOLLOW_TIME)
+      conv.mode, conv.unit, conv.distance, conv.source = "follow", unit, distance, unit .. " position"
+      conv.bias = conv.applied - convergeAngle(offset, distance)
+      conv.live, conv.aim, conv.watch = nil, nil, nil  -- a zoom meanwhile is carried by the following itself
       return true
     end
-  end
+    -- No position for what is under the reticle: the engine's soft target and
+    -- focus follow it from here until the reticle closes.
+    if not unit and UnitExists("mouseover") and not (c.aim and position("mouseover")) then beginFocus(true) end
+  elseif not gate then conv.followGUID, conv.followToken = nil, nil end
   if not conv.live then
-    command(0, gate and "follow (no plate)" or nil, elapsed)
+    conv.mode = c.heldGate and "follow (the game's focus)" or gate and "follow (nothing under the reticle)" or nil
+    conv.watch = not c.held and catchUp(c, facing, steered, offset)
     return gate
   end
+  conv.watch = nil
 
-  -- Zoom gesture.
+  -- Zoom gesture: onto a unit by its position.
+  if conv.aim then
+    local wanted, distance
+    if facing and UnitExists(conv.aim) then wanted, distance = aimAngle(conv.aim, facing, zoom) end
+    if wanted then
+      -- Held through the zoom and a moment longer, then let go: the view
+      -- stays where the zoom left it, also when the unit walks on.
+      if conv.quiet > AIM_SETTLE then conv.live, conv.aim = nil, nil; return false end
+      leaveHome(offset)
+      conv.mode, conv.distance = "aim", distance
+      track(wanted, elapsed, AIM_TIME)
+      conv.bias = conv.applied - convergeAngle(offset, distance)
+      return true
+    end
+    conv.aim = nil                    -- the unit is gone: on by its last distance, from the yaw turned so far
+    conv.bias = conv.applied - convergeAngle(offset, conv.distance)
+  end
   local softUnit = c.heldSoft and (UnitExists("softenemy") and "softenemy" or UnitExists("softfriend") and "softfriend") or nil
-  -- The client's target focus is turning the camera onto the target (or the
-  -- soft target): our own turn would only fight it.
+  -- The client's own focus is turning the view onto the target (or the soft
+  -- target): a turn made here would only fight it.
   if c.heldFocus and (softUnit or not c.heldSoft) then
     conv.mode, conv.source, conv.unit = "target focus", softUnit and "soft target focus" or "target focus", softUnit or "target"
     conv.bias = conv.applied - convergeAngle(offset, conv.distance)
-    conv.leadAngle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
     if conv.quiet > 0.5 then conv.live = nil end
     return false
   end
@@ -1010,88 +1281,62 @@ local function stepConverge(zoom, elapsed)
     local ok, low, high = pcall(addon.Range.Bracket, addon.Range, softUnit)
     if ok and low and high then
       conv.distance, conv.source, conv.unit = max(1, (low + high) / 2), softUnit .. " range", softUnit
-      conv.bias = conv.beginApplied - convergeAngle(conv.beginOffset, conv.distance)
-    end
-  end
-  -- The reticle opened on a unit (or moved to another) after the gesture
-  -- began: its distance takes over from here, without a jump.
-  if conv.unit ~= "mouseover" and not c.heldSoft and gateOpen() and UnitExists("mouseover") then
-    local _, unit, yards, source = reticleUnit()
-    if unit == "mouseover" then
-      conv.unit, conv.distance, conv.source = unit, yards, source
-      conv.bias = conv.applied - convergeAngle(offset, yards)
-    end
-  end
-  local rate, busy = 0, false
-  local x
-  if conv.plate then
-    local ok, value = pcall(plateX, conv.plate, conv.unit)
-    x = ok and value
-    if not x then                     -- plate gone: carry on by distance from the yaw turned so far
-      conv.plate = nil
       conv.bias = conv.applied - convergeAngle(offset, conv.distance)
     end
   end
-  if x and zoom < 0.05 then           -- first person: back to zero; the lock starts from here
-    conv.lockX, x = x, nil
-  elseif not x then conv.lockX = nil end
-  if x then
-    if resumed or not conv.lockX then conv.lockX = x end
-    conv.wanted = nil
-    -- The turn the offset change calls for is applied in the same frame as the
-    -- offset (by the unit's estimated distance); the plate only trims what that
-    -- estimate got wrong. Waiting for the plate to move first made the turn
-    -- arrive visibly after the zoom.
-    local angle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
-    local lead = conv.leadAngle and (angle - conv.leadAngle) / max(elapsed, 1 / 120) or 0
-    conv.leadAngle = angle
-    if conv.quiet < 0.15 then
-      local _, _, width = screen()
-      rate = lead + lockRate(x, conv.lockX, width, elapsed)
-      busy = rate ~= 0
-    end
-    -- What the lock turned is the base for a later hand-over to the distance.
-    conv.bias = conv.applied - convergeAngle(offset, conv.distance)
-  else
-    local wanted = zoom < 0.05 and 0 or conv.bias + convergeAngle(offset, conv.distance)
-    conv.wanted = wanted
-    conv.leadAngle = zoom < 0.05 and 0 or convergeAngle(offset, conv.distance)
-    local owed = wanted - conv.applied
-    busy = abs(owed) > 0.002
-    -- Leaving or entering first person the client slides the shoulder offset
-    -- in over about 75 ms (measured), so the turn it calls for is spread over
-    -- the same time; ordinary zoom steps are applied as they come.
-    if abs(owed) > 0.3 and not conv.ramp then conv.ramp = abs(owed) / FIRST_PERSON_TIME end
-    if not busy then conv.ramp = nil end
-    if busy then
-      rate = owed / elapsed
-      if conv.ramp then rate = max(-conv.ramp, min(conv.ramp, rate)) end
-    end
+  -- First person looks along the character: an aim left over from before is dropped there.
+  if zoom < 0.05 and conv.home ~= nil then
+    conv.bias, conv.distance, conv.home = conv.home, c.distance, nil
   end
-  -- Core.lua's cursor return holds the turn speed at its minimum for this
-  -- frame: a speed factor computed against it would be wrong on the next.
-  if speedsHeld then rate = 0 end
-  command(max(-CONVERGE_MAX_RATE, min(CONVERGE_MAX_RATE, rate)), x and "plate lock" or "distance", elapsed)
-  if not busy and conv.quiet > 0.5 then conv.live, conv.plate = nil, nil end
-  return busy or gate
+  local wanted = zoom < 0.05 and 0 or conv.bias + convergeAngle(offset, conv.distance)
+  conv.wanted, conv.mode = wanted, "distance"
+  local owed = wanted - conv.applied
+  local busy = abs(owed) > 0.002
+  -- Leaving or entering first person the client slides the shoulder offset
+  -- in over about 75 ms (measured), so the turn it calls for is spread over
+  -- the same time; ordinary zoom steps are applied as they come.
+  if abs(owed) > 0.3 and not conv.ramp then conv.ramp = abs(owed) / FIRST_PERSON_TIME end
+  if not busy then conv.ramp = nil end
+  if busy then
+    local limit = (conv.ramp or CONVERGE_MAX_RATE) * elapsed
+    turn(max(-limit, min(limit, owed)))
+  end
+  if not busy and conv.quiet > 0.5 then conv.live = nil end
+  return busy
 end
--- Core's gate changes: following starts with it and stops on the very call.
+-- Core's gate changes: the reticle closing ends its hold on the very call.
 local function gateChanged()
   if not (Camera.active and cfg and cfg.converge.follow) then return end
-  if gateOpen() then beginFocus(true); Camera:Wake()
-  else
-    if cfg.converge.heldGate then endFocus() end
-    if conv.mode == "follow" then command(0, nil) end
+  if not gateOpen() then
+    if cfg.converge.heldGate then releaseFocus() end
+    conv.followGUID, conv.followToken = nil, nil
   end
+  Camera:Wake()                     -- to follow, or for the catch-up to watch the facing
+end
+
+-- On quick wheel notches the eased zoom overshoots: for the frame or two
+-- until its correction lands, the client reports a distance far outside the
+-- step (measured: 25 -> 17.4 -> 23 on the first notch, 23 -> 0 -> 21 on the
+-- next ones) while the picture zooms on smoothly. Such a reading is not where
+-- the camera is; the curves and the aim keep the last sound one.
+local soundZoom
+local function steadyZoom(zoom)
+  local e = ease
+  if e and e.from and soundZoom
+    and (zoom < min(e.from, e.to) - 0.5 or zoom > max(e.from, e.to) + 0.5) then return soundZoom end
+  soundZoom = zoom
+  return zoom
 end
 
 local lastZoom
 driver:SetScript("OnUpdate", function(self, elapsed)
   local zoom = GetCameraZoom()
   local busy = stepEase(zoom)
+  zoom = steadyZoom(zoom)
   if stepTransition(zoom) then busy = true end
   if stepTurns(elapsed) then busy = true end
   if stepFade() then busy = true end
+  local carrying = stepCarry(zoom, elapsed)
   if stepConverge(zoom, elapsed) then busy = true end
   -- Changes below a two-thousandth of a yard do not keep the driver awake; the
   -- forced pass before sleeping lands on the exact values.
@@ -1101,12 +1346,8 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   elseif busy then Camera.quiet = 0
   else
     Camera.quiet = Camera.quiet + elapsed
-    -- The engine swings the view back when its focus is released, so a zoom
-    -- onto a selected target keeps the focus until that target changes.
-    local c = cfg.converge
-    local targeted = c.heldFocus and not c.heldSoft and UnitExists("target")
-    if Camera.quiet > FOCUS_SETTLE and not targeted and not (c.heldGate and gateOpen()) then endFocus() end
-    if Camera.quiet > 0.5 then
+    if Camera.quiet > FOCUS_SETTLE and not (cfg.converge.heldGate and gateOpen()) then releaseFocus() end
+    if Camera.quiet > 0.5 and not conv.watch and not carrying then
       stopConverge()              -- the next gesture picks its distance afresh; offset changes made while asleep are not turned
       applyZoom(zoom, true)       -- land on the exact curve values before sleeping
       self:Hide()
@@ -1396,6 +1637,19 @@ local function normalize(config)
   -- rev 5: focus back on. It is what brings the reticle onto the target; the
   -- swing back is now prevented by holding it while that target stays selected.
   if config.converge.rev < 5 then config.converge.focus, config.converge.rev = nil, 5 end
+  -- rev 6: the camera's sideways offset measured in game is 1.11 times the
+  -- shoulder setting (orc); a stored 1 was the default, not a choice.
+  if config.converge.rev < 6 then
+    if config.converge.scale == 1 then config.converge.scale = nil end
+    config.converge.rev = 6
+  end
+  config.converge.followStrength = nil      -- measured: a focus strength above 1 adds nothing
+  -- rev 7: the limit now also bounds the turn that stands in for the game's
+  -- focus; a stored 45 was the default of the build before.
+  if config.converge.rev < 7 then
+    if config.converge.aimLimit == 45 then config.converge.aimLimit = nil end
+    config.converge.rev = 7
+  end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
   local template = shipped.situations[1]
@@ -1464,9 +1718,11 @@ events:SetScript("OnEvent", function(self, event)
     for name, text in pairs(deferred) do deferred[name] = nil; setCVar(name, text) end
     return
   end
-  if event == "PLAYER_LOGOUT" then endFocus(); return end
+  if event == "PLAYER_LOGOUT" then gaugeEnd(); endFocus(); return end
   if event == "PLAYER_TARGET_CHANGED" then
-    if cfg and cfg.converge.heldFocus and not cfg.converge.heldSoft then endFocus() end
+    -- The unit the focus was on is no longer the target: nothing to stay on.
+    if cfg and cfg.converge.heldFocus and not cfg.converge.heldSoft then endFocus(); gaugeEnd() end
+    if conv.home ~= nil then Camera:Wake() end     -- the catch-up may start now, or has to stand down
     return
   end
   lastZoom = nil
@@ -1478,7 +1734,7 @@ function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
   if not self.active then return end
-  endFocus(); stopConverge()
+  gaugeEnd(); endFocus(); stopConverge()
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -1491,7 +1747,7 @@ end
 function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
-    stopConverge()
+    gaugeEnd(); stopConverge()
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()
@@ -1634,11 +1890,17 @@ function Camera:Command(command)
   print(("Aim convergence: %s; fallback distance=%s; scale=%s; target focus=%s (strength %s, pitch %s)%s; enemy focus CVar=%s; interact=%s")
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
       tostring(c.pitch), c.held and (", held now, yaw CVar " .. tostring(GetCVar(FOCUS[1]))) or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
-  print(("Aim convergence yaw: %s; now=%s; last zoom: unit=%s, distance=%s (%s); wanted=%s; applied=%.3f; frames read back from facing=%d; follow=%s, gate %s (at zoom start: gate %s, mouseover %s)")
+  local offAxis = conv.home and conv.applied - convergeAngle(shoulderAt(zoom), c.distance) - conv.home
+  print(("Aim convergence yaw: %s; now=%s; last: unit=%s, distance=%s (%s); camera %.3f deg left of the character's facing%s; aim=%s (limit %s), follow=%s, stay=%s, catch-up=%s; gate %s")
     :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
-      conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none",
-      conv.wanted and ("%.3f"):format(conv.wanted) or "none (plate lock or idle)", conv.applied, conv.read,
-      c.follow and "on" or "off", gateOpen() and "open" or "closed",
-      conv.beginGate and "open" or "closed", conv.beginMouse and "yes" or "no"))
+      conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none", conv.applied,
+      offAxis and (", %.3f of it from aiming"):format(offAxis) or "",
+      c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.stay and "on" or "off", c.catchUp and "on" or "off",
+      gateOpen() and "open" or "closed"))
+  print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s")
+    :format(position("player") and "given" or "not given", UnitExists("target") and (position("target") and "given" or "not given") or "-",
+      UnitExists("mouseover") and (position("mouseover") and "given" or "not given") or "-",
+      c.held and (c.heldFocus and ("on, swivel %s"):format(carry.psi and ("%.2f"):format(carry.psi) or "not read") or "soft target only") or "off",
+      conv.handed or "none yet"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end
