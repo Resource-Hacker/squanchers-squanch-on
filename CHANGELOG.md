@@ -21,6 +21,10 @@
   game's focus over as a turn from the first moment and without pausing;
   before, it waited, turned a little, waited again and then went on, which
   showed as a jerky zoom.
+- Camera: after the view was turned onto a unit it comes round behind your
+  character as soon as the character moves; before, it stayed askew and the
+  character ran sideways across the screen. Standing still, the view stays
+  where it was left.
 - Camera: soft targeting is no longer used by anything. The "Soft targeting
   while zooming" option is gone, and the open reticle no longer borrows the
   game's soft target. Following and sticking work for the units the game

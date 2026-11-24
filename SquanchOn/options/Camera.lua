@@ -209,7 +209,7 @@ Options:Add('camera', {
         desc = 'How close to the reticle, sideways, an enemy has to be for a zoom to stick to it.',
         keywords = 'aim convergence reticle stick zoom angle degrees near' }),
     converge('catchUp', { type = 'toggle', label = 'Character catches up as you steer',
-        desc = 'After the view was turned onto a unit your character no longer faces where you look, and an addon cannot turn it. Part of your own mouse turning then goes into lining the two up again (never while the reticle is held open).',
+        desc = 'After the view was turned onto a unit your character no longer faces where you look, and an addon cannot turn it. Part of your own mouse turning then goes into lining the two up again, and the view comes round behind your character as soon as it moves, so it never runs sideways across the screen (never while the reticle is held open).',
         keywords = 'aim convergence catch up realign character facing steer' }),
     converge('aim', { type = 'toggle', label = 'Use unit positions where the game gives them',
         desc = 'Exact turning and following for the units the game gives a position for. Off: the game\'s target focus is used for every unit.',

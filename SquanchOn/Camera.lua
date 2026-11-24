@@ -816,6 +816,7 @@ local FOLLOW_TIME = 0.035           -- the same for the open reticle
 local NEAR_RANGE = 50               -- yards within which a zoom sticks to an enemy
 local PIVOT = 0.5                   -- yards from the character's position to the camera's pivot, ahead
 local CATCH_UP = 0.3                -- share of the owner's turning that goes into realigning
+local REALIGN = {time = 0.35, least = 10}   -- while the character moves: seconds (time constant) and degrees a second at least, of the view coming round behind it
 local GAUGE_YARDS = {400, 200, 100, 60}
 local sin, cos, tan, atan, rad, sqrt, exp, atan2 = math.sin, math.cos, math.tan, math.atan, math.rad, math.sqrt, math.exp, math.atan2
 local conv = {applied = 0, quiet = huge}
@@ -1403,16 +1404,22 @@ local function armConverge()
     beginConverge(zoom, zoom)
   end
 end
--- Back to the resting line with the owner's own turning. True while there is
--- a gap this could close, so the driver keeps watching the facing.
-local function catchUp(c, facing, steered, offset)
+-- Back to the resting line: with the owner's own turning, and at once when
+-- the character moves (left askew, it would run sideways across the
+-- screen). True while there is a gap this could close, so the driver keeps
+-- watching the facing.
+local function catchUp(c, facing, steered, offset, elapsed)
   if conv.home == nil then return false end
   local extra = conv.applied - convergeAngle(offset, c.distance) - conv.home
   if abs(extra) < 0.05 then conv.home = nil; return false end
   -- Not while the reticle is held open: there the aim must move exactly as the mouse does.
   if not (c.catchUp and facing) or gateOpen() then return false end
-  local share = min(abs(extra), abs(steered) * CATCH_UP)
-  if share > 0 and abs(steered) < 30 then turn(extra > 0 and -share or share) end
+  local share = abs(steered) < 30 and min(abs(extra), abs(steered) * CATCH_UP) or 0
+  local ok, speed = pcall(GetUnitSpeed, "player")
+  if ok and not secret(speed) and type(speed) == "number" and speed > 0 then
+    share = max(share, min(abs(extra), max(abs(extra) * (1 - exp(-elapsed / REALIGN.time)), REALIGN.least * elapsed)))
+  end
+  if share > 0 then turn(extra > 0 and -share or share) end
   return true
 end
 local function stepConverge(zoom, elapsed)
@@ -1457,7 +1464,7 @@ local function stepConverge(zoom, elapsed)
   end
   if not conv.live then
     conv.mode = gate and (UnitExists("mouseover") and "follow (no position and no nameplate to go by)" or "follow (nothing under the reticle)") or nil
-    conv.watch = not c.held and catchUp(c, facing, steered, offset)
+    conv.watch = not c.held and catchUp(c, facing, steered, offset, elapsed)
     return gate
   end
   conv.watch = nil
