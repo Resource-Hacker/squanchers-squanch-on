@@ -25,16 +25,21 @@
   soft target's cone starts at its narrowest and goes wider, step by step,
   until it has taken the unit under the reticle; nothing else it finds is
   followed. With nothing selected that is the only following. With
-  something else selected, the soft target is tried on the unit under the
-  reticle in the same way: where the game takes it, that unit is followed
-  as exactly and your target stays your target; where it does not, the unit
-  is followed from the mouseover alone, which is looser. The game does not
-  let soft targeting be switched on in combat, so it is switched on when
-  you select an enemy and kept through the fight, set so that nothing is
+  something else selected, a unit under the reticle is followed from the
+  mouseover alone, which is looser: the game's camera focus goes to your
+  target wherever you have one (tried: the game does soft-target the unit
+  under the reticle beside a selected target, and still turns the view to
+  the target). That following no longer judders while you move sideways
+  (the game reports your position in uneven steps; they are evened out),
+  nothing it turns lands in a single frame, and it no longer moves the
+  point the game picks at, which had shifted the reticle and its dot up
+  and down. The game does not let soft targeting be switched on in combat,
+  so it is switched on when you select an enemy and kept through the fight
+  (for when your target is dead or gone), set so that nothing is
   soft-targeted while the reticle is closed and a target is selected; in a
-  fight that began with nothing selected the reticle follows by the
-  mouseover alone (with a target) or not at all (without). Where the
-  mouseover alone follows, the mouse still moves the reticle within the unit,
+  fight that began with nothing selected the reticle does not follow
+  without a target. Where the mouseover alone follows, the mouse still
+  moves the reticle within the unit,
   so you can go after a unit that moves and put the reticle where you want
   it; pushing on past the unit's edge turns your character and leaves the
   view on the unit (Camera page, "Open reticle: the mouse moves the reticle

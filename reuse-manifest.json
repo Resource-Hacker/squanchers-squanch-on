@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "SquanchOn/Camera.lua",
-          "sha256": "9c22af0ef5d2e07f42d507093884da9f3651f5c2a15933514bf7bbbb94ecbd95"
+          "sha256": "360b65d65d0f559520a62272256286835c3a6e3bf86da8336704a4194bcc68c5"
         },
         {
           "path": "SquanchOn/LICENSES/DynamicCam-MIT.txt",
@@ -366,7 +366,7 @@
       "files": [
         {
           "path": "SquanchOn/HordeReticle.lua",
-          "sha256": "f191e5167a358c07e09d08ce2fe923b486334c3ef77fa1425a30a1732d6a0f9b"
+          "sha256": "d65e30ebb118b52b9894fa372b5a465c53526c6762d10b30cb9d33d9e37c2dbd"
         },
         {
           "path": "SquanchOn/HordeReticleData.lua",

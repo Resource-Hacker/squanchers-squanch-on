@@ -842,10 +842,6 @@ local gauge, carry = {}, {
   FOLLOW_RATE = 120,                -- degrees per second at most while the open reticle's hold is taken over
   NEAR = 10,                        -- yards within which the reticle's hold is left to the engine's own swivel
   FIRST_PERSON_STEP = 0.5,          -- yards the view steps out of first person while the reticle's hold is on (setting)
-  -- The soft target beside a selected target (see the reticle's branch): seconds it is given to take the unit
-  -- under the reticle; the focus's yaw strength and seconds of its gentle start; seconds the reticle may be
-  -- off the unit before the focus is taken to be following something else; seconds on it that settle the matter.
-  MIXED_WAIT = 0.45, RAMP = 0.15, RAMP_TIME = 0.2, ASTRAY = 0.25, SURE = 0.5,
   SEEK = 0.1,                       -- seconds the soft target is given at each width of its cone to take the unit under the reticle
   BARE = 0.15,                      -- seconds without a unit under the reticle before nothing is taken to be under it
 }
@@ -1126,7 +1122,7 @@ end
 -- the open reticle is held: on the target it was opened on ("target"); or,
 -- with nothing selected ("soft"), on what the soft target, its cone at the
 -- narrowest, takes in front. All of it is put back afterwards.
-local function beginFocus(reticle, mixed)
+local function beginFocus(reticle)
   local c = cfg.converge
   if not c.enabled or transFn then return end
   carry.since, carry.still = nil, nil   -- a release that was waiting: the gesture goes on
@@ -1156,8 +1152,8 @@ local function beginFocus(reticle, mixed)
     -- The game's focus stays off until its soft target has taken what the reticle is to follow (stepCarry):
     -- it would turn the view to whatever else the soft target finds, or to the target.
     want[FOCUS[3]], want[FOCUS[6]] = 0, 0
-    -- Beside a selected target the soft target is to go its own way (neither setting is refused in combat).
-    if mixed then want.SoftTargetWithLocked, want.SoftTargetMatchLocked = 2, 0 end
+    -- A corpse still selected must not stand in the soft target's way (neither setting is refused in combat).
+    want.SoftTargetWithLocked, want.SoftTargetMatchLocked = 2, 0
   end
   local held = {}
   for name in pairs(want) do held[name] = heldValue(name) end
@@ -1173,8 +1169,7 @@ local function beginFocus(reticle, mixed)
   end
   carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide, carry.peak = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil, nil
   carry.guid, carry.gone, carry.narrow = nil, nil, nil
-  carry.mixed, carry.live, carry.wait, carry.ramp, carry.astray, carry.good, carry.sure = mixed and true or nil, nil, nil, nil, nil, nil, nil
-  carry.arc, carry.seek, carry.seekOff, carry.bare = nil, nil, nil, nil
+  carry.live, carry.arc, carry.seek, carry.seekOff, carry.bare = nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 -- The zoom is over. A swivel that is still large is carried a moment longer
@@ -1195,8 +1190,7 @@ local function releaseGate()
   local rest = gauge.saved and carry.psi or 0
   endFocus(); gaugeEnd()
   carry.psi, carry.since, carry.facing, carry.still, carry.wide, carry.guid, carry.gone, carry.narrow = nil, nil, nil, nil, nil, nil, nil, nil
-  carry.mixed, carry.live, carry.wait, carry.ramp, carry.astray, carry.good, carry.sure = nil, nil, nil, nil, nil, nil, nil
-  carry.arc, carry.seek, carry.seekOff = nil, nil, nil
+  carry.live, carry.arc, carry.seek, carry.seekOff = nil, nil, nil, nil
   if abs(rest) > 0.05 then carry.release = {turn = rest, time = 0, done = 0} end
   Camera:Wake()
 end
@@ -1205,9 +1199,8 @@ end
 function carry.idle()
   local c = cfg.converge
   if not (c.heldGate and c.heldSoft and carry.live) then return end
-  carry.live, carry.ramp, carry.astray, carry.good, carry.sure, carry.arc, carry.seek, carry.wide = nil, nil, nil, nil, nil, nil, nil, nil
+  carry.live, carry.arc, carry.seek, carry.wide = nil, nil, nil, nil
   setCVar(FOCUS[3], 0)
-  setCVar(FOCUS[1], c.strength)
   setCVar("SoftTargetEnemyArc", 0)
 end
 -- Carry: while the engine's focus is on, the swivel it holds is taken over as
@@ -1271,38 +1264,9 @@ local function stepCarry(zoom, elapsed)
           return true                               -- what the soft target has now, it took with the wider cone
         end
       end
-      if not (onIt or (soft and bare and not carry.mixed and not carry.arc)) then return true end
-      carry.live, carry.astray, carry.good = true, 0, 0
-      if carry.mixed then
-        -- Something else is selected (the owner, 2026-11-24: the unit under the reticle is to be followed
-        -- exactly while the target stays the target, as while the game's soft targeting was always on).
-        -- Gently at first: should the focus go for the target instead, the reticle leaves the unit at once
-        -- and does not come back to it. That ends the hold, and the mouseover alone follows for the rest
-        -- of the press.
-        carry.ramp = 0
-        setCVar(FOCUS[1], min(c.strength, carry.RAMP))
-      else carry.sure = true end
+      if not (onIt or (soft and bare and not carry.arc)) then return true end
+      carry.live = true
       setCVar(FOCUS[3], 1)
-    elseif not carry.sure then
-      -- The unit was under the reticle when the focus came on: a swivel of more than a degree during the
-      -- gentle start is not for that unit.
-      local stray = carry.ramp and abs(carry.psi or 0) > 1.2
-      if carry.ramp then
-        carry.ramp = carry.ramp + elapsed
-        if carry.ramp > carry.RAMP_TIME and not stray then
-          carry.ramp = nil
-          setCVar(FOCUS[1], c.strength)
-        end
-      end
-      carry.good = carry.good + (onIt and elapsed or 0)
-      carry.astray = onIt and 0 or carry.astray + elapsed
-      if carry.good > carry.SURE then carry.sure = true
-      elseif stray or carry.astray > carry.ASTRAY then
-        carry.mixedOff, carry.mixedFail = true, (carry.mixedFail or 0) + 1
-        carry.psi = nil                             -- nothing of that swivel is kept: the game lets it go as its focus goes off
-        releaseGate()
-        return true
-      end
     end
   end
   if soft and carry.guid and not sameUnit("softenemy", carry.guid) then
@@ -1420,7 +1384,6 @@ local function stepCarry(zoom, elapsed)
       local ok, near = pcall(addon.Range.Within, addon.Range, c.heldSoft and "softenemy" or "target", carry.NEAR)
       if not (ok and near == false) then step = 0 end   -- nor one that is not known to be further off
     end
-    if carry.mixed and not carry.sure then step = 0 end   -- beside a target nothing is taken over until the focus is known to be on this unit
     local limit = rate * elapsed
     step = max(-limit, min(limit, step))
     -- A zoom turns by no more than the owner allows; nothing ever turns far off the character's own line.
@@ -1524,7 +1487,8 @@ end
 -- followed by hand; it is not the game's own focus, which is why that comes
 -- first where it can be had.
 local lock = {
-  VERT = 5,                         -- frames off the unit in which only the picking's height is tried before anything turns
+  VERT = 5,                         -- frames off the unit that are waited out before anything turns (the picking misses frames)
+  SLEW = 120,                       -- degrees a second at most for anything the following turns: nothing lands in one frame
   WALL = 0.3,                       -- seconds an edge the hand was stopped at stays shut after the last push against it
   SPEED = 15,                       -- degrees a second, as seen on screen, of the glide that looks for the unit
   LEGS = {1.5, -2},                 -- degrees as seen, from where it was lost: the likelier side, then the other; then back and wait
@@ -1532,60 +1496,27 @@ local lock = {
   EASE = 0.06,                      -- seconds: time constant of the glide picking up and losing speed
   LOST = 0.9,                       -- seconds off the unit before it is let go
   LIMIT = 40,                       -- degrees a second at most for the unit's learnt rate
-  -- Screen heights, from where the unit was last picked, at which the picking looks for it; and how far from
-  -- the reticle itself at most.
-  RISE = {0, 0.012, -0.012, 0.024, -0.024, 0.04, -0.04, 0.06, -0.06, 0.085, -0.085},
-  REACH = 0.15,
-  HEIGHT = "CursorCenteredYPos",
 }
--- The picking's height. The reticle's mouseover is picked at the centred
--- cursor, and the client lets that be put higher or lower at once with
--- nothing on screen to show it (measured live: the unit is picked or not
--- from the very next frame). A unit that walks nearer or further, or a view
--- tilted a little, slips out from under the reticle's point but not out of
--- its column: the point goes after it, up and down from where the unit was
--- last picked, before anything is turned. on: the followed unit is picked
--- now. narrow: only near where it was. Core.lua owns the setting and
--- writes the owner's value at every start of mouselooking.
-function lock.level(on, narrow)
-  if on then
-    if lock.probes and not lock.rest then
-      local reach = lock.at - lock.base
-      if abs(reach) > 0.001 then lock.way = reach > 0 and 1 or -1 end
-      lock.base = lock.at
-    end
-    lock.probes, lock.rest = nil, nil
-    return
-  end
-  if lock.flat or lock.rest then return end
-  if not lock.own then
-    lock.own = tonumber(GetCVar(lock.HEIGHT)) or 0.5
-    lock.base = lock.own
-  end
-  lock.probes = (lock.probes or 0) + 1
-  if lock.probes > 3 * #lock.RISE then
-    -- Not in the reticle's column: the picking waits at the owner's height until the unit is under it again.
-    lock.rest, lock.base, lock.at = true, lock.own, lock.own
-    setCVar(lock.HEIGHT, lock.own)
-    return
-  end
-  local reach = lock.RISE[(lock.probes - 1) % (narrow and 5 or #lock.RISE) + 1] * (lock.way or 1)
-  local at = max(lock.own - lock.REACH, min(lock.own + lock.REACH, lock.base + reach))
-  lock.at = at
-  -- Refused (in combat, should the client do that): the height stays the owner's.
-  if not setCVar(lock.HEIGHT, ("%.3f"):format(at)) then lock.flat, lock.at = true, lock.base end
-end
--- The picking is back at the owner's height.
-function lock.settle()
-  if lock.own then
-    setCVar(lock.HEIGHT, lock.own)
-    lock.settled = GetTime()
-  end
-  lock.own, lock.base, lock.at, lock.probes, lock.way, lock.flat, lock.rest = nil, nil, nil, nil, nil, nil, nil
+-- (The picking's height, CursorCenteredYPos, was moved up and down the reticle's column for a while to go
+-- after units that slip out from under the reticle's point. Everything drawn at the centred cursor went with
+-- it: the owner saw the reticle and its dot shifting vertically, twice, and it is not done any more.)
+-- The client reports the character's position in uneven steps (the owner's log of 2026-11-24: a frame with
+-- twice the movement, then one with none), and turning by each report as it came made the view judder
+-- whenever the character moved sideways. What is owed for that movement is paid out evenly: at the pace of
+-- the last moments, plus a share of what is still outstanding.
+function lock.sway(raw, elapsed)
+  local dt = max(elapsed, 0.001)
+  lock.flow = (lock.flow or 0) + (raw / dt - (lock.flow or 0)) * (1 - exp(-dt / 0.06))
+  local owed = (lock.owed or 0) + raw
+  local out = lock.flow * dt
+  out = out + (owed - out) * (1 - exp(-dt / 0.12))
+  lock.owed = owed - out
+  return out
 end
 function lock.release()
   lock.guid, lock.sweep, lock.push, lock.north, lock.west, lock.conv, lock.speed, lock.hand = nil, nil, nil, nil, nil, nil, nil, nil
   lock.wall, lock.rel, lock.count, lock.pace, lock.pushed, lock.inset = nil, nil, nil, nil, nil, nil
+  lock.flow, lock.owed, lock.left = nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1617,7 +1548,6 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   if lock.off > lock.LOST or died or on and lock.near() then
     lock.close = on and not died or nil   -- come close: the view stays as it is while the unit is under the reticle
     lock.release()
-    lock.settle()
     return false
   end
   -- The character's own movement to the left of the view is taken out by the unit's distance. (Counting its
@@ -1629,14 +1559,13 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
     local heading = rad(facing + conv.applied)
     local toNorth, toWest = north - lock.north, west - lock.west
     if abs(toNorth) + abs(toWest) < 5 then              -- a jump is no movement
-      step = -deg((toWest * cos(heading) - toNorth * sin(heading)) / lock.dist)
+      step = lock.sway(-deg((toWest * cos(heading) - toNorth * sin(heading)) / lock.dist), elapsed)
     end
   end
   lock.north, lock.west = north, west
   local seen = max(0.33, lock.dist / (lock.dist + zoom))    -- degrees seen on screen per degree turned about the character
   -- Under the reticle, or only just off it with nothing turned yet.
   local held = on or count <= lock.VERT
-  lock.level(on, count > #lock.RISE)
   -- What the owner has turned in the last quarter second or so, and the pace of it.
   lock.hand = lock.hand * exp(-elapsed / 0.25) + steered
   lock.pace = lock.pace + (steered / max(elapsed, 0.001) - lock.pace) * (1 - exp(-elapsed / 0.15))
@@ -1752,19 +1681,21 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   if lock.sweep then lock.sweep.at = lock.sweep.at + speed * elapsed end
   step = step + speed * elapsed / seen
   leaveHome(offset, guid)
+  -- Nothing lands in one frame: what is wanted beyond a quick turn's pace is carried into the next frames
+  -- (a reticle put back inside the unit used to jump there, up to 3.7 degrees at once in the owner's log).
+  step = step + (lock.left or 0)
+  local most = lock.SLEW * elapsed
+  local out = max(-most, min(most, step))
+  lock.left = step - out
+  step = out
   -- Never far off the character's own line: beyond that the view goes with the mouse again.
-  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step = 0 end
+  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step, lock.left = 0, nil end
   turn(step)
   conv.mode, conv.unit, conv.distance, conv.source, conv.followed = "follow", "mouseover", lock.dist, "mouseover alone", guid
   conv.bias = conv.applied - convergeAngle(offset, lock.dist)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the following itself
   conv.gateFollow = true
   return true
-end
--- For whatever draws at the picking point (the reticle): true while the point is not at the owner's own
--- height, and a moment longer for the client to have it back there. The reticle then stays where it was.
-function Camera:PickBorrowed()
-  return lock.own ~= nil or (lock.settled ~= nil and GetTime() - lock.settled < 0.2)
 end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
@@ -1875,15 +1806,13 @@ local function stepConverge(zoom, elapsed)
           -- view goes back to where it rests instead of on to the next enemy in front.
           if c.softFollow and not conv.spent then beginFocus("soft") end
         elseif over then
-          -- Something else is selected. First the game's soft target, as while its soft targeting was
-          -- always on: where it takes the unit under the reticle, the game's focus follows that unit and
-          -- the target stays the target. Where it does not take it within a moment, cannot be switched on
-          -- (combat), or the focus has twice gone for the target instead: by the mouseover alone.
-          if not (c.softFollow and not carry.mixedOff and (carry.mixedFail or 0) < 2 and not conv.spent
-              and beginFocus("soft", true) ~= false) then
-            if lock.begin(c, offset) then return true end
-            lock.close = lock.near() or nil            -- close by: nothing is turned, and nothing is turned back while it is there
-          end
+          -- Something else is selected: by the mouseover alone. The game does have a soft target beside
+          -- a selected target (SoftTargetWithLocked 2, SoftTargetMatchLocked 0), and it was the very unit
+          -- under the reticle when tried live on 2026-11-24; but the game's focus, switched on then, went
+          -- for the target all the same and took the view 2.7 and 12 degrees off that unit. The focus
+          -- follows the target wherever there is one.
+          if lock.begin(c, offset) then return true end
+          lock.close = lock.near() or nil              -- close by: nothing is turned, and nothing is turned back while it is there
         end
       elseif c.heldGate and not c.heldSoft then
         -- Opened on the target, and the target has died or is no more: the hold ends, the view goes back.
@@ -1891,23 +1820,14 @@ local function stepConverge(zoom, elapsed)
           releaseGate()
           conv.spent = true
         end
-      elseif c.heldGate and c.heldSoft and carry.mixed and not carry.live then
-        -- Beside a target, the soft target has not taken the unit under the reticle: by the mouseover alone.
-        carry.wait = (carry.wait or 0) + elapsed
-        if carry.wait > carry.MIXED_WAIT then
-          carry.mixedOff = true
-          releaseGate()
-          if UnitExists("mouseover") and not carry.dead("mouseover") and lock.begin(c, offset) then return true end
-        end
       end
     end
   else
     if c.heldGate then releaseGate() end               -- the reticle closed
     lock.release()
-    lock.settle()
     if not gate then
       conv.followGUID, conv.followToken = nil, nil
-      conv.spent, carry.mixedOff = nil, nil
+      conv.spent = nil
     end
   end
   -- The reticle's following has ended (closed, or the unit is gone): back to where the view rests.
