@@ -1483,7 +1483,12 @@ end
 --   then on.
 local lock = {
   SLEW = 120,                       -- degrees a second at most for what is turned: nothing lands in one frame
-  REACH = 0,                        -- yards the range checks leave out: they measure between the two units' reaches, not their centres
+  -- Yards the range checks leave out. They compare a range with the distance between the two units' centres
+  -- less both their combat reaches (the server emulators' Spell::CheckRange and GetCombatDistance; a
+  -- character's reach is 1.5, a boar's or a scorpid's 0.6 to 0.85, an elder boar's 1.0), so a unit "between
+  -- 30 and 35 yards" stands 32.3 to 37.3 from the character. Left out, the unit was taken to be about 8 per
+  -- cent nearer than it is and the view turned that much too far for every step to the side.
+  REACH = 2.3,
   ASK = 0.1,                        -- seconds between questions of range
   DWELL = 0.3,                      -- seconds another unit is under the reticle before that one is held
   ASIDE = 6,                        -- degrees the hand has taken the view from the unit after which the hold rests
