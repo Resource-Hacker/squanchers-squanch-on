@@ -24,9 +24,12 @@
   reticle: other enemies by the game's soft target", on by default). With
   nothing selected that is the only following: what the soft target does not
   take is not followed, and nothing is in combat, where the game does not
-  let its soft targeting be switched on. A unit under the reticle while
-  something else is selected is followed from the mouseover alone, which is
-  looser. There the mouse still moves the reticle within the unit,
+  let its soft targeting be switched on. With something else selected, the
+  soft target is tried on the unit under the reticle first: where the game
+  takes it, that unit is followed as exactly and your target stays your
+  target; where it does not, and in combat, the unit is followed from the
+  mouseover alone, which is looser. There the mouse still moves the reticle
+  within the unit,
   so you can go after a unit that moves and put the reticle where you want
   it; pushing on past the unit's edge turns your character and leaves the
   view on the unit (Camera page, "Open reticle: the mouse moves the reticle
