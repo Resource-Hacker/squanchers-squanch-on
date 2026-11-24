@@ -295,8 +295,8 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 13, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = false, firstPersonStep = false, swapFocus = true}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 14, follow = true,
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = false, firstPersonStep = false, swapFocus = false}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -2955,6 +2955,12 @@ local function normalize(config)
   -- did not come back with the focus on; the one run that had looked like it is explained by a boar walking
   -- the way the test turned). Off unless chosen, until it is shown to hold.
   if config.converge.rev < 13 then config.converge.interact, config.converge.rev = nil, 13 end
+  -- rev 14: the target waiting in the focus while the reticle is held was on by default for one session on
+  -- 2026-11-24. It does what it says, but the owner's aim was an ability on the unit under the reticle with
+  -- Auto Shot staying on the target, and Auto Shot shoots the target only: it stops with the target cleared,
+  -- and the first harmful cast makes its own target the target (seen in the owner's log, and by them). Off
+  -- unless chosen.
+  if config.converge.rev < 14 then config.converge.swapFocus, config.converge.rev = nil, 14 end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   -- How long each kind of unit is, as the reticle's following has measured it (lock.learn): by its id.
   if type(config.converge.sizes) ~= "table" then config.converge.sizes = {} end

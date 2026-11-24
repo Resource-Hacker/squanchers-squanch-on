@@ -10,17 +10,18 @@
   next mouse turns lines the two up again.
 - Camera: with nothing selected, holding the reticle open follows the unit
   that comes under it, also while it walks, until you let go.
-- Camera: with an enemy selected, opening the reticle now makes that enemy
-  your focus and clears your target for as long as you hold it (Camera
-  page, "Open reticle: your target waits in the focus while you hold it",
-  on by default), so the game's own soft target and camera follow whatever
-  comes under the reticle, as with nothing selected. Letting go makes it
-  your target again, unless you selected something else meanwhile, and
-  clears the focus. The target frames, the target's nameplate marker, the
-  target crosshair and the reticle's target marks keep showing it. Target
-  and focus can only be changed inside a key press, so the reticle's own
-  press does it. Auto-attack and Auto Shot run on the target and may pause
-  while you hold; a focus you set yourself is replaced.
+- Camera: an option (Camera page, "Open reticle: your target waits in the
+  focus while you hold it", off by default) makes a selected enemy your
+  focus and clears your target while the reticle is held, so the game's own
+  soft target and camera follow whatever comes under the reticle, as with
+  nothing selected; letting go makes it your target again, unless you
+  selected something else meanwhile. The target frames, the target's
+  nameplate marker, the target crosshair and the reticle's target marks keep
+  showing it. Target and focus can only be changed inside a key press, so
+  the reticle's own press does it. Auto-attack and Auto Shot shoot the
+  target only: they stop while you hold, and the first harmful spell you
+  cast makes its own target your target. A focus you set yourself is
+  replaced.
 - Camera: with nothing selected, zooming turns the view onto the enemy
   nearest the reticle and leaves it there (Camera page, "Zoom sticks to the
   enemy near the reticle", on by default, with a slider for how near).
