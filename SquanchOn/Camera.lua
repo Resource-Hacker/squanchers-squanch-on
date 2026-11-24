@@ -1490,6 +1490,12 @@ local lock = {
   -- cent nearer than it is and the view turned that much too far for every step to the side.
   REACH = 2.3,
   ASK = 0.1,                        -- seconds between questions of range
+  -- The unit's nameplate as a rangefinder (lock.plate). least: the plate's size at far yards from the camera;
+  -- base: the furthest this client shows nameplates, from which it counts the far end of the sizing.
+  SPAN = {least = 0.96, far = 145, base = 45},
+  EASE = 0.06,                      -- seconds by which a plate's size trails its distance (measured: 0.692, then 0.5002 after 0.45 s on the way to 0.5)
+  PULL = 0.25,                      -- seconds over which the distance is taken from the plate's reading
+  SLACK = 1.5,                      -- yards a plate's reading may lie outside the range bracket and still be believed
   DWELL = 0.3,                      -- seconds another unit is under the reticle before that one is held
   ASIDE = 6,                        -- degrees the hand has taken the view from the unit after which the hold rests
   GONE = 1,                         -- seconds without the unit's nameplate (out of range, or dead) after which the hold rests
@@ -1514,6 +1520,7 @@ function lock.release()
   lock.guid, lock.token, lock.north, lock.west, lock.offset, lock.low, lock.high = nil, nil, nil, nil, nil, nil, nil
   lock.off, lock.aside, lock.other, lock.rest, lock.asked, lock.gone, lock.plated = nil, nil, nil, nil, nil, nil, nil
   lock.flow, lock.owed, lock.left = nil, nil, nil
+  lock.pace, lock.ranged, lock.seen = nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1533,6 +1540,24 @@ function lock.range(unit)
   -- (From the camera's pivot, which is a little ahead of the character.)
   return low and low + lock.REACH - PIVOT, high and high + lock.REACH - PIVOT
 end
+-- The unit's distance by its nameplate. The client sizes a nameplate by its distance from the camera, and an
+-- addon may read a plate's scale although it may not ask where the plate is (the owner's idea of 2026-11-24:
+-- "an invisible frame on the nameplate that has that fade value 1:1 for every distance unit"; tried live the
+-- same hour with the sizing switched on for a second: the scale of the plate of the unit under the reticle
+-- followed its distance as a smooth number, 0.5622 at about 39 yards from the camera with the sizing set from
+-- 1 at the camera to 0.5 at 45 yards, and its alpha agreed). Nameplates.lua keeps that sizing on, so slight
+-- that it is not seen (four per cent over 145 yards). With the unit under the reticle the camera, the pivot
+-- and the unit are in line, so the unit is that distance less the zoom from the pivot. The selected plate is
+-- sized otherwise (1.2) and says nothing; nor does a plate beyond the far end, or one the client keeps secret.
+function lock.plate(unit, zoom)
+  local span = addon.Nameplates and addon.Nameplates.rangefinder
+  if not (span and C_NamePlate and C_NamePlate.GetNamePlateForUnit) then return end
+  local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+  if not (ok and plate) then return end
+  local read, scale = pcall(plate.GetScale, plate)
+  if not read or secret(scale) or type(scale) ~= "number" or scale >= 0.9999 or scale <= span.least + 0.0001 then return end
+  return span.far * (1 - scale) / (1 - span.least) - zoom, scale
+end
 -- The unit to ask: under the reticle it is the mouseover, else its nameplate.
 function lock.unit(on)
   if on then return "mouseover" end
@@ -1551,6 +1576,10 @@ function lock.begin(c, offset)
   local low, high = lock.range("mouseover")
   lock.guid, lock.low, lock.high = guid, low, high
   lock.dist = max(3, low and high and (low + high) / 2 or high or low and low * 1.2 or c.distance)
+  local seen = lock.plate("mouseover", GetCameraZoom())
+  if seen and (not low or seen > low - lock.SLACK) and (not high or seen < high + lock.SLACK) then
+    lock.dist, lock.ranged, lock.seen = max(3, seen), true, seen
+  end
   lock.off, lock.aside, lock.asked = 0, 0, 0
   return true
 end
@@ -1611,9 +1640,12 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
       -- pivot by the shoulder's offset, so the unit stands that much to the right of where the view looks.)
       local beside = offset * cfg.converge.scale
       local toward = heading - rad(convergeAngle(offset, lock.dist))
-      local dist = lock.dist - (toNorth * cos(toward) + toWest * sin(toward))
-      if lock.low and dist < lock.low then dist = lock.low end
-      if lock.high and dist > lock.high then dist = lock.high end
+      local nearer = toNorth * cos(toward) + toWest * sin(toward)
+      lock.pace = (lock.pace or 0) + (nearer / max(elapsed, 0.001) - (lock.pace or 0)) * (1 - exp(-elapsed / 0.1))
+      local dist = lock.dist - nearer
+      local slack = lock.ranged and lock.SLACK or 0     -- a plate's reading is believed a little beyond the bracket
+      if lock.low and dist < lock.low - slack then dist = lock.low - slack end
+      if lock.high and dist > lock.high + slack then dist = lock.high + slack end
       lock.dist = max(3, dist)
       -- To the left of the view or the right: taken out by how far along the view the unit is.
       if not lock.rest then
@@ -1623,6 +1655,23 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
     end
   end
   lock.north, lock.west = north, west
+  -- Its nameplate's reading, where there is one: what the character's own steps have changed of it since the
+  -- plate last caught up is added, and the distance is drawn to it. (Read after the view was turned for this
+  -- frame's steps: the distance is for the next.)
+  do
+    local token = on and "mouseover" or lock.token
+    local seen = token and lock.plate(token, zoom)
+    if seen then
+      seen = seen - lock.EASE * (lock.pace or 0)
+      lock.seen = seen
+      if (not lock.low or seen > lock.low - lock.SLACK) and (not lock.high or seen < lock.high + lock.SLACK) then
+        lock.dist = max(3, lock.dist + (seen - lock.dist) * (lock.ranged and 1 - exp(-elapsed / lock.PULL) or 1))
+        lock.ranged = true
+      end
+    else
+      lock.seen = nil
+    end
+  end
   if on and not c.handSteers then step = step - steered end   -- the setting is off: the view is held still on the unit against the hand
   -- A zoom shifts the unit by the shoulder's convergence.
   if lock.offset and lock.offset ~= offset then
@@ -2294,10 +2343,21 @@ events:SetScript("OnEvent", function(self, event, unit)
   Camera:Wake()
 end)
 
+-- For Nameplates.lua: the sizing of nameplates by distance that the reticle's hold reads (lock.plate), or
+-- nothing while the reticle follows nothing.
+function Camera:Rangefinder()
+  local c = cfg and cfg.converge
+  return self.active and c and c.enabled and c.follow and lock.SPAN or nil
+end
+function lock.plates()
+  local plates = addon.Nameplates
+  if plates and plates.started and plates.ApplyCVars then plates:ApplyCVars() end
+end
 -- Call after any edit of the settings table.
 function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
+  lock.plates()
   if not self.active then return end
   gaugeEnd(); endFocus(); stopConverge(); lock.release()
   carry.rearm()
@@ -2326,6 +2386,7 @@ function Camera:Disable(restore)
     if CameraZoomIn == zoomInHook then CameraZoomIn = nativeZoomIn end
     if CameraZoomOut == zoomOutHook then CameraZoomOut = nativeZoomOut end
     self.active = false
+    lock.plates()                      -- the rangefinder's sizing of nameplates goes with it
   end
   if restore and cfg and cfg.previous then
     for name, value in pairs(cfg.previous) do setCVar(name, value) end

@@ -35,9 +35,16 @@
   moves as you move, or as your mouse turns it. (It used to look for a unit
   that had slipped off, gliding to one side and the other; with only
   "under the reticle or not" to go by that was a hunt and looked like one.)
-  The distance comes from the game's range checks, is kept up as you walk
-  towards the unit or away, and is set right whenever a check changes its
-  answer. The game reports your position in uneven steps; they are evened
+  The distance is read from the unit's nameplate: the game sizes a
+  nameplate by its distance from the camera and lets an addon read that
+  size, though not where the plate is, so the addon keeps that sizing on at
+  a slope too slight to see (a plate 30 yards off is about one per cent
+  smaller; the selected plate is not touched) and reads it as yards. Where
+  there is no reading (no nameplates, the game's own plates, a plate kept
+  secret) the distance comes from the game's range checks instead (five
+  yards wide, counted between the two units' hit areas, which is allowed
+  for), is kept up as you walk towards the unit or away, and is set right
+  whenever a check changes its answer. The game reports your position in uneven steps; they are evened
   out, nothing lands in a single frame, and the point the game picks at is
   never moved (that had shifted the reticle and its dot up and down). The
   game does not let soft targeting be switched on in combat,

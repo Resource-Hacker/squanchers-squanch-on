@@ -477,6 +477,18 @@ function NP:ApplyCVars(zone)
   local enhance = ns.NameplateEnhance
   if enhance and enhance:On('pointer') and enhance:On('offscreen') then wanted.nameplateShowOffscreen = 1 end
   if enhance and enhance:On('stacking') then wanted.nameplateMotion = 1 end
+  -- The camera's rangefinder (Camera.lua, lock.plate). The client sizes a plate by its distance from the
+  -- camera: nameplateMaxScale up to nameplateMaxScaleDistance yards, nameplateMinScale from the furthest it
+  -- shows plates (45 yards on this client, whatever nameplateMaxDistance says) less nameplateMinScaleDistance,
+  -- and evenly in between (read live on 2026-11-24: four readings of a plate's scale against the range checks
+  -- put that far end between 43.9 and 45.5 yards). A plate's scale can be read where its place cannot, so a
+  -- slope too slight to see is kept on: four per cent over 145 yards, a plate 30 yards off is about one per
+  -- cent smaller. The selected plate keeps nameplateSelectedScale.
+  local range = ns.Camera and ns.Camera.Rangefinder and ns.Camera:Rangefinder()
+  if range then
+    wanted.nameplateMaxScale, wanted.nameplateMinScale = 1, range.least
+    wanted.nameplateMaxScaleDistance, wanted.nameplateMinScaleDistance = 0, range.base - range.far
+  end
   local friendly = self:Settings().zoneFriendly
   if zone and friendly.enabled then
     local zone = self.zone
@@ -506,11 +518,22 @@ function NP:ApplyCVars(zone)
       end
     end
   end
+  -- The rangefinder is on only where the client has taken all of it; its far end is counted from the
+  -- furthest plate the client shows.
+  self.rangefinder = nil
+  if range and same(ask(GetCVar, 'nameplateMaxScale'), 1) and same(ask(GetCVar, 'nameplateMinScale'), range.least)
+    and same(ask(GetCVar, 'nameplateMaxScaleDistance'), 0) then
+    -- (The far end by what the client holds, should it not have taken the distance asked for.)
+    local short = tonumber(ask(GetCVar, 'nameplateMinScaleDistance'))
+    local furthest = math.min(tonumber(ask(GetCVar, 'nameplateMaxDistance')) or range.base, range.base)
+    if short and furthest - short > 1 then self.rangefinder = { least = range.least, far = furthest - short } end
+  end
   -- The rings keep nameplateSelectedScale; it may just have changed.
   if ns.TargetCrosshairs and ns.TargetCrosshairs.ScaleChanged then ns.TargetCrosshairs:ScaleChanged() end
   return true
 end
 function NP:RestoreCVars()
+  self.rangefinder = nil
   local previous = ns.db and ns.db.nameplateCVarsPrevious
   if type(previous) ~= 'table' then return true end
   if InCombatLockdown() then self.pendingRestore = true; return false end
