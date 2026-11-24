@@ -1104,7 +1104,7 @@ local function beginFocus(reticle)
     carry.stepped = true
     nativeZoomOut(carry.FIRST_PERSON_STEP)
   end
-  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil
+  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide, carry.peak = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 -- The zoom is over. A swivel that is still large is carried a moment longer
@@ -1235,6 +1235,11 @@ local function stepCarry(zoom, elapsed)
         ratio = carry.ratio or 1
       end
     elseif not carry.stage then carry.mark = nil end
+    -- A long zoom never stands still for that answer. Turning far more than
+    -- the swivel ever was without bringing it down is the same case: a unit
+    -- too near (seen live: 29 degrees turned on a swivel of 3).
+    carry.peak = max(carry.peak or 0, abs(psi))
+    if not carry.stage and not c.heldGate and abs(carry.total) > 2.5 * carry.peak + 3 then carry.stage = "given" end
     -- A release that is due: no more turns, so that the swivel read at the end is where the engine has settled.
     if carry.still then rate = 0 end
     local step = carry.stage == "given" and 0 or psi * ratio * (1 - exp(-elapsed / CARRY_TIME))
