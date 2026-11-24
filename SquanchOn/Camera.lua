@@ -1893,8 +1893,11 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
         if spin then lock.mode = "follow"; middle(testYards, -way) else lock.mode, lock.towards = nil, way end
         return 0
       end
-      -- (Found ahead of a view that was turning with it, or standing for it: more of what seemed left.)
-      if lock.trim and ask.from == "follow" and way == lock.way then lock.trim = min(1, lock.trim + 0.5) end
+      -- (Found ahead of a view that was turning with it, or to either side of one that stood for it: it does
+      -- move across the view, and more of what seemed left is turned for. In the owner's log of 14:46 the
+      -- view stood on the back of a boar walking off for a second and a half, the boar veered out, was found,
+      -- and the view stood again where it found it, because only a find while turning had counted.)
+      if lock.trim and (ask.from ~= "follow" or way == lock.way) then lock.trim = min(1, lock.trim + 0.5) end
       lock.way = way
       if spin then
         lock.mode = "follow"
