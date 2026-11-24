@@ -811,8 +811,6 @@ local FOCUS = {"test_cameraTargetFocusEnemyStrengthYaw", "test_cameraTargetFocus
 local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom stops
 local CARRY_TIME = 0.3              -- seconds: time constant of taking the engine's swivel over as a turn
 local CARRY_RATE = 12               -- degrees per second at most: the engine trails each turn, and the unit strays that much meanwhile
-local CARRY_LAG = 0.14              -- seconds by which the engine's answer trails a turn (twice its spring's time)
-local FOLLOW_RATE = 120             -- degrees per second at most while the open reticle's hold is taken over
 local AWAY_LIMIT = 75               -- degrees the view is ever turned away from the character's own line
 local CARRY_REST = 0.6              -- degrees of swivel a release may still find
 local CARRY_PATIENCE = 1.3          -- seconds a release waits for the swivel to come down to that
@@ -820,7 +818,6 @@ local CARRY_SETTLE = 0.15           -- seconds without a turn before the release
 local RELEASE_TIME = 0.07           -- seconds: the engine lets its focus go as e0 (1 + t/T) exp(-t/T)
 local CONVERGE_MAX_RATE = 600       -- degrees per second
 local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
-local FIRST_PERSON_STEP = 0.5       -- yards the view steps out of first person while the reticle's hold is on (setting)
 local AIM_TIME = 0.07               -- seconds: time constant of the turn onto a unit during a zoom
 local AIM_SETTLE = 0.25             -- seconds an aim keeps turning after the zoom stopped
 local FOLLOW_TIME = 0.035           -- the same for the open reticle
@@ -831,7 +828,12 @@ local REALIGN = {time = 0.35, least = 10}   -- while the character moves: second
 local GAUGE_YARDS = {400, 200, 100, 60}
 local sin, cos, tan, atan, rad, sqrt, exp, atan2 = math.sin, math.cos, math.tan, math.atan, math.rad, math.sqrt, math.exp, math.atan2
 local conv = {applied = 0, quiet = huge}
-local gauge, carry = {}, {}
+-- (Three constants live in the carry table: this file's main chunk is at the 200 local variables Lua allows.)
+local gauge, carry = {}, {
+  LAG = 0.14,                       -- seconds by which the engine's answer trails a turn (twice its spring's time)
+  FOLLOW_RATE = 120,                -- degrees per second at most while the open reticle's hold is taken over
+  FIRST_PERSON_STEP = 0.5,          -- yards the view steps out of first person while the reticle's hold is on (setting)
+}
 local function wrap(angle) return (angle + 180) % 360 - 180 end
 -- Yards north and west of a unit, or nothing where the client keeps them back.
 local function position(unit)
@@ -1035,7 +1037,7 @@ local function endFocus()
   c.held, c.heldGate, c.heldSoft = nil, nil, nil
   if carry.stepped then               -- back into first person
     carry.stepped = nil
-    if nativeZoomIn and GetCameraZoom() < FIRST_PERSON_STEP + 0.3 then nativeZoomIn(FIRST_PERSON_STEP + 0.3) end
+    if nativeZoomIn and GetCameraZoom() < carry.FIRST_PERSON_STEP + 0.3 then nativeZoomIn(carry.FIRST_PERSON_STEP + 0.3) end
   end
   for name, value in pairs(held) do
     setCVar(name, value)
@@ -1097,7 +1099,7 @@ local function beginFocus(reticle)
   -- reticle is held the view may sit a step outside it (setting, off).
   if reticle and c.firstPersonStep and nativeZoomOut and GetCameraZoom() < 0.05 then
     carry.stepped = true
-    nativeZoomOut(FIRST_PERSON_STEP)
+    nativeZoomOut(carry.FIRST_PERSON_STEP)
   end
   carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
@@ -1189,12 +1191,12 @@ local function stepCarry(zoom, elapsed)
     local offset = shoulderAt(zoom)
     leaveHome(offset)
     -- The reticle's hold has to keep up with a unit that walks and an owner who strafes.
-    local rate, ratio = c.heldGate and FOLLOW_RATE or CARRY_RATE, carry.ratio or 1
+    local rate, ratio = c.heldGate and carry.FOLLOW_RATE or CARRY_RATE, carry.ratio or 1
     -- The engine's answer trails the turns by its spring: they are compared
     -- through a copy that trails alike. Only while the zoom stands still,
     -- its own shift of the unit would spoil the answer; and once per hold.
     local trail = carry.trail or carry.total
-    trail = trail + (carry.total - trail) * (1 - exp(-elapsed / CARRY_LAG))
+    trail = trail + (carry.total - trail) * (1 - exp(-elapsed / carry.LAG))
     carry.trail = trail
     if not carry.stage and was and conv.quiet > 0.05 and not c.heldGate then
       local mark = carry.mark
@@ -1280,6 +1282,124 @@ local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   conv.bias = conv.applied - convergeAngle(offset, distance)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the holding itself
 end
+-- Follow by the mouseover alone. For a unit the client gives no position
+-- for, and on which its own focus cannot be put (something else is
+-- selected, or the soft target is not wanted), all that is known is whether
+-- the unit is under the reticle. That is enough to stay on it. What the
+-- owner turns is taken out exactly (the character turns, the view stays);
+-- what the character moves, by the unit's estimated distance; a zoom, by
+-- the shoulder's convergence. What the unit does itself is learnt: each
+-- time the reticle slips off it a short search to either side finds it
+-- again, and how far it had gone corrects its rate (or, while the
+-- character moves sideways, its distance).
+local lock = {
+  STEP = 0.5,                       -- degrees as seen on screen: the unit of the search's steps (well under a model's width)
+  -- The search, in those units from where the unit was lost: mostly toward where it most likely went, now
+  -- and then the other way, and on outwards. Then it stands still where it began and waits.
+  SEARCH = {1, 2, -1, 3, -2, 4.5, -3, 6, -4.5, 8, -6, 0},
+  RUN = 10,                         -- degrees a second as seen that the unit may be running on, allowed for (up to 2.5 degrees)
+  WAIT = 2,                         -- frames a search step is given to show under the reticle
+  MISS = 2,                         -- frames off the unit before a search begins (one frame can be a flicker)
+  INSIDE = 0.4,                     -- degrees as seen that the view goes on past the edge once the unit is found again
+  LOST = 0.7,                       -- seconds off the unit before it is let go
+}
+function lock.release()
+  lock.guid, lock.hunt, lock.push, lock.north, lock.west, lock.conv, lock.drift = nil, nil, nil, nil, nil, nil, nil
+end
+function lock.begin(c, offset)
+  local ok, guid = pcall(UnitGUID, "mouseover")
+  if not ok or secret(guid) or type(guid) ~= "string" then return false end
+  local _, yards = reticleUnit()
+  lock.release()
+  yards = yards or c.distance
+  lock.guid, lock.rate, lock.dist, lock.miss, lock.off, lock.span, lock.sway, lock.first = guid, 0, yards, 0, 0, 0, 0, true
+  lock.least, lock.most = max(3, yards * 0.4), min(80, yards * 2.5)      -- the distance is never taken far from the first estimate
+  return true
+end
+-- One frame. False once the unit is let go.
+function lock.step(c, facing, steered, zoom, offset, elapsed)
+  local guid = lock.guid
+  local seen = max(0.33, lock.dist / (lock.dist + zoom))    -- degrees seen on screen per degree turned about the character
+  local on = sameUnit("mouseover", guid)
+  local step = -steered                               -- the owner's own turning
+  local north, west = position("player")
+  local sway = 0
+  if north and lock.north then                        -- the character's own movement: yards to the left of the view
+    local heading = rad(facing + conv.applied)
+    sway = -(north - lock.north) * sin(heading) + (west - lock.west) * cos(heading)
+    if abs(sway) < 5 then step = step - deg(sway / lock.dist) else sway = 0 end     -- a jump is no movement
+  end
+  lock.drift = (lock.drift or 0) + (sway / max(elapsed, 0.001) - (lock.drift or 0)) * min(1, elapsed / 0.1)   -- yards a second, smoothed
+  lock.north, lock.west = north, west
+  local angle = convergeAngle(offset, lock.dist)      -- a zoom shifts the unit by the shoulder's convergence
+  if lock.conv then step = step + angle - lock.conv end
+  lock.conv = angle
+  step = step + lock.rate * elapsed                   -- the unit's own going
+  lock.span, lock.sway = lock.span + elapsed, lock.sway + sway
+  if on then
+    local hunt = lock.hunt
+    if hunt then
+      -- Found: it had gone this far (in turn) beyond where the reticle was thought to sit inside it.
+      local way = hunt.at > 0 and 1 or -1
+      local gone = way * (abs(hunt.at) + (lock.first and 0 or lock.INSIDE / seen))
+      local fed = -deg(lock.sway / lock.dist)         -- what the character's movement was taken to call for
+      if abs(lock.sway) > 1 and fed * (fed + gone) > 0 then
+        -- While moving sideways the miss is the distance's: nearer than thought needs more turn, further less.
+        local factor = max(0.6, min(1.6, fed / (fed + gone)))
+        lock.dist = max(lock.least, min(lock.most, lock.dist * factor))
+      else
+        if gone * lock.rate < 0 then lock.rate = lock.rate * 0.3 end       -- the view had run on ahead: it slowed or turned back
+        lock.rate = max(-90, min(90, lock.rate + 0.7 * gone / max(0.15, lock.span)))
+      end
+      lock.push, lock.side, lock.hunt, lock.first = way * lock.INSIDE / seen, way, nil, nil
+      lock.span, lock.sway = 0, 0
+    end
+    lock.miss, lock.off = 0, 0
+    local push = lock.push
+    if push then                                      -- on past the edge, over a few frames
+      local part = push * min(1, elapsed / 0.03)
+      step, push = step + part, push - part
+      lock.push = abs(push) > 0.01 and push or nil
+    end
+  else
+    lock.miss, lock.off = lock.miss + 1, lock.off + elapsed
+    if lock.off > lock.LOST then
+      lock.release()
+      return false
+    end
+    if lock.miss >= lock.MISS then
+      local hunt = lock.hunt
+      if not hunt then
+        -- Where it most likely went. The character moves sideways: the view lags what that calls for (a unit
+        -- nearer than thought). Lost soon after it was found: the way it was going. Lost late: the view ran
+        -- on ahead of a unit that slowed or turned back.
+        local toward
+        if abs(lock.drift) > 1 then toward = lock.drift > 0 and -1 or 1
+        elseif lock.span < 0.5 or abs(lock.rate) <= 1 then toward = lock.side or 1
+        else toward = lock.rate > 0 and -1 or 1 end
+        hunt = {at = 0, count = 0, wait = 0, toward = toward, time = 0}
+        lock.hunt, lock.push = hunt, nil
+      end
+      hunt.wait, hunt.time = hunt.wait - 1, hunt.time + elapsed
+      if hunt.wait <= 0 then
+        hunt.count = hunt.count + 1
+        local far = lock.SEARCH[hunt.count] or 0
+        -- On the likelier side it has had this long to run on.
+        local want = hunt.toward * (far * lock.STEP + (far > 0 and 1 or far < 0 and -1 or 0) * min(2.5, lock.RUN * hunt.time)) / seen
+        step, hunt.at, hunt.wait = step + want - hunt.at, want, lock.WAIT
+      end
+    end
+  end
+  leaveHome(offset)
+  step = -steered + max(-5, min(5, step + steered))   -- never a wild turn in one frame (the owner's own turning apart)
+  -- Never far off the character's own line: beyond that the view goes with the mouse again.
+  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step = 0 end
+  turn(step)
+  conv.mode, conv.unit, conv.distance, conv.source, conv.followed = "follow", "mouseover", lock.dist, "mouseover alone", guid
+  conv.bias = conv.applied - convergeAngle(offset, lock.dist)
+  conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the following itself
+  return true
+end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
   local c = cfg.converge
@@ -1334,6 +1454,7 @@ local function stepConverge(zoom, elapsed)
   if not c.enabled or transFn or #turns > 0 then
     if conv.live then stopConverge() end
     conv.steer, conv.watch, conv.followGUID, conv.followToken = nil, nil, nil, nil
+    lock.release()
     return false
   end
   local facing = readFacing()
@@ -1357,21 +1478,29 @@ local function stepConverge(zoom, elapsed)
     -- Never far off the character's own line: beyond that the view goes with the mouse again.
     if wanted and abs(wanted) <= AWAY_LIMIT then
       if c.heldGate then releaseGate() end             -- by its position: the engine's focus is not needed
+      lock.release()
       hold(unit, wanted, distance, offset, elapsed, "follow", conv.followGUID)
       return true
     end
-    if not wanted and not c.held then
-      -- The game gives no position for what is there: its own focus follows
-      -- until the reticle closes. With a target selected that is the target,
-      -- when the reticle was opened on it; with nothing selected, what the
-      -- game's soft target takes (if allowed).
-      if UnitExists("target") then
+    if not wanted then
+      -- The game gives no position for what is there.
+      if lock.guid then
+        if lock.step(c, facing, steered, zoom, offset, elapsed) then return true end
+      elseif not c.held then
+        local target = UnitExists("target")
         local ok, same = pcall(UnitIsUnit, "mouseover", "target")
-        if ok and not secret(same) and same then beginFocus("target") end
-      elseif c.softFollow then beginFocus("soft") end
+        if target and ok and not secret(same) and same then
+          beginFocus("target")                         -- opened on the target: the engine's focus follows it
+        elseif not target and c.softFollow then
+          beginFocus("soft")                           -- nothing selected: what the engine's soft target takes
+        elseif UnitExists("mouseover") and lock.begin(c, offset) then
+          return true                                  -- something else is selected (or no soft target is wanted): by the mouseover alone
+        end
+      end
     end
   else
     if c.heldGate then releaseGate() end               -- the reticle closed
+    lock.release()
     if not gate then conv.followGUID, conv.followToken = nil, nil end
   end
   if not conv.live then
@@ -1866,7 +1995,7 @@ function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
   if not self.active then return end
-  gaugeEnd(); endFocus(); stopConverge()
+  gaugeEnd(); endFocus(); stopConverge(); lock.release()
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -1879,7 +2008,7 @@ end
 function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
-    gaugeEnd(); stopConverge()
+    gaugeEnd(); stopConverge(); lock.release()
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()

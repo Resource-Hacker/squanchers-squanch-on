@@ -23,6 +23,12 @@
   "Open reticle: other enemies by the game's soft target", on by default).
   The game's focus is taken over as real turns while it follows, so the view
   keeps up and stays where it is when the reticle closes.
+- Camera: with a target selected, the open reticle also follows a different
+  unit under it that the game gives no position for, from the mouseover
+  alone: your own turning and movement are taken out, and each time the
+  reticle slips off the unit a short search to either side finds it again
+  and corrects its estimated speed or distance. The same is used with
+  nothing selected when the soft target is switched off.
 - Camera: while the reticle is open, zooming no longer pulls the view to
   your target.
 - Camera: with nothing selected, a zoom also sticks to an enemy the game
