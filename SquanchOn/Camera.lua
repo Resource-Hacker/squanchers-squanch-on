@@ -1533,7 +1533,10 @@ local lock = {
   -- The unit's nameplate as a rangefinder (lock.plate). least: the plate's size at far yards from the camera;
   -- base: the furthest this client shows nameplates, from which it counts the far end of the sizing.
   SPAN = {least = 0.96, far = 145, base = 45},
-  EASE = 0.06,                      -- seconds by which a plate's size trails its distance (measured: 0.692, then 0.5002 after 0.45 s on the way to 0.5)
+  EASE = 0.07,                      -- seconds by which a plate's size trails its distance (measured: 0.692, then 0.5002 after 0.45 s on the way to 0.5; 0.07 against the view's own turning)
+  BRISK = 3,                        -- degrees a second of turning, beside the even turning with a unit, from which the plate's reading is not taken
+  SNUG = 0.87,                      -- what the reticle picks of a unit, as a share of its model's length (a boar: 2.5 to 2.6 yards walked under a still reticle, 2.94 by its model)
+  PACE = 20,                        -- degrees a second, beside the even turning with a unit, at which a step or a glide of the following is paid out
   PULL = 0.25,                      -- seconds over which the distance is taken from the plate's reading
   SLACK = 1.5,                      -- yards a plate's reading may lie outside the range bracket and still be believed
   -- Following a unit that walks (lock.walk).
@@ -1574,6 +1577,7 @@ function lock.release()
   lock.slow, lock.inside, lock.margin, lock.walked, lock.asks, lock.tired = nil, nil, nil, nil, nil, nil
   lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind, lock.shift = nil, nil, nil, nil, nil, nil, nil, nil
   lock.wide, lock.at = nil, nil
+  lock.yaw, lock.yawEased, lock.stepped, lock.busy, lock.due, lock.settling, lock.pushed, lock.paying = nil, nil, nil, nil, nil, nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1656,7 +1660,7 @@ function lock.extent(vel)
   local long = lock.long
   if not (long and vel and vel > 0) then return end
   local share = min(1, abs(lock.away or 0) / vel)         -- of its speed along the view
-  return long * sqrt(1 - share * share) + (lock.wide or long * lock.WIDE) * share
+  return long * lock.SNUG * sqrt(1 - share * share) + (lock.wide or long * lock.WIDE) * share
 end
 -- How big a kind of unit is, from the game itself (the owner asked for a database of sizes; this is one): a
 -- model scene's actor given the unit's model says what box is about it, and that box is what the reticle
@@ -1716,7 +1720,7 @@ end
 function lock.sized(kind)
   local size = kind and lock.sizes[kind]
   if type(size) == "table" then lock.long, lock.wide, lock.sure = tonumber(size[1]), tonumber(size[2]), true
-  elseif type(size) == "number" then lock.long, lock.sure = size, true end
+  elseif type(size) == "number" then lock.long, lock.sure = size / lock.SNUG, true end   -- (measured by a walk through: what the reticle picks of it)
 end
 -- A walk through measured, or half of one: the unit's length from it.
 function lock.learn(yards, vel, whole)
@@ -1732,9 +1736,9 @@ function lock.learn(yards, vel, whole)
     long = known and known + (long - known) * 0.5 or long -- a second look counts for half
     if kind then lock.sizes[kind] = math.floor(long * 100 + 0.5) / 100 end
   end
-  lock.long, lock.sure = long, whole or lock.sure
+  lock.long, lock.sure = long / lock.SNUG, whole or lock.sure   -- (kept as its model's length would be: see lock.extent)
 end
-function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
+function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
   if abs(steered) > 0.02 then
     lock.calm, lock.handed, lock.handedFor = 0, steered > 0 and 1 or -1, 0
   else
@@ -1801,16 +1805,20 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       lock.mode, lock.ask = nil, nil
       return 0
     end
-    ask.t, ask.wait = ask.t + elapsed, ask.wait + 1
+    ask.t = ask.t + elapsed
+    if not lock.settling then ask.wait = ask.wait + 1 end
     if ask.stage == 0 then
-      ask.stage, ask.wait, lock.asks = 1, 0, lock.asks + 1
-      return ask.side * test
+      ask.stage, ask.wait, ask.t, lock.asks = 1, 0, 0, lock.asks + 1
+      return ask.side * 1.5 * test
     elseif ask.stage == 1 then
-      if ask.wait < lock.WAIT then return 0 end
+      -- (Meanwhile the view goes with the unit as if it walked to that side: were it so, the reticle would
+      -- stay ahead of its head, and the dot dark; standing still, its head caught up with the reticle
+      -- before the answer was read.)
+      if ask.wait < lock.WAIT then return ask.side * spin * elapsed end
       if on then
         -- Still under the reticle: its body is on that side, and it walks the other way, over the reticle.
         lock.way = -ask.side
-        local inside = testYards + across * ask.t
+        local inside = 1.5 * testYards + 2 * across * ask.t
         if lock.long then
           lock.mode, lock.ask = "follow", nil
           middle(inside, ask.side)
@@ -1864,9 +1872,9 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       lock.mode, lock.ask, lock.tired, lock.towards, lock.margin = nil, nil, true, nil, nil
       return 0
     end
-    ask.held = (ask.held or 0) + elapsed
     local rate = spin or 0                               -- (it may have stopped meanwhile: then it is where it stopped)
-    ask.t, ask.wait = ask.t + elapsed, ask.wait + 1
+    ask.t = ask.t + elapsed
+    if not lock.settling then ask.held, ask.wait = (ask.held or 0) + elapsed, ask.wait + 1 end
     local step = ask.way * rate * elapsed                -- with the unit, should this be its way
     if on then
       local way = ask.way
@@ -1887,7 +1895,7 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       else
         lock.mode, lock.towards, lock.margin = nil, way, testYards   -- it had stopped: held where it is
       end
-    elseif ask.wait > lock.WAIT and ask.held > 0.03 then
+    elseif ask.wait > lock.WAIT and (ask.held or 0) > 0.03 then
       if ask.stage == 1 then
         -- Not there: it went the other way, and has gone on that way meanwhile.
         step = step - ask.way * ((ask.took or test) + test + 2 * rate * (ask.t + 2 * elapsed))
@@ -1985,6 +1993,30 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
   end
   if lock.gap == 2 then lock.walked = nil end
   return 0
+end
+-- What lock.wants wants turned is not turned in one frame (the owner, 2026-11-24: "still nudging and
+-- snapping a little, can you get it smoother? ... micronudge 1 pixel"): a step that asks which side the unit
+-- is on, a catching up, the glide to its middle used to land at once, up to a degree in a frame in the
+-- owner's log, which is thirty pixels. The even turning with the unit goes through as it is; of the rest so
+-- much a frame is paid out (lock.PACE) and the remainder carried. While something is still owed the
+-- following does not count its waits (lock.settling): the view is not yet where the question was put.
+function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
+  local due = lock.due or 0
+  lock.settling = abs(due) > 0.02 or nil
+  due = due + lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
+  local even = (spin or 0) * 1.2 * elapsed
+  local most = even + lock.PACE * elapsed
+  local out = max(-most, min(most, due))
+  -- (And the paying out itself sets in and leaves off over a frame or two.)
+  local eased = (lock.paying or 0) + (out / max(elapsed, 0.001) - (lock.paying or 0)) * (1 - exp(-elapsed / 0.012))
+  if abs(due) < 0.003 and abs(eased) < 0.5 then eased = due / max(elapsed, 0.001) end
+  lock.paying = eased
+  out = eased * elapsed
+  if out * due < 0 or abs(out) > abs(due) + even then out = max(-abs(due) - even, min(abs(due) + even, out)) end
+  lock.due = due - out
+  -- (Brisker than the even turning: the plate's reading is not taken meanwhile, see lock.step.)
+  if abs(out) > even + lock.BRISK * elapsed then lock.busy = 0.2 end
+  return out
 end
 -- The unit to ask: under the reticle it is the mouseover, else its nameplate.
 function lock.unit(on)
@@ -2104,15 +2136,48 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   local vel = token and lock.speed(token)
   local spin
   do
+    local dt = max(elapsed, 0.001)
+    if lock.busy then
+      lock.busy = lock.busy - elapsed
+      if lock.busy <= 0 then lock.busy = nil end
+    end
+    if abs(steered) > lock.BRISK * dt then lock.busy = 0.2 end           -- the hand turning the view briskly
+    -- What the view has turned since the last frame (the hand, and what was turned for the hold), as a
+    -- plate's size trails it: see below.
+    local yawWas = lock.yawEased or 0
+    lock.yaw = (lock.yaw or 0) + steered + (lock.stepped or 0)
+    lock.yawEased = yawWas + (lock.yaw - yawWas) * (1 - exp(-dt / lock.EASE))
+    local turned = rad(lock.yawEased - yawWas)
     local seen = token and lock.plate(token, zoom)
     if seen then
-      -- What the unit itself moves along the view: the reading's change, less the character's own steps.
+      -- What the unit itself moves along the view: the reading's change, less the character's own steps,
+      -- and less what the view's own turning did to it. The reading is the unit's distance from the camera,
+      -- and turning the view moves the camera: round the pivot, which with the camera over a shoulder takes
+      -- it that offset nearer or further for each radian turned (in the owner's logs of 2026-11-24: 1.7 to
+      -- 2.6 yards a radian in fifteen stretches, the plate trailing 0.07 s). That much is taken out here.
+      -- Where the ground behind the camera pushes it in, turning moves the reading by whatever the ground
+      -- there does (10 to 14 yards a radian on one boar, the other sign elsewhere), and that undid the
+      -- following the same afternoon: every jump of the view moved the reading by a third of a yard, the
+      -- unit seemed to rush at the camera, nothing of its speed was left to go across the view, the following
+      -- stopped, the unit walked out, the view jumped after it: seven jumps in five seconds. Nothing tells
+      -- how the ground lies, but it shows: a unit cannot come nearer or go off faster than it moves, and
+      -- where the reading says it does while the view turns briskly (lock.busy: a step or a glide of the
+      -- following's, the hand), the ground is at it (lock.pushed, for the next seconds). There the reading's
+      -- change is not taken during such turning, nor for a moment after: the unit's pace along the view stays
+      -- what it was meanwhile, and so does the following. On open ground it is taken throughout: left out
+      -- there, a unit that turned while the view was catching up was followed by its old course, and lost.
       -- A reading that changes faster than the unit can move is a plate still finding its size (one that has
       -- just appeared eases in over a quarter of a second: 6 yards too far at first in the owner's log).
-      local rate = lock.read and (seen - lock.read) / max(elapsed, 0.001) + (lock.pace or 0)
+      local rate = lock.read and (seen - lock.read + beside * turned) / dt + (lock.pace or 0)
       lock.read = seen
-      local steady = rate and abs(rate) <= (vel or 9) + 3
-      if steady then lock.away = (lock.away or rate) + (rate - (lock.away or rate)) * (1 - exp(-elapsed / 0.06)) end
+      if lock.pushed then
+        lock.pushed = lock.pushed - elapsed
+        if lock.pushed <= 0 then lock.pushed = nil end
+      end
+      if rate and lock.busy and vel and abs(rate) > vel + 0.5 then lock.pushed = 4 end
+      local spoilt = lock.busy and lock.pushed
+      local steady = rate and (abs(rate) <= (vel or 9) + 3 or spoilt and lock.ranged)
+      if steady and not spoilt then lock.away = (lock.away or rate) + (rate - (lock.away or rate)) * (1 - exp(-elapsed / 0.06)) end
       seen = seen - lock.EASE * (lock.pace or 0)
       lock.seen = seen
       if steady then
@@ -2127,8 +2192,12 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
         if (not low or seen > low) and (not high or seen < high) then
           shift = 0
         else
+          -- (To the middle of what the range checks allow, not to its edge: a distance a sixth too short
+          -- turned the view a fifth too far for all it did, in the offline run.)
           local want = seen + shift
-          if low and want < low then shift = shift + low - want elseif high and want > high then shift = shift + high - want end
+          if low and want < low or high and want > high then
+            shift = (low and high and (low + high) / 2 or low and low + lock.SLACK or high - lock.SLACK) - seen
+          end
         end
         lock.shift = shift
         lock.dist = max(3, lock.dist + (seen + shift - lock.dist) * (lock.ranged and 1 - exp(-elapsed / lock.PULL) or 1))
@@ -2159,7 +2228,8 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   lock.left = step - out
   step = out
   -- Never far off the character's own line: beyond that the view goes with the mouse again.
-  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step, lock.left = 0, nil end
+  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step, lock.left, lock.due = 0, nil, nil end
+  lock.stepped = step
   turn(step)
   conv.mode, conv.unit, conv.distance, conv.source, conv.followed = "follow", "mouseover", lock.dist, "mouseover alone", guid
   conv.bias = conv.applied - convergeAngle(offset, lock.dist)
