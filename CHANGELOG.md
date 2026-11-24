@@ -33,7 +33,8 @@
   (Camera page, "Open reticle: other units by the game's interact focus",
   off by default: one test run looked as if it held a unit that was not the
   target, six more did not). The addon's own following is what is used:
-  the view is held on the place of the unit under the reticle: it makes up for your own walking and strafing by the
+  the view is held on the place of the unit under the reticle: it makes up
+  for your own walking and strafing by the
   unit's distance, and it follows a unit that walks. For that it does not
   search (it used to glide to one side and the other looking for a unit
   that had slipped off; with only "under the reticle or not" to go by that
