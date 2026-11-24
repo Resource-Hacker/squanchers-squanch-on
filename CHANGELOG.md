@@ -18,16 +18,28 @@
   stays on it until you let go, also while it walks or you strafe; then the
   view comes back to where it rests. A unit the game gives a position for is
   followed by that. Opened on your target, the game's camera focus follows
-  the target. Anything else is followed from the mouseover alone: while the
-  unit is under the reticle your own turning and movement are taken out;
-  when it slips off for more than a moment you have the mouse again and the
-  view glides a degree or two to either side until it is under it again,
-  learning the unit's speed from finds that agree. Nothing of the game's
-  targeting is touched for that.
-- Camera: optional, off by default: with nothing selected the open reticle
-  can instead follow through the game's own soft target, switched on only
-  while the reticle is held (Camera page, "Open reticle: other enemies by
-  the game's soft target"). When what it held is gone the view comes back.
+  the target. With nothing selected, the game's own soft target and camera
+  focus keep the enemy in front on the reticle; they are switched on only
+  while the reticle is held and put back when you let go (Camera page, "Open
+  reticle: other enemies by the game's soft target", on by default). What
+  the soft target does not take, anything under the reticle while something
+  else is selected, and everything in combat (the game does not let its soft
+  targeting be switched on there) is followed from the mouseover alone,
+  which is looser: while the unit is under the reticle your own turning and
+  movement are taken out; when it slips off for more than a moment you have
+  the mouse again and the view glides a degree or two to either side until
+  it is under it again. A unit that walks nearer or further no longer slips
+  out from under the reticle for that: the point the game picks at goes up
+  and down after it, unseen.
+- Camera: the view is no longer thrown about by the open reticle. A unit
+  within ten yards is left to the game's own swivel instead of being turned
+  after (every step of such a unit swings the view far round); when the
+  game's soft target goes over to another enemy somewhere about, the view no
+  longer swings to that one; and your own pet beside you is not followed.
+- Camera: when the unit the view was turned onto dies, the view goes back to
+  where it rests: with the reticle still held on the corpse, and also after
+  a zoom's turn (which stays otherwise). The dead are not followed, and a
+  dead target counts as nothing selected.
 - Camera: while the reticle is open, zooming no longer pulls the view to
   your target.
 - Camera: with nothing selected, a zoom also sticks to an enemy the game
