@@ -1531,7 +1531,7 @@ function lock.release()
   lock.pace, lock.ranged, lock.seen, lock.read, lock.away = nil, nil, nil, nil, nil
   lock.mode, lock.ask, lock.way, lock.into, lock.gap, lock.calm, lock.towards, lock.handed, lock.handedFor = nil, nil, nil, nil, nil, nil, nil, nil, nil
   lock.slow, lock.inside, lock.margin, lock.walked, lock.asks, lock.tired = nil, nil, nil, nil, nil, nil
-  lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind = nil, nil, nil, nil, nil, nil, nil
+  lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind, lock.shift = nil, nil, nil, nil, nil, nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -2001,8 +2001,23 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
       if steady then lock.away = (lock.away or rate) + (rate - (lock.away or rate)) * (1 - exp(-elapsed / 0.06)) end
       seen = seen - lock.EASE * (lock.pace or 0)
       lock.seen = seen
-      if steady and (not lock.low or seen > lock.low - lock.SLACK) and (not lock.high or seen < lock.high + lock.SLACK) then
-        lock.dist = max(3, lock.dist + (seen - lock.dist) * (lock.ranged and 1 - exp(-elapsed / lock.PULL) or 1))
+      if steady then
+        -- The camera may stand nearer than its zoom says (the ground behind it pushes it in; after a zoom
+        -- out it is still on its way): the reading is short by as much, whatever the unit does (the owner's
+        -- log of 2026-11-24: a scorpid 39 to 43 yards off by the range checks read 25 to 26 at zoom 25, and
+        -- the following never began). What the reading is out by is kept and moved only as far as the range
+        -- checks demand, so that the unit's own coming and going is still followed to the inch. A reading
+        -- the range checks agree with is taken as it is.
+        local low, high = lock.low and lock.low - lock.SLACK, lock.high and lock.high + lock.SLACK
+        local shift = lock.shift or 0
+        if (not low or seen > low) and (not high or seen < high) then
+          shift = 0
+        else
+          local want = seen + shift
+          if low and want < low then shift = shift + low - want elseif high and want > high then shift = shift + high - want end
+        end
+        lock.shift = shift
+        lock.dist = max(3, lock.dist + (seen + shift - lock.dist) * (lock.ranged and 1 - exp(-elapsed / lock.PULL) or 1))
         lock.ranged = true
       end
       -- Across the view: what is left of its speed. Degrees a second about the pivot.
