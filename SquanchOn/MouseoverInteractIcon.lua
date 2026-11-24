@@ -97,6 +97,9 @@ end
 
 function module:ApplyPolicy()
   if self.applyingPolicy then return end
+  -- The camera holds a unit by the game's interact focus (Camera.lua, beginFocus "other"), which needs soft
+  -- interact targeting on for as long: the policy waits, and the camera calls for it when the hold ends.
+  if self.hold then return end
   -- Plater restores its profile after login and whenever its profile changes.
   -- Apply after that restore so its ordinary CVar hook also saves our value.
   if not self.platerHooked and Plater and type(Plater.RestoreProfileCVars) == "function" then

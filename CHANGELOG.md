@@ -25,10 +25,17 @@
   soft target's cone starts at its narrowest and goes wider, step by step,
   until it has taken the unit under the reticle; nothing else it finds is
   followed. With nothing selected that is the only following. With
-  something else selected, the game's camera focus cannot be used (it goes
+  something else selected, the game's enemy focus cannot be used (it goes
   to your target wherever you have one; tried: the game does soft-target
   the unit under the reticle beside a selected target, and still turns the
-  view to the target), so there the view is held on the place of the unit
+  view to the target). The game has a second camera focus, for what you
+  interact with, and that one follows the unit the addon names to it, an
+  enemy at range included: so the unit under the reticle is followed by
+  that, exactly and smoothly, while your target stays your target (Camera
+  page, "Open reticle: other units by the game's interact focus", on by
+  default; soft interact targeting is on only while the reticle is held).
+  Where the game does not hold the unit that way, the addon's own
+  following takes over, in which the view is held on the place of the unit
   under the reticle: it makes up for your own walking and strafing by the
   unit's distance, and it follows a unit that walks. For that it does not
   search (it used to glide to one side and the other looking for a unit
