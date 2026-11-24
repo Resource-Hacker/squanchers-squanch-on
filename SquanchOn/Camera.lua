@@ -296,7 +296,7 @@ local function build(profile, defaults)
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
     converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 12, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, firstPersonStep = false}}
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, firstPersonStep = false}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -1362,30 +1362,37 @@ end
 -- selected: the client then has no soft target at all, whatever its
 -- settings, tried live; or the soft target does not take the unit, or is
 -- not wanted), all that is known is whether the unit is under the reticle.
--- That is enough to stay on a unit that stands, walks steadily or is
--- strafed around, if it is done calmly: seen live, a unit 25 yards off is
--- half a degree wide to either side, its picking flickers, and a tracker
--- that answers every slip with a search and a new estimate throws the view
--- about. It is not enough for a unit that darts off at close range; the
--- soft target's focus is, which is why that comes first where it can.
--- * While the unit is under the reticle, what the owner turns is taken out
---   exactly (the character turns, the view stays), what the character
---   moves by the unit's distance (its range bracket), a zoom by the
---   shoulder's convergence, and what the unit itself does by its learnt
---   rate.
--- * Off it for a moment is let pass: a flicker, or the view a frame behind
---   fast turning.
--- * Off it for longer, the owner has the mouse again, and the view glides
---   a little to one side and the other of where the unit was; no further.
---   First to the side the owner's own hand has just gone. Found, it goes a
---   little on into the unit.
--- * The unit's rate is learnt from finds that agree: half of what one find
---   suggests, all of it once two in a row are on the same side. Found
+-- The reticle is made to stick to the unit with that:
+-- * While the unit is under the reticle the owner's hand moves the reticle
+--   within it as ever. (It used to be taken out, to hold the view still on
+--   the unit. The owner's log showed the hand busy the whole time, going
+--   after the unit, and every slip found on the side the hand was going to:
+--   the best knowledge there is of where the unit goes was being thrown
+--   away.)
+-- * Where the hand carries the reticle over the unit's edge, it is put back
+--   inside at once, and pushing on that way turns the character under a
+--   view that stays: the edge is shut for as long as it is pushed against.
+-- * Pushed against a shut edge and the unit lost all the same, the unit has
+--   gone on that way itself: it is looked for there, and the hand's pace is
+--   taken for its rate.
+-- * What the character moves is taken out by the unit's distance (its range
+--   bracket when the following began).
+-- * Off the unit with nothing known to have moved the reticle there, the
+--   point the game picks at looks up and down its column first (unseen;
+--   that also lets a flicker of the picking pass), and only then does the
+--   view glide a little to one side and the other of where the unit was.
+--   Found, it goes a little on into the unit.
+-- * The unit's own rate is learnt from finds that agree: half of what one
+--   find suggests, all of it once two in a row are on the same side. Found
 --   behind where the view was heading, the unit has stopped or turned: its
 --   rate is dropped. While the unit is not under the reticle its rate is
 --   not acted on.
+-- It holds a unit that stands, walks steadily, is strafed around or is
+-- followed by hand; it is not the game's own focus, which is why that comes
+-- first where it can be had.
 local lock = {
-  GRACE = 0.12,                     -- seconds off the unit that are let pass
+  VERT = 5,                         -- frames off the unit in which only the picking's height is tried before anything turns
+  WALL = 0.3,                       -- seconds an edge the hand was stopped at stays shut after the last push against it
   SPEED = 15,                       -- degrees a second, as seen on screen, of the glide that looks for the unit
   LEGS = {1.5, -2},                 -- degrees as seen, from where it was lost: the likelier side, then the other; then back and wait
   DEPTH = 0.25,                     -- degrees as seen that the view goes on into the unit once it is found
@@ -1445,6 +1452,7 @@ function lock.settle()
 end
 function lock.release()
   lock.guid, lock.sweep, lock.push, lock.north, lock.west, lock.conv, lock.speed, lock.hand = nil, nil, nil, nil, nil, nil, nil, nil
+  lock.wall, lock.rel, lock.count, lock.pace, lock.pushed, lock.inset = nil, nil, nil, nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1461,14 +1469,16 @@ function lock.begin(c, offset)
   local _, yards = reticleUnit()
   lock.release()
   lock.guid, lock.rate, lock.dist, lock.off, lock.span, lock.trust, lock.side, lock.speed = guid, 0, yards or c.distance, 0, 0, 0.5, nil, 0
+  lock.hand, lock.pace, lock.rel, lock.count, lock.inset = 0, 0, {0, 0, 0}, 0, 0
   return true
 end
 -- One frame. False once the unit is let go.
 function lock.step(c, facing, steered, zoom, offset, elapsed)
   local guid = lock.guid
-  local seen = max(0.33, lock.dist / (lock.dist + zoom))    -- degrees seen on screen per degree turned about the character
   local on = sameUnit("mouseover", guid)
   lock.off = on and 0 or lock.off + elapsed
+  local count = on and 0 or lock.count + 1            -- frames off the unit in a row
+  lock.count = count
   local died = on and carry.dead("mouseover")
   if died then conv.spent = true end
   if lock.off > lock.LOST or died or on and lock.near() then
@@ -1477,20 +1487,70 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
     lock.settle()
     return false
   end
-  -- Under the reticle, off it only for a moment, or its column not yet looked through.
-  local held = lock.off < lock.GRACE or not lock.flat and (lock.probes or 0) < #lock.RISE
-  lock.level(on, not held)
-  -- What the owner has turned in the last quarter second or so. It is taken out while the unit is held, so it
-  -- moves nothing; but a hand that goes after a unit says which way the unit went.
-  lock.hand = (lock.hand or 0) * exp(-elapsed / 0.25) + steered
-  local step = held and -steered or 0                 -- the owner's own turning: taken out while held, theirs again otherwise
+  -- The character's own movement to the left of the view is taken out by the unit's distance. (Counting its
+  -- steps towards the unit into that distance, and holding it to the range bracket as that changes, was
+  -- tried in the simulation and did not help.)
+  local step = 0
   local north, west = position("player")
-  if north and lock.north then                        -- the character's own movement: yards to the left of the view
+  if north and lock.north then
     local heading = rad(facing + conv.applied)
-    local sway = -(north - lock.north) * sin(heading) + (west - lock.west) * cos(heading)
-    if abs(sway) < 5 then step = step - deg(sway / lock.dist) end     -- a jump is no movement
+    local toNorth, toWest = north - lock.north, west - lock.west
+    if abs(toNorth) + abs(toWest) < 5 then              -- a jump is no movement
+      step = -deg((toWest * cos(heading) - toNorth * sin(heading)) / lock.dist)
+    end
   end
   lock.north, lock.west = north, west
+  local seen = max(0.33, lock.dist / (lock.dist + zoom))    -- degrees seen on screen per degree turned about the character
+  -- Under the reticle, or only just off it with nothing turned yet.
+  local held = on or count <= lock.VERT
+  lock.level(on, count > #lock.RISE)
+  -- What the owner has turned in the last quarter second or so, and the pace of it.
+  lock.hand = lock.hand * exp(-elapsed / 0.25) + steered
+  lock.pace = lock.pace + (steered / max(elapsed, 0.001) - lock.pace) * (1 - exp(-elapsed / 0.15))
+  if on and not c.handSteers then
+    step = step - steered                               -- the setting is off: the view is held still on the unit against the hand
+  elseif on then
+    local wall = lock.wall
+    if wall and steered * wall > 0 then
+      -- Pushed on against a shut edge: the character turns, the view stays. The harder the push, the
+      -- further inside the edge it stays: the hand's turning may show a frame before it can be taken out.
+      step = step - steered
+      local need = min(0.4, 1.5 * abs(steered) * seen)
+      if need > lock.inset then
+        step = step - wall * (need - lock.inset) / seen
+        lock.inset = need
+      end
+      lock.wallT, lock.pushed = lock.WALL, 0
+      lock.rel[3], lock.rel[2], lock.rel[1] = lock.rel[2], lock.rel[1], 0
+    else
+      -- The hand moves the reticle within the unit. (Its last three frames are kept: the picking may tell
+      -- of an edge crossed a frame or two late.)
+      lock.rel[3], lock.rel[2], lock.rel[1] = lock.rel[2], lock.rel[1], steered * seen
+      if wall then lock.pushed = (lock.pushed or 0) + elapsed end
+    end
+    if wall then
+      lock.wallT = lock.wallT - elapsed
+      if lock.wallT <= 0 then lock.wall = nil end
+    end
+  elseif held then
+    step = step - steered                               -- just lost: the view holds still while it is looked into
+    if count == 1 then
+      lock.late = steered * seen                        -- one frame off may be a flicker of the picking: nothing yet
+    elseif count == 2 then
+      -- Off for two frames. What the hand did in the frames before, and in these two (taken out above, but
+      -- perhaps in the picture already):
+      local rel, late = lock.rel[1] + lock.rel[2] + lock.rel[3], lock.late + steered * seen
+      if c.handSteers and abs(rel + late) > 0.03 then
+        -- The hand carried the reticle over the unit's edge: back to where it was, a little further in
+        -- for a harder push, and that edge is shut.
+        local way = rel + late > 0 and 1 or -1
+        lock.inset = min(0.4, 1.5 * max(abs(lock.rel[1]), abs(lock.rel[2]), abs(lock.rel[3]), abs(lock.late), abs(steered * seen)))
+        step = step - (rel + way * lock.inset) / seen
+        lock.wall, lock.wallT, lock.pushed = way, lock.WALL, 0
+      end
+      lock.rel[1], lock.rel[2], lock.rel[3] = 0, 0, 0
+    end
+  end
   local angle = convergeAngle(offset, lock.dist)      -- a zoom shifts the unit by the shoulder's convergence
   if lock.conv then step = step + angle - lock.conv end
   lock.conv = angle
@@ -1500,17 +1560,27 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   local sweep = lock.sweep
   if on then
     if sweep then
-      -- Found, this far (in turn) from where it was lost: what that says of the unit's rate counts for a
-      -- quarter, doubling while finds stay on one side.
-      local way = sweep.at >= 0 and 1 or -1
-      if way * lock.rate < 0 then
-        lock.rate, lock.trust = 0, 0.5                -- behind where the view was heading: it has stopped or turned
+      if abs(sweep.at) < 0.1 then
+        lock.sweep = nil                              -- found where it was lost (higher or lower): nothing learnt of its rate
       else
-        lock.trust = way == lock.side and 1 or 0.5
-        local gone = (sweep.at + way * lock.DEPTH) / seen
-        lock.rate = max(-lock.LIMIT, min(lock.LIMIT, lock.rate + lock.trust * gone / max(0.25, lock.span)))
+        -- Found, this far (in turn) from where it was lost: what that says of the unit's rate counts for
+        -- half, and in full while finds stay on one side.
+        local way = sweep.at >= 0 and 1 or -1
+        if sweep.pushed == way then
+          -- Beyond the edge the hand was pushing against: the unit is going that way, at the hand's pace.
+          if lock.pace * way > 2 then
+            lock.rate, lock.trust = max(-lock.LIMIT, min(lock.LIMIT, lock.rate + 0.6 * lock.pace)), 1
+          end
+          lock.wall = nil
+        elseif way * lock.rate < 0 then
+          lock.rate, lock.trust = 0, 0.5              -- behind where the view was heading: it has stopped or turned
+        else
+          lock.trust = way == lock.side and 1 or 0.5
+          local gone = (sweep.at + way * lock.DEPTH) / seen
+          lock.rate = max(-lock.LIMIT, min(lock.LIMIT, lock.rate + lock.trust * gone / max(0.25, lock.span)))
+        end
+        lock.push, lock.side, lock.sweep, lock.span = way * lock.DEPTH, way, nil, 0
       end
-      lock.push, lock.side, lock.sweep, lock.span = way * lock.DEPTH, way, nil, 0
     end
     local push = lock.push
     if push then                                      -- a little on into the unit
@@ -1519,14 +1589,18 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
       lock.push = abs(push) > 0.02 and push or nil
     end
   elseif not held then
+    -- Looked for with the mouse the owner's again, but for pushing on against an edge that is shut.
+    if lock.wall and steered * lock.wall > 0 then step = step - steered end
     if not sweep then
-      -- The likelier side first. Where the owner's hand has just gone, if it went anywhere. Else, followed
-      -- steadily until now: the view has run on ahead of a unit that stopped or turned, so behind. Else
-      -- where it was found last.
-      local toward = lock.side or 1
-      if abs(lock.hand) > 0.4 then toward = lock.hand > 0 and 1 or -1
+      -- The likelier side first. Pushed against a shut edge and lost all the same: the unit has gone on that
+      -- way. Else where the owner's hand has just gone, if it went anywhere. Else, followed steadily until
+      -- now: the view has run on ahead of a unit that stopped or turned, so behind. Else where it was
+      -- found last.
+      local toward, pushed = lock.side or 1, nil
+      if lock.wall and (lock.pushed or 1) < 0.15 then toward, pushed = lock.wall, lock.wall
+      elseif abs(lock.hand) > 0.4 then toward = lock.hand > 0 and 1 or -1
       elseif abs(lock.rate) > 1 and lock.span > 0.5 then toward = lock.rate > 0 and -1 or 1 end
-      sweep = {at = 0, leg = 1, way = toward}
+      sweep = {at = 0, leg = 1, way = toward, pushed = pushed}
       lock.sweep, lock.push = sweep, nil
     end
     local reach = lock.LEGS[sweep.leg]
