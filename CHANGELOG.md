@@ -36,12 +36,18 @@
   was a hunt and looked like one). The game tells how fast a unit moves,
   and its nameplate how fast it comes nearer or goes further off; what is
   left of its speed is what it moves across the view, and the view turns
-  with it at exactly that rate. Only the side is not told: when a unit
-  walks out from under the reticle the view takes one small step to one
-  side, and one to the other if the unit is not there, then follows without
-  steps until the unit stops, riding at the place in it where you had the
-  reticle (Camera page, "Open reticle: follows a held unit that walks", on
-  by default). While your mouse is turning the view nothing is asked.
+  with it at exactly that rate, at the unit's middle. Two things are not
+  told and are found out. How long a kind of unit is: what the reticle
+  picks of a walking boar is about 2.4 yards long along its path, so the
+  first time a kind of unit walks right through a reticle that stands
+  still it is let through and measured, and that is kept. Which way it
+  walks: one small step when it walks into the reticle (the view is at its
+  middle a fraction of a second after the reticle's dot lights) or out from
+  under it, and a second if the first was the wrong side; lost after it
+  turned, the view looks behind first. Steps in quick succession end the
+  following for that unit rather than hunt for it (Camera page, "Open
+  reticle: follows a held unit that walks", on by default). While your
+  mouse is turning the view nothing is asked.
   The distance is read from the unit's nameplate: the game sizes a
   nameplate by its distance from the camera and lets an addon read that
   size, though not where the plate is, so the addon keeps that sizing on at
