@@ -296,7 +296,7 @@ local function build(profile, defaults)
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
     converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 10, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true}}
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, firstPersonStep = false}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -784,9 +784,13 @@ end
 --   position. For any other unit the engine's own soft target and focus do
 --   the following for as long as the reticle is held (the owner's choice,
 --   2026-11-23, knowing it is what the open reticle did before positions
---   were found: nothing else follows such a unit), with the client's
---   selection disc hidden meanwhile; or, with that switched off, the unit's
---   nameplate is gone by (see plate, below).
+--   were found: nothing else follows such a unit). Tried and dropped the
+--   same day: strips hung on the unit's nameplate to tell by hover how far
+--   off the reticle it stands; while mouselooking the client gives frames
+--   no hover (C_GamePad.SetAllowHoverEventsWithFreeLook was already on).
+-- * Zoom sticks: with nothing selected and no unit with a position near the
+--   reticle, the same soft target is switched on for the length of a zoom
+--   and what it finds is treated as the target is (focus and carry).
 --   Nothing is ever held at rest with the reticle closed, and at rest the
 --   client's soft targeting is left as the owner has it.
 -- * Focus and carry: a zoom with a target that gives no position is caught
@@ -808,6 +812,7 @@ local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom
 local CARRY_TIME = 0.3              -- seconds: time constant of taking the engine's swivel over as a turn
 local CARRY_RATE = 12               -- degrees per second at most: the engine trails each turn, and the unit strays that much meanwhile
 local CARRY_LAG = 0.14              -- seconds by which the engine's answer trails a turn (twice its spring's time)
+local FOLLOW_RATE = 120             -- degrees per second at most while the open reticle's hold is taken over
 local AWAY_LIMIT = 75               -- degrees the view is ever turned away from the character's own line
 local CARRY_REST = 0.6              -- degrees of swivel a release may still find
 local CARRY_PATIENCE = 1.3          -- seconds a release waits for the swivel to come down to that
@@ -815,6 +820,7 @@ local CARRY_SETTLE = 0.15           -- seconds without a turn before the release
 local RELEASE_TIME = 0.07           -- seconds: the engine lets its focus go as e0 (1 + t/T) exp(-t/T)
 local CONVERGE_MAX_RATE = 600       -- degrees per second
 local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
+local FIRST_PERSON_STEP = 0.5       -- yards the view steps out of first person while the reticle's hold is on (setting)
 local AIM_TIME = 0.07               -- seconds: time constant of the turn onto a unit during a zoom
 local AIM_SETTLE = 0.25             -- seconds an aim keeps turning after the zoom stopped
 local FOLLOW_TIME = 0.035           -- the same for the open reticle
@@ -891,11 +897,12 @@ local function nearUnit()
   end
   return best
 end
--- The unit a zoom turns onto by its position.
+-- The unit a zoom turns onto by its position. With the reticle open that is
+-- only what is under it: a zoom must not pull the reticle off to the target.
 local function aimUnit()
-  if gateOpen() and UnitExists("mouseover") and position("mouseover") then return "mouseover" end
+  if gateOpen() then return UnitExists("mouseover") and position("mouseover") and "mouseover" or nil end
   if UnitExists("target") then return not UnitIsUnit("target", "player") and position("target") and "target" or nil end
-  if cfg.converge.stick and not gateOpen() then return nearUnit() end
+  if cfg.converge.stick then return nearUnit() end
 end
 -- The unit the open reticle follows by its position: the one that comes
 -- under it, and from then on that same unit for as long as the reticle stays
@@ -1025,7 +1032,11 @@ local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
   if not held then return end
-  c.held, c.heldGate = nil, nil
+  c.held, c.heldGate, c.heldSoft = nil, nil, nil
+  if carry.stepped then               -- back into first person
+    carry.stepped = nil
+    if nativeZoomIn and GetCameraZoom() < FIRST_PERSON_STEP + 0.3 then nativeZoomIn(FIRST_PERSON_STEP + 0.3) end
+  end
   for name, value in pairs(held) do
     setCVar(name, value)
     -- The client refuses some of these in combat without a word (seen once,
@@ -1047,23 +1058,30 @@ local function heldValue(name)
   deferred[name] = nil
   return waiting or GetCVar(name)
 end
--- The engine's focus: for the length of a zoom with a target the client
--- gives no position for; and (reticle) for as long as the open reticle is
--- held with nothing selected. There the engine's soft target, its cone at
--- the narrowest, takes the enemy in front and the focus keeps the view on
--- it; the client's selection disc is hidden meanwhile. All of it is put
--- back when the reticle closes.
+-- The engine's focus. For the length of a zoom (reticle nil): on the target,
+-- when the client gives no position for it; with nothing selected (zoom
+-- sticks) on what the engine's soft target finds in front. For as long as
+-- the open reticle is held: on the target it was opened on ("target"); or,
+-- with nothing selected ("soft"), on what the soft target, its cone at the
+-- narrowest, takes in front. All of it is put back afterwards.
 local function beginFocus(reticle)
   local c = cfg.converge
   if not c.enabled or transFn then return end
   carry.since, carry.still = nil, nil   -- a release that was waiting: the gesture goes on
   if c.held then return end
-  local want = {}
-  if reticle then
-    want.SoftTargetEnemy, want.SoftTargetEnemyArc, want.ObjectSelectionCircle = 3, 0, 0
-  else
-    if not (c.focus and UnitExists("target") and not UnitIsUnit("target", "player")) then return end
+  local want, soft = {}, nil
+  if reticle == "soft" then
+    want.SoftTargetEnemy, want.SoftTargetEnemyArc, soft = 3, 0, true
+  elseif reticle == "target" then
+    -- The focus alone: the target is what it follows.
+  elseif gateOpen() then return                      -- a zoom with the reticle open leaves the view where the reticle has it
+  elseif UnitExists("target") then
+    if not c.focus or UnitIsUnit("target", "player") then return end
     if c.aim and aimUnit() then return end           -- a unit with a position is aimed at by a real turn
+  else
+    if not (c.stick and c.softStick) or gateOpen() then return end
+    if c.aim and aimUnit() then return end           -- the enemy near the reticle gives its position
+    want.SoftTargetEnemy, want.SoftTargetEnemyArc, soft = 3, 1, true
   end
   for index, name in ipairs(FOCUS) do
     local kind = index % 3            -- 1 yaw strength, 2 pitch strength, 0 enable
@@ -1071,11 +1089,17 @@ local function beginFocus(reticle)
   end
   local held = {}
   for name in pairs(want) do held[name] = heldValue(name) end
-  c.held, c.heldGate = held, reticle and true or nil
+  c.held, c.heldGate, c.heldSoft = held, reticle and true or nil, soft
   for name, value in pairs(want) do
     if held[name] ~= nil then setCVar(name, value) end
   end
-  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail = 0, nil, 0, 0, nil, nil, nil, nil, nil
+  -- The engine's focus does not seem to act in first person: while the
+  -- reticle is held the view may sit a step outside it (setting, off).
+  if reticle and c.firstPersonStep and nativeZoomOut and GetCameraZoom() < 0.05 then
+    carry.stepped = true
+    nativeZoomOut(FIRST_PERSON_STEP)
+  end
+  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 -- The zoom is over. A swivel that is still large is carried a moment longer
@@ -1088,6 +1112,15 @@ local function releaseFocus()
     return
   end
   carry.since = carry.since or 0
+  Camera:Wake()
+end
+-- The open reticle's hold ends: what swivel the engine still holds is turned
+-- as it lets go, so the view stays where the following left it.
+local function releaseGate()
+  local rest = gauge.saved and carry.psi or 0
+  endFocus(); gaugeEnd()
+  carry.psi, carry.since, carry.facing, carry.still, carry.wide = nil, nil, nil, nil, nil
+  if abs(rest) > 0.05 then carry.release = {turn = rest, time = 0, done = 0} end
   Camera:Wake()
 end
 -- Carry: while the engine's focus is on, the swivel it holds is taken over as
@@ -1114,14 +1147,23 @@ local function stepCarry(zoom, elapsed)
     if t > 10 then carry.release = nil; return false end
     return true
   end
-  if not c.held or c.heldGate then      -- the open reticle's hold is the engine's alone: nothing is taken over
+  if not c.held then
     gaugeEnd()
     carry.psi, carry.since, carry.facing, carry.still = nil, nil, nil, nil
     return false
   end
   local facing = readFacing()
   local psi
-  if c.stay and facing then
+  if c.heldSoft and not gauge.saved and not UnitExists("softenemy") then
+    -- Nothing in front for the soft target to take: no waypoint for nothing.
+  elseif c.stay and facing then
+    -- Snapped: the reticle's unit must not be dropped for no longer standing
+    -- straight ahead of the character (strafing does that at once). The
+    -- soft target's cone goes to its widest for the rest of the hold.
+    if c.heldGate and c.heldSoft and not carry.wide then
+      carry.wide = true
+      setCVar("SoftTargetEnemyArc", 2)
+    end
     if not gauge.saved then
       if (carry.retry or 0) <= GetTime() then
         if gaugeBegin(facing + conv.applied + (carry.psi or 0)) then carry.blind = 0
@@ -1146,14 +1188,15 @@ local function stepCarry(zoom, elapsed)
     carry.time = (carry.time or 0) + elapsed
     local offset = shoulderAt(zoom)
     leaveHome(offset)
-    local rate, ratio = CARRY_RATE, carry.ratio or 1
+    -- The reticle's hold has to keep up with a unit that walks and an owner who strafes.
+    local rate, ratio = c.heldGate and FOLLOW_RATE or CARRY_RATE, carry.ratio or 1
     -- The engine's answer trails the turns by its spring: they are compared
     -- through a copy that trails alike. Only while the zoom stands still,
     -- its own shift of the unit would spoil the answer; and once per hold.
     local trail = carry.trail or carry.total
     trail = trail + (carry.total - trail) * (1 - exp(-elapsed / CARRY_LAG))
     carry.trail = trail
-    if not carry.stage and was and conv.quiet > 0.05 then
+    if not carry.stage and was and conv.quiet > 0.05 and not c.heldGate then
       local mark = carry.mark
       if not mark then
         mark = {psi, trail}
@@ -1175,7 +1218,7 @@ local function stepCarry(zoom, elapsed)
     step = max(-limit, min(limit, step))
     -- A zoom turns by no more than the owner allows; nothing ever turns far off the character's own line.
     local away = conv.applied - convergeAngle(offset, c.distance) - conv.home
-    if abs(carry.total + step) > c.aimLimit or abs(away + step) > AWAY_LIMIT then step = 0 end
+    if (not c.heldGate and abs(carry.total + step) > c.aimLimit) or abs(away + step) > AWAY_LIMIT then step = 0 end
     turn(step)
     carry.total = carry.total + step
   end
@@ -1237,185 +1280,6 @@ local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   conv.bias = conv.applied - convergeAngle(offset, distance)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the holding itself
 end
--- Follow without a position. The client will not say where a nameplate is
--- (every measurement of one, and of anything anchored to one, is refused),
--- but it does tell a frame that the cursor is over it. While the open
--- reticle follows a unit, screen-high strips hang on that unit's nameplate:
--- one on its centre line and a row to either side, each a known angle wide.
--- The strip under the centred cursor tells how far off the reticle the unit
--- stands, and the view turns until it is the middle one. The strips take
--- mouse motion only and pass it on: clicks and the world's own picking are
--- untouched. While mouselooking the client keeps hover from frames unless
--- told otherwise (C_GamePad.SetAllowHoverEventsWithFreeLook, which needs
--- no gamepad); that is switched on for as long as the strips hang.
--- plate.works: nil until a strip has answered (true), or until the strips
--- hung a while with the unit under the cursor and none did (false: not
--- tried again this session).
-local plate = {
-  EDGES = {0.25, 0.6, 1.2, 2.4, 4.8, 9, 16, 26},   -- degrees from the centre line at which one strip ends and the next begins
-  TIME = 0.08,                      -- seconds: time constant of the turn toward the middle strip
-  LEARN = 20,                       -- how fast the unit's own rate across the screen is picked up (per second squared)
-  LOST = 0.6,                       -- seconds with no strip under the cursor and the unit not under it either: let go
-  strips = {},
-}
-function plate.build()
-  if plate.ready ~= nil then return plate.ready end
-  if InCombatLockdown() then return false end       -- passing motion on cannot be set in combat: built after it
-  local holder
-  local ok, problem = pcall(function()
-    holder = CreateFrame("Frame", nil, UIParent)
-    holder:SetSize(1, 1)
-    holder:Hide()
-    for side = -1, 1 do                               -- 1: right of the centre line
-      for index = 1, side == 0 and 1 or #plate.EDGES - 1 do
-        local strip = CreateFrame("Frame", nil, holder)
-        strip.side, strip.index = side, index
-        strip.angle = side * (plate.EDGES[index] + plate.EDGES[index + 1]) / 2
-        strip:SetFrameStrata("BACKGROUND")
-        strip:EnableMouse(true)
-        strip:SetMouseClickEnabled(false)
-        strip:SetPropagateMouseMotion(true)
-        strip:SetScript("OnEnter", function(self) self.over = true end)
-        strip:SetScript("OnLeave", function(self) self.over = nil end)
-        strip:SetScript("OnHide", function(self) self.over = nil end)
-        plate.strips[#plate.strips + 1] = strip
-      end
-    end
-  end)
-  plate.holder, plate.ready, plate.problem = holder, ok, not ok and tostring(problem) or nil
-  return ok
-end
-function plate.attach(token)
-  local found, frame = pcall(C_NamePlate.GetNamePlateForUnit, token)
-  if not (found and frame) or not plate.build() then return false end
-  local holder = plate.holder
-  -- Screen units per unit of tangent (see gaugeRead), in the strips' own scale.
-  local focal = WorldFrame:GetHeight() * WorldFrame:GetEffectiveScale() / 2
-    / tan(rad(0.6263 * (tonumber(GetCVar("cameraFov")) or 90) + 0.52) / 2) / holder:GetEffectiveScale()
-  local ok, problem = pcall(function()
-    for _, strip in ipairs(plate.strips) do
-      strip:ClearAllPoints()
-      strip.over = nil
-      if strip.side == 0 then
-        strip:SetSize(2 * focal * tan(rad(plate.EDGES[1])), 4000)
-        strip:SetPoint("CENTER", frame, "CENTER")
-      else
-        local near, far = focal * tan(rad(plate.EDGES[strip.index])), focal * tan(rad(plate.EDGES[strip.index + 1]))
-        strip:SetSize(far - near, 4000)
-        if strip.side > 0 then strip:SetPoint("LEFT", frame, "CENTER", near, 0) else strip:SetPoint("RIGHT", frame, "CENTER", -near, 0) end
-      end
-    end
-    holder:Show()
-  end)
-  if not ok then
-    plate.problem = tostring(problem)
-    holder:Hide()
-    return false
-  end
-  plate.frame = frame
-  local pad = C_GamePad
-  if pad and pad.SetAllowHoverEventsWithFreeLook and plate.hover == nil then
-    local got, was = pcall(pad.GetAllowHoverEventsWithFreeLook)
-    plate.hover = got and not secret(was) and was == true
-    pcall(pad.SetAllowHoverEventsWithFreeLook, true)
-  end
-  return true
-end
-function plate.release()
-  plate.guid, plate.token, plate.frame, plate.rate, plate.lost, plate.last, plate.since, plate.age = nil, nil, nil, nil, nil, nil, nil, nil
-  if plate.holder then plate.holder:Hide() end
-  if plate.hover ~= nil then                        -- hover while mouselooking: as the owner had it
-    pcall(C_GamePad.SetAllowHoverEventsWithFreeLook, plate.hover)
-    plate.hover = nil
-  end
-end
--- Degrees the unit stands left of the reticle, by the strip the cursor is
--- over; nil when it is over none. A strip right of the nameplate's centre
--- line under the cursor: the unit is left of the reticle.
-function plate.read()
-  local best
-  for _, strip in ipairs(plate.strips) do
-    local over = strip.over
-    if not over and plate.poll ~= false then        -- a strip that slid under a resting cursor
-      local ok, focus = pcall(strip.IsMouseMotionFocus, strip)
-      if ok and not secret(focus) then over = focus == true else plate.poll = false end
-    end
-    if over and (not best or strip.index < best.index or strip.side == 0) then best = strip end
-  end
-  return best and best.angle
-end
--- One frame of following the open reticle's unit by its nameplate. False
--- when there is nothing to follow that way.
-function plate.step(c, elapsed, offset)
-  local guid = plate.guid
-  if not guid then
-    local ok, found = pcall(UnitGUID, "mouseover")    -- the unit that has come under the reticle
-    if not ok or secret(found) or type(found) ~= "string" then return false end
-    local token
-    for index = 1, 40 do
-      if sameUnit("nameplate" .. index, found) then token = "nameplate" .. index; break end
-    end
-    if not (token and plate.attach(token)) then return false end
-    plate.guid, plate.token, plate.rate, plate.lost, plate.age, plate.hid, plate.seen, plate.mute = found, token, 0, 0, 0, 0, 0, 0
-    guid = found
-  end
-  local ok, frame = pcall(C_NamePlate.GetNamePlateForUnit, plate.token)
-  if not (ok and frame == plate.frame and sameUnit(plate.token, guid)) then      -- the nameplate went, or passed to another unit
-    plate.release()
-    return false
-  end
-  local off = plate.read()
-  local under = sameUnit("mouseover", guid)
-  -- The unit was under the cursor when the strips went up. If from then on
-  -- the game no longer sees it there whenever a strip is, the strips are
-  -- keeping the mouse from the world (motion is not passed on in this
-  -- client): they must go, for good, or mouseover casting would suffer.
-  if plate.age < 0.3 then
-    plate.age = plate.age + elapsed
-    if off then
-      plate.seen = plate.seen + 1
-      if not under then plate.hid = plate.hid + 1 end
-    end
-    if plate.age >= 0.3 and plate.seen >= 8 and plate.hid >= plate.seen * 0.8 then
-      plate.problem, plate.ready = "the strips hid the unit from the game's own picking", false
-      plate.release()
-      return false
-    end
-  end
-  if off then plate.works = true
-  elseif plate.works == nil and under then
-    -- The unit is under the cursor, so the cursor is within the strips: one of them should be answering.
-    plate.mute = plate.mute + elapsed
-    if plate.mute > 0.4 then
-      plate.works, plate.problem = false, "no strip answers while mouselooking"
-      plate.release()
-      return false
-    end
-  end
-  plate.lost = (off or under) and 0 or plate.lost + elapsed
-  if plate.lost > plate.LOST then plate.release(); return false end
-  off = off or 0
-  -- A strip that goes on answering while the view turns well past what it
-  -- spans is not telling where the unit is: no more of this until a reload.
-  if off ~= plate.last then plate.last, plate.since = off, conv.applied end
-  if off ~= 0 and abs(conv.applied - plate.since) > 8 * abs(off) + 2 then
-    plate.problem, plate.ready = "a strip kept answering while the view turned past it", false
-    plate.release()
-    return false
-  end
-  if off * plate.rate < 0 then plate.rate = 0 end     -- it stopped or turned back: no carrying on past it
-  plate.rate = plate.rate + off * plate.LEARN * elapsed
-  local limit = CONVERGE_MAX_RATE * elapsed
-  local step = max(-limit, min(limit, (plate.rate + off / plate.TIME) * elapsed))
-  leaveHome(offset)
-  -- Never far off the character's own line.
-  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step, plate.rate = 0, 0 end
-  turn(step)
-  conv.mode, conv.unit, conv.distance, conv.source, conv.followed = "follow", plate.token, c.distance, "nameplate", guid
-  conv.bias = conv.applied - convergeAngle(offset, c.distance)
-  conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the following itself
-  return true
-end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
   local c = cfg.converge
@@ -1470,7 +1334,6 @@ local function stepConverge(zoom, elapsed)
   if not c.enabled or transFn or #turns > 0 then
     if conv.live then stopConverge() end
     conv.steer, conv.watch, conv.followGUID, conv.followToken = nil, nil, nil, nil
-    if plate.guid then plate.release() end
     return false
   end
   local facing = readFacing()
@@ -1484,38 +1347,36 @@ local function stepConverge(zoom, elapsed)
     beginConverge(zoom, was < 0.05 and was or zoom)
   end
 
-  -- The open reticle follows the unit under it.
+  -- The open reticle follows the unit under it, selected or not, and stays
+  -- on it until the reticle closes.
   local gate = c.enabled and c.follow and gateOpen()
-  if gate and facing and (not c.held or c.heldGate) and not UnitExists("target") then
+  if gate and facing and (not c.held or c.heldGate) then
     local unit = c.aim and followUnit() or nil
     local wanted, distance
     if unit then wanted, distance = aimAngle(unit, facing, zoom) end
     -- Never far off the character's own line: beyond that the view goes with the mouse again.
     if wanted and abs(wanted) <= AWAY_LIMIT then
-      if plate.guid then plate.release() end
-      if c.heldGate then endFocus() end                -- by its position: the engine's soft target is not needed
+      if c.heldGate then releaseGate() end             -- by its position: the engine's focus is not needed
       hold(unit, wanted, distance, offset, elapsed, "follow", conv.followGUID)
       return true
     end
-    if not wanted then
-      -- The game gives no position for what is there: its nameplate is gone
-      -- by where the strips answer; where they do not, the game's own soft
-      -- target and focus follow until the reticle closes (if allowed).
-      if plate.works ~= false and (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset)
-        and (plate.works or not c.softFollow) then
-        if c.heldGate then endFocus() end              -- the strips answer: the soft target is not needed
-        return true
-      end
-      if c.softFollow and not c.held and not plate.works then beginFocus(true) end
+    if not wanted and not c.held then
+      -- The game gives no position for what is there: its own focus follows
+      -- until the reticle closes. With a target selected that is the target,
+      -- when the reticle was opened on it; with nothing selected, what the
+      -- game's soft target takes (if allowed).
+      if UnitExists("target") then
+        local ok, same = pcall(UnitIsUnit, "mouseover", "target")
+        if ok and not secret(same) and same then beginFocus("target") end
+      elseif c.softFollow then beginFocus("soft") end
     end
   else
-    if plate.guid then plate.release() end
-    if c.heldGate then endFocus() end                  -- the reticle closed, or something was selected
+    if c.heldGate then releaseGate() end               -- the reticle closed
     if not gate then conv.followGUID, conv.followToken = nil, nil end
   end
   if not conv.live then
-    conv.mode = gate and (c.heldGate and "follow (the game's soft target)"
-      or UnitExists("mouseover") and "follow (no position and no nameplate to go by)" or "follow (nothing under the reticle)") or nil
+    conv.mode = gate and (c.heldGate and (c.heldSoft and "follow (the game's soft target)" or "follow (the game's focus on the target)")
+      or UnitExists("mouseover") and "follow (no position for this unit)" or "follow (nothing under the reticle)") or nil
     conv.watch = not c.held and catchUp(c, facing, steered, offset, elapsed)
     return gate
   end
@@ -1572,7 +1433,7 @@ end
 local function gateChanged()
   if not (Camera.active and cfg and cfg.converge.follow) then return end
   if not gateOpen() then
-    if cfg.converge.heldGate then endFocus() end
+    if cfg.converge.heldGate then releaseGate() end
     conv.followGUID, conv.followToken = nil, nil
   end
   Camera:Wake()                     -- to follow, or for the catch-up to watch the facing
@@ -2005,8 +1866,7 @@ function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
   if not self.active then return end
-  gaugeEnd(); endFocus(); stopConverge(); plate.release()
-  if cfg.converge.enabled and cfg.converge.follow then plate.build() end
+  gaugeEnd(); endFocus(); stopConverge()
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -2019,7 +1879,7 @@ end
 function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
-    gaugeEnd(); stopConverge(); plate.release()
+    gaugeEnd(); stopConverge()
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()
@@ -2170,11 +2030,10 @@ function Camera:Command(command)
       c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.softFollow and "on" or "off", c.stick and "on" or "off", tostring(c.stickAngle),
       c.stay and "on" or "off", c.catchUp and "on" or "off",
       gateOpen() and "open" or "closed"))
-  print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s. Nameplate following: %s")
+  print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s")
     :format(position("player") and "given" or "not given", UnitExists("target") and (position("target") and "given" or "not given") or "-",
       UnitExists("mouseover") and (position("mouseover") and "given" or "not given") or "-",
       c.held and ("on, swivel %s"):format(carry.psi and ("%.2f"):format(carry.psi) or "not read") or "off",
-      conv.handed or "none yet",
-      plate.problem and ("failed: " .. plate.problem) or plate.guid and "on a unit now" or plate.works and "works" or plate.ready and "ready" or "not used yet"))
+      conv.handed or "none yet"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end

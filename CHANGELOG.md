@@ -14,15 +14,24 @@
   nearest the reticle and leaves it there (Camera page, "Zoom sticks to the
   enemy near the reticle", on by default, with a slider for how near).
   Nothing is held while you are not zooming.
-- Camera: the open reticle follows any enemy again. Where the game gives a
-  position it goes by that. Otherwise the unit's nameplate is gone by, read
-  from which of a row of unseen strips the centred cursor is over (the game
-  is told to report hover while mouselooking for as long as that lasts).
-  Where no strip answers, the game's own soft target and camera focus do the
-  following, switched on only while the reticle is held open and put back
-  when you let go, with the game's selection disc hidden meanwhile (Camera
-  page, "Open reticle: other enemies by the game's soft target", on by
-  default).
+- Camera: the open reticle follows what is under it, selected or not, and
+  stays on it until you let go, also while it walks or you strafe. A unit
+  the game gives a position for is followed by that. Opened on your target,
+  the game's camera focus follows the target. With nothing selected, any
+  other enemy is followed through the game's own soft target, switched on
+  only while the reticle is held and put back when you let go (Camera page,
+  "Open reticle: other enemies by the game's soft target", on by default).
+  The game's focus is taken over as real turns while it follows, so the view
+  keeps up and stays where it is when the reticle closes.
+- Camera: while the reticle is open, zooming no longer pulls the view to
+  your target.
+- Camera: with nothing selected, a zoom also sticks to an enemy the game
+  gives no position for: its soft target is switched on for the length of
+  the zoom to find the enemy in front, and put back afterwards (Camera page,
+  "Zoom sticks: other enemies by the game's soft target", on by default).
+- Camera: experimental setting, off by default: in first person the view
+  steps half a yard out while the open reticle follows through the game's
+  focus (which does not seem to act in first person).
 - Camera: a zoom with a target the game gives no position for takes the
   game's focus over as a turn from the first moment and without pausing;
   before, it waited, turned a little, waited again and then went on, which
@@ -31,10 +40,6 @@
   character as soon as the character moves; before, it stayed askew and the
   character ran sideways across the screen. Standing still, the view stays
   where it was left.
-- Camera: the "Soft targeting while zooming" option is gone; a zoom never
-  switches the game's soft targeting on. With nothing selected a zoom sticks
-  to units the game gives a position for; a zoom with any selected target
-  still turns onto it.
 - Camera: quick wheel zooming no longer flickers the shoulder offset and field
   of view. The game reports a false zoom distance for a frame or two while a
   quick zoom is corrected; those readings are now ignored.
