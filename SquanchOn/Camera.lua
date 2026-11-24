@@ -295,8 +295,8 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 12, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = true, firstPersonStep = false}}
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 13, follow = true,
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = false, firstPersonStep = false}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -1141,6 +1141,12 @@ end
 -- been turned 5 degrees off it, and never with it off; the game listed no soft interact target the while).
 -- So with something else selected the enemy focus is switched off for the hold and the interact focus on,
 -- on the unit under the reticle; the target stays the target. The settings are those of that test.
+-- NOT BORNE OUT since: six more runs of the same test the owner made straight after (read at their next
+-- reload) did not show it. In the four clean ones, the unit standing 26 to 39 yards off, the view turned 5
+-- degrees off it did not come back with the focus on; and the one run above fits a boar that walked the way
+-- the test turned (its body takes a second to cross the reticle). The setting is off by default
+-- (converge.interact); what remains to be tried is whether the focus holds a WALKING unit for as long as it
+-- stays under the reticle.
 local function beginFocus(reticle)
   local c = cfg.converge
   if not c.enabled or transFn then return end
@@ -2684,6 +2690,12 @@ local function normalize(config)
   -- rev 12: with nothing selected the soft target is the default again. Tried live side by side, it keeps a
   -- walking unit on the reticle throughout where the mouseover alone slips and searches.
   if config.converge.rev < 12 then config.converge.softFollow, config.converge.rev = nil, 12 end
+  -- rev 13: the hold by the game's interact focus was on by default for three minutes on 2026-11-24, on the
+  -- strength of one test run. Six more runs the owner made straight after, read at their next reload, did
+  -- not bear it out (four clean ones, the unit standing 26 to 39 yards off: the view turned 5 degrees off it
+  -- did not come back with the focus on; the one run that had looked like it is explained by a boar walking
+  -- the way the test turned). Off unless chosen, until it is shown to hold.
+  if config.converge.rev < 13 then config.converge.interact, config.converge.rev = nil, 13 end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   -- How long each kind of unit is, as the reticle's following has measured it (lock.learn): by its id.
   if type(config.converge.sizes) ~= "table" then config.converge.sizes = {} end
