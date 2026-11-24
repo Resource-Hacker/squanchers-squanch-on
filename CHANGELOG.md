@@ -10,10 +10,10 @@
   next mouse turns lines the two up again.
 - Camera: with nothing selected, holding the reticle open follows the unit
   that comes under it, also while it walks, until you let go.
-- Camera: with the reticle closed and nothing selected, the view sticks to an
-  enemy you bring the reticle near and stays on it while it walks; steer away
-  to let go (Camera page, "Closed reticle sticks to a nearby enemy", on by
-  default). It uses no mouseover and no soft targeting.
+- Camera: with nothing selected, zooming turns the view onto the enemy
+  nearest the reticle and leaves it there (Camera page, "Zoom sticks to the
+  enemy near the reticle", on by default, with a slider for how near).
+  Nothing is held while you are not zooming.
 - Camera: soft targeting is no longer used by anything. The "Soft targeting
   while zooming" option is gone, and the open reticle no longer borrows the
   game's soft target. Following and sticking work for the units the game

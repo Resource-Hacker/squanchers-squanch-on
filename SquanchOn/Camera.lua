@@ -295,7 +295,7 @@ local function build(profile, defaults)
     -- reticle. scale: yards of sideways camera shift per
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
-    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 8, follow = true,
+    converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 10, follow = true,
       aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
@@ -777,18 +777,18 @@ end
 --   about the character: only for far units are the two alike, a near unit
 --   needs a much larger turn to stay on the reticle.
 -- What is done with that:
--- * Aim: a zoom turns onto a unit with a position (the open reticle's, else
---   the target) by a real turn and holds it there.
+-- * Aim: a zoom turns onto a unit with a position by a real turn and holds
+--   it there: the unit under the open reticle, else the target, else (zoom
+--   sticks) the enemy nearest the reticle among the nameplate units.
 -- * Follow: the open reticle keeps turning onto the unit under it.
--- * Stick: with the reticle closed and nothing selected, the view stays on
---   an enemy it was brought near, until the owner steers away. This goes by
---   positions and nameplate units alone: no mouseover, no soft target.
+--   Nothing is ever held at rest with the reticle closed, and nothing here
+--   uses the client's soft targeting (the owner wants neither).
 -- * Focus and carry: a zoom with a target that gives no position is caught
 --   by the engine's focus. While that is on, the swivel it holds is read from
 --   the marker and taken over bit by bit as a real turn, the engine keeping
 --   the unit on the reticle all the while. At the release what little swivel
 --   is left is turned in step with the engine letting go, so nothing swings
---   back. The open reticle and the stick do nothing for such a unit.
+--   back. With nothing selected such a unit is left alone.
 -- * Distance: with no unit, the centre ray keeps crossing the character's
 --   forward line `distance` yards ahead.
 -- * Catch-up: a view turned onto a unit is off the character's facing.
@@ -811,16 +811,8 @@ local CONVERGE_MAX_RATE = 600       -- degrees per second
 local FIRST_PERSON_TIME = 0.075     -- seconds the client takes to slide the shoulder offset in or out
 local AIM_TIME = 0.07               -- seconds: time constant of the turn onto a unit during a zoom
 local AIM_SETTLE = 0.25             -- seconds an aim keeps turning after the zoom stopped
-local FOLLOW_TIME = 0.035           -- the same for the open reticle and the stick
--- The stick, in one table: this file's main chunk is close to the 200 local
--- variables Lua allows a function.
-local stick = {
-  SCAN = 0.1,                       -- seconds between looks for a unit to stick to
-  RANGE = 50,                       -- yards within which a unit is stuck to
-  MEMORY = 0.5,                     -- seconds over which the owner's steering counts as recent
-  CALM = 0.8,                       -- degrees of steering between two looks below which a unit is caught
-  BREAK = 5,                        -- degrees of recent steering that let it go
-}
+local FOLLOW_TIME = 0.035           -- the same for the open reticle
+local NEAR_RANGE = 50               -- yards within which a zoom sticks to an enemy
 local PIVOT = 0.5                   -- yards from the character's position to the camera's pivot, ahead
 local CATCH_UP = 0.3                -- share of the owner's turning that goes into realigning
 local GAUGE_YARDS = {400, 200, 100, 60}
@@ -870,10 +862,33 @@ local function aimAngle(unit, facing, zoom)
   if distance < 3 then return end     -- on top of the character: no sensible angle
   return wrap(deg(atan2(west, north)) + convergeAngle(shoulderAt(zoom), distance) - facing), distance
 end
+-- With nothing selected a zoom sticks to the enemy nearest the reticle:
+-- among the units with a nameplate and a position, the one seen within the
+-- owner's angle of it.
+local function nearUnit()
+  local facing, zoom = readFacing(), GetCameraZoom()
+  if not facing then return end
+  local best, bestOff
+  for index = 1, 40 do
+    local unit = "nameplate" .. index
+    local ok, enemy, dead = pcall(function() return UnitExists(unit) and UnitCanAttack("player", unit), UnitIsDead(unit) end)
+    if ok and not secret(enemy) and not secret(dead) and enemy and not dead then
+      local wanted, distance = aimAngle(unit, facing, zoom)
+      if wanted and distance <= NEAR_RANGE then
+        -- How far from the reticle it is seen: the camera stands the zoom behind the pivot the turn is about.
+        local turned = rad(wrap(wanted - conv.applied))
+        local off = abs(deg(atan2(distance * sin(turned), distance * cos(turned) + zoom)))
+        if off <= cfg.converge.stickAngle and (not bestOff or off < bestOff) then best, bestOff = unit, off end
+      end
+    end
+  end
+  return best
+end
 -- The unit a zoom turns onto by its position.
 local function aimUnit()
   if gateOpen() and UnitExists("mouseover") and position("mouseover") then return "mouseover" end
-  if UnitExists("target") and not UnitIsUnit("target", "player") and position("target") then return "target" end
+  if UnitExists("target") then return not UnitIsUnit("target", "player") and position("target") and "target" or nil end
+  if cfg.converge.stick and not gateOpen() then return nearUnit() end
 end
 -- The unit the open reticle follows by its position: the one that comes
 -- under it, and from then on that same unit for as long as the reticle stays
@@ -1189,8 +1204,8 @@ end
 local function stopConverge()
   conv.ramp, conv.live, conv.aim, conv.mode, conv.quiet = nil, nil, nil, nil, huge
 end
--- The view is kept on a unit by its position (open reticle, stick). key: what
--- is being held, so that a change of unit starts the turn afresh.
+-- The view is kept on a unit by its position (open reticle). key: what is
+-- being held, so that a change of unit starts the turn afresh.
 local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   leaveHome(offset)
   if conv.mode ~= mode or conv.followed ~= key then conv.tracked = nil end
@@ -1199,88 +1214,6 @@ local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   conv.mode, conv.unit, conv.distance, conv.source = mode, unit, distance, unit .. " position"
   conv.bias = conv.applied - convergeAngle(offset, distance)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the holding itself
-end
--- Stick: with the reticle closed and nothing selected, the view stays on the
--- enemy it was brought near. stick.guid is that unit, stick.token its
--- nameplate token, stick.push the owner's recent steering, stick.shun a unit
--- the owner steered off.
-function stick.yes(fn, ...)
-  local ok, value = pcall(fn, ...)
-  return ok and not secret(value) and value == true
-end
-function stick.allowed(c, facing)
-  return c.enabled and c.stick and facing and not c.held and not transFn and #turns == 0
-    and not gateOpen() and not UnitExists("target")
-end
--- The enemy nearest the reticle among the units with a nameplate and a
--- position, within the owner's angle. A unit the owner steered off is passed
--- over until the reticle has left it.
-function stick.candidate(c, facing, zoom)
-  local best, bestOff, bestGuid
-  local shunned = false
-  for index = 1, 40 do
-    local unit = "nameplate" .. index
-    if UnitExists(unit) and stick.yes(UnitCanAttack, "player", unit) and not stick.yes(UnitIsDead, unit) then
-      local wanted, distance = aimAngle(unit, facing, zoom)
-      if wanted and distance <= stick.RANGE and abs(wanted) <= AWAY_LIMIT then
-        -- How far from the reticle it is seen: the camera stands the zoom behind the pivot the turn is about.
-        local turn = rad(wrap(wanted - conv.applied))
-        local off = abs(deg(atan2(distance * sin(turn), distance * cos(turn) + zoom)))
-        if off <= c.stickAngle then
-          local ok, guid = pcall(UnitGUID, unit)
-          if not ok or secret(guid) or type(guid) ~= "string" then guid = nil end
-          if guid and guid == stick.shun then shunned = true
-          elseif guid and (not bestOff or off < bestOff) then best, bestOff, bestGuid = unit, off, guid end
-        end
-      end
-    end
-  end
-  if not shunned then stick.shun = nil end
-  return best, bestGuid
-end
--- Looks for a unit to stick to, a few times a second while none is held. The
--- driver may be asleep, so the owner's steering is read here as well.
-function stick.scan()
-  local c = cfg and cfg.converge
-  if not (Camera.active and c) or stick.guid then return end
-  local facing = readFacing()
-  local steered = stick.facing and facing and abs(wrap(facing - stick.facing)) or huge
-  stick.facing = facing
-  -- Not while a zoom eases: the client's distance reading is not sound then.
-  if ease or not stick.allowed(c, facing) or steered > stick.CALM then return end
-  local unit, guid = stick.candidate(c, facing, GetCameraZoom())
-  if unit then
-    stick.guid, stick.token, stick.push = guid, unit, 0
-    Camera:Wake()
-  end
-end
--- Holds the stuck unit on the reticle. False once it is let go.
-function stick.step(c, facing, steered, zoom, offset, elapsed)
-  local guid = stick.guid
-  if not stick.allowed(c, facing) then stick.guid, stick.token = nil, nil; return false end
-  local unit = stick.token
-  if not (unit and sameUnit(unit, guid)) then
-    unit = nil
-    for index = 1, 40 do
-      if sameUnit("nameplate" .. index, guid) then unit = "nameplate" .. index; break end
-    end
-    stick.token = unit
-  end
-  local wanted, distance
-  if unit and not stick.yes(UnitIsDead, unit) then wanted, distance = aimAngle(unit, facing, zoom) end
-  if not wanted or distance > stick.RANGE * 1.2 or abs(wanted) > AWAY_LIMIT then
-    stick.guid, stick.token = nil, nil            -- gone, dead, or too far round: nothing to keep off
-    return false
-  end
-  -- Steering is taken up by the hold, so the unit stays put on the screen;
-  -- enough of it in a short while is the owner turning away.
-  stick.push = (stick.push or 0) * exp(-elapsed / stick.MEMORY) + steered
-  if abs(stick.push) > stick.BREAK then
-    stick.guid, stick.token, stick.shun = nil, nil, guid
-    return false
-  end
-  hold(unit, wanted, distance, offset, elapsed, "stick", guid)
-  return true
 end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
@@ -1294,7 +1227,11 @@ local function beginConverge(zoom, from)
     conv.unit, conv.distance, conv.source = unit, distance, unit .. " position"
     -- Far off to the side it is not what the owner is looking at: the zoom
     -- then only keeps its own point steady, by that unit's true distance.
-    if c.aim and abs(wrap(wanted - conv.applied)) <= c.aimLimit and abs(wanted) <= AWAY_LIMIT then conv.aim = unit end
+    if c.aim and abs(wrap(wanted - conv.applied)) <= c.aimLimit and abs(wanted) <= AWAY_LIMIT then
+      conv.aim = unit
+      local ok, guid = pcall(UnitGUID, unit)       -- a nameplate's name can pass to another unit
+      conv.aimGUID = ok and not secret(guid) and guid or nil
+    end
   else
     conv.unit, conv.distance, conv.source = reticleUnit()
   end
@@ -1325,7 +1262,7 @@ local function stepConverge(zoom, elapsed)
   -- Not during a situation's own turn or setting transition.
   if not c.enabled or transFn or #turns > 0 then
     if conv.live then stopConverge() end
-    conv.steer, conv.watch, conv.followGUID, conv.followToken, stick.guid, stick.token = nil, nil, nil, nil, nil, nil
+    conv.steer, conv.watch, conv.followGUID, conv.followToken = nil, nil, nil, nil
     return false
   end
   local facing = readFacing()
@@ -1351,8 +1288,6 @@ local function stepConverge(zoom, elapsed)
       return true
     end
   elseif not gate then conv.followGUID, conv.followToken = nil, nil end
-  -- Closed reticle, nothing selected: the view stays on the enemy it was brought near.
-  if stick.guid and stick.step(c, facing, steered, zoom, offset, elapsed) then return true end
   if not conv.live then
     conv.mode = gate and (UnitExists("mouseover") and "follow (the game gives no position for this unit)" or "follow (nothing under the reticle)") or nil
     conv.watch = not c.held and catchUp(c, facing, steered, offset)
@@ -1363,7 +1298,9 @@ local function stepConverge(zoom, elapsed)
   -- Zoom gesture: onto a unit by its position.
   if conv.aim then
     local wanted, distance
-    if facing and UnitExists(conv.aim) then wanted, distance = aimAngle(conv.aim, facing, zoom) end
+    if facing and (conv.aimGUID and sameUnit(conv.aim, conv.aimGUID) or not conv.aimGUID and UnitExists(conv.aim)) then
+      wanted, distance = aimAngle(conv.aim, facing, zoom)
+    end
     if wanted then
       -- Held through the zoom and a moment longer, then let go: the view
       -- stays where the zoom left it, also when the unit walks on.
@@ -1749,10 +1686,11 @@ local function normalize(config)
     if config.converge.aimLimit == 45 then config.converge.aimLimit = nil end
     config.converge.rev = 7
   end
-  -- rev 8: soft targeting is no longer used by anything here.
-  if config.converge.rev < 8 then
+  -- rev 10: soft targeting is no longer used by anything here; keys of
+  -- builds that never left the owner's machine go with it.
+  if config.converge.rev < 10 then
     local old = config.converge
-    old.soft, old.softMode, old.heldSoft, old.heldFocus, old.heldGate, old.rev = nil, nil, nil, nil, nil, 8
+    old.soft, old.softMode, old.heldSoft, old.heldFocus, old.heldGate, old.stickArc, old.rev = nil, nil, nil, nil, nil, nil, 10
   end
   for key, value in pairs(shipped.converge) do if config.converge[key] == nil then config.converge[key] = value end end
   if type(config.situations) ~= "table" then config.situations = copy(shipped.situations) end
@@ -1839,9 +1777,6 @@ function Camera:SettingsChanged()
   normalize(cfg)
   if not self.active then return end
   gaugeEnd(); endFocus(); stopConverge()
-  stick.guid, stick.token, stick.shun = nil, nil, nil
-  if stick.ticker then stick.ticker:Cancel(); stick.ticker = nil end
-  if cfg.converge.enabled and cfg.converge.stick then stick.ticker = C_Timer.NewTicker(stick.SCAN, stick.scan) end
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -1855,8 +1790,6 @@ function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
     gaugeEnd(); stopConverge()
-    stick.guid, stick.token = nil, nil
-    if stick.ticker then stick.ticker:Cancel(); stick.ticker = nil end
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()
@@ -2000,12 +1933,12 @@ function Camera:Command(command)
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
       tostring(c.pitch), c.held and (", held now, yaw CVar " .. tostring(GetCVar(FOCUS[1]))) or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
   local offAxis = conv.home and conv.applied - convergeAngle(shoulderAt(zoom), c.distance) - conv.home
-  print(("Aim convergence yaw: %s; now=%s; last: unit=%s, distance=%s (%s); camera %.3f deg left of the character's facing%s; aim=%s (limit %s), follow=%s, stick=%s (%s deg%s), stay=%s, catch-up=%s; gate %s")
+  print(("Aim convergence yaw: %s; now=%s; last: unit=%s, distance=%s (%s); camera %.3f deg left of the character's facing%s; aim=%s (limit %s), follow=%s, zoom sticks=%s (%s deg), stay=%s, catch-up=%s; gate %s")
     :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
       conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none", conv.applied,
       offAxis and (", %.3f of it from aiming"):format(offAxis) or "",
       c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.stick and "on" or "off", tostring(c.stickAngle),
-      stick.guid and ", holding a unit" or "", c.stay and "on" or "off", c.catchUp and "on" or "off",
+      c.stay and "on" or "off", c.catchUp and "on" or "off",
       gateOpen() and "open" or "closed"))
   print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s")
     :format(position("player") and "given" or "not given", UnitExists("target") and (position("target") and "given" or "not given") or "-",
