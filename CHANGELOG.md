@@ -14,9 +14,13 @@
   nearest the reticle and leaves it there (Camera page, "Zoom sticks to the
   enemy near the reticle", on by default, with a slider for how near).
   Nothing is held while you are not zooming.
-- Camera: the open reticle now follows any unit that has a nameplate, not
-  only those the game gives a position for: the unit's nameplate tells how
-  far off the reticle it stands.
+- Camera: the open reticle follows any enemy again. Where the game gives a
+  position it goes by that; for every other enemy the game's own soft target
+  and camera focus do the following, switched on only while the reticle is
+  held open and put back when you let go, with the game's selection disc
+  hidden meanwhile (Camera page, "Open reticle: other enemies by the game's
+  soft target", on by default). With that off, the unit's nameplate is gone
+  by instead, where the game reports the cursor over it.
 - Camera: a zoom with a target the game gives no position for takes the
   game's focus over as a turn from the first moment and without pausing;
   before, it waited, turned a little, waited again and then went on, which
@@ -25,10 +29,10 @@
   character as soon as the character moves; before, it stayed askew and the
   character ran sideways across the screen. Standing still, the view stays
   where it was left.
-- Camera: soft targeting is no longer used by anything. The "Soft targeting
-  while zooming" option is gone, and the open reticle no longer borrows the
-  game's soft target. Following and sticking work for the units the game
-  gives a position for; a zoom with any other target still turns onto it.
+- Camera: the "Soft targeting while zooming" option is gone; a zoom never
+  switches the game's soft targeting on. With nothing selected a zoom sticks
+  to units the game gives a position for; a zoom with any selected target
+  still turns onto it.
 - Camera: quick wheel zooming no longer flickers the shoulder offset and field
   of view. The game reports a false zoom distance for a frame or two while a
   quick zoom is corrected; those readings are now ignored.

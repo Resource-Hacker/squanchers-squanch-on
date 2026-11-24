@@ -296,7 +296,7 @@ local function build(profile, defaults)
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
     converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 10, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6}}
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -780,10 +780,15 @@ end
 -- * Aim: a zoom turns onto a unit with a position by a real turn and holds
 --   it there: the unit under the open reticle, else the target, else (zoom
 --   sticks) the enemy nearest the reticle among the nameplate units.
--- * Follow: the open reticle keeps turning onto the unit under it: by its
---   position, else by its nameplate (see plate, below).
---   Nothing is ever held at rest with the reticle closed, and nothing here
---   uses the client's soft targeting (the owner wants neither).
+-- * Follow: the open reticle keeps turning onto the unit under it by its
+--   position. For any other unit the engine's own soft target and focus do
+--   the following for as long as the reticle is held (the owner's choice,
+--   2026-11-23, knowing it is what the open reticle did before positions
+--   were found: nothing else follows such a unit), with the client's
+--   selection disc hidden meanwhile; or, with that switched off, the unit's
+--   nameplate is gone by (see plate, below).
+--   Nothing is ever held at rest with the reticle closed, and at rest the
+--   client's soft targeting is left as the owner has it.
 -- * Focus and carry: a zoom with a target that gives no position is caught
 --   by the engine's focus. While that is on, the swivel it holds is read from
 --   the marker and taken over bit by bit as a real turn, the engine keeping
@@ -1020,7 +1025,7 @@ local function endFocus()
   local c = cfg and cfg.converge
   local held = type(c) == "table" and c.held
   if not held then return end
-  c.held = nil
+  c.held, c.heldGate = nil, nil
   for name, value in pairs(held) do
     setCVar(name, value)
     -- The client refuses some of these in combat without a word (seen once,
@@ -1042,23 +1047,33 @@ local function heldValue(name)
   deferred[name] = nil
   return waiting or GetCVar(name)
 end
--- The engine's focus, for the length of a zoom with a target the client
--- gives no position for.
-local function beginFocus()
+-- The engine's focus: for the length of a zoom with a target the client
+-- gives no position for; and (reticle) for as long as the open reticle is
+-- held with nothing selected. There the engine's soft target, its cone at
+-- the narrowest, takes the enemy in front and the focus keeps the view on
+-- it; the client's selection disc is hidden meanwhile. All of it is put
+-- back when the reticle closes.
+local function beginFocus(reticle)
   local c = cfg.converge
   if not c.enabled or transFn then return end
   carry.since, carry.still = nil, nil   -- a release that was waiting: the gesture goes on
   if c.held then return end
-  if not (c.focus and UnitExists("target") and not UnitIsUnit("target", "player")) then return end
-  if c.aim and aimUnit() then return end           -- a unit with a position is aimed at by a real turn
-  local held = {}
-  for _, name in ipairs(FOCUS) do held[name] = heldValue(name) end
-  c.held = held
+  local want = {}
+  if reticle then
+    want.SoftTargetEnemy, want.SoftTargetEnemyArc, want.ObjectSelectionCircle = 3, 0, 0
+  else
+    if not (c.focus and UnitExists("target") and not UnitIsUnit("target", "player")) then return end
+    if c.aim and aimUnit() then return end           -- a unit with a position is aimed at by a real turn
+  end
   for index, name in ipairs(FOCUS) do
-    if held[name] ~= nil then
-      local kind = index % 3          -- 1 yaw strength, 2 pitch strength, 0 enable
-      setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
-    end
+    local kind = index % 3            -- 1 yaw strength, 2 pitch strength, 0 enable
+    want[name] = kind == 1 and c.strength or kind == 2 and c.pitch or 1
+  end
+  local held = {}
+  for name in pairs(want) do held[name] = heldValue(name) end
+  c.held, c.heldGate = held, reticle and true or nil
+  for name, value in pairs(want) do
+    if held[name] ~= nil then setCVar(name, value) end
   end
   carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail = 0, nil, 0, 0, nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
@@ -1099,7 +1114,7 @@ local function stepCarry(zoom, elapsed)
     if t > 10 then carry.release = nil; return false end
     return true
   end
-  if not c.held then
+  if not c.held or c.heldGate then      -- the open reticle's hold is the engine's alone: nothing is taken over
     gaugeEnd()
     carry.psi, carry.since, carry.facing, carry.still = nil, nil, nil, nil
     return false
@@ -1446,24 +1461,33 @@ local function stepConverge(zoom, elapsed)
 
   -- The open reticle follows the unit under it.
   local gate = c.enabled and c.follow and gateOpen()
-  if gate and facing and not c.held and not UnitExists("target") then
+  if gate and facing and (not c.held or c.heldGate) and not UnitExists("target") then
     local unit = c.aim and followUnit() or nil
     local wanted, distance
     if unit then wanted, distance = aimAngle(unit, facing, zoom) end
     -- Never far off the character's own line: beyond that the view goes with the mouse again.
     if wanted and abs(wanted) <= AWAY_LIMIT then
       if plate.guid then plate.release() end
+      if c.heldGate then endFocus() end                -- by its position: the engine's soft target is not needed
       hold(unit, wanted, distance, offset, elapsed, "follow", conv.followGUID)
       return true
     end
-    -- The game gives no position for it: by its nameplate.
-    if not wanted and (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset) then return true end
+    if not wanted then
+      -- The game gives no position for what is there: its own soft target
+      -- and focus follow until the reticle closes; or, with that switched
+      -- off, the unit's nameplate is gone by.
+      if c.softFollow then
+        if not c.held then beginFocus(true) end
+      elseif (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset) then return true end
+    end
   else
     if plate.guid then plate.release() end
+    if c.heldGate then endFocus() end                  -- the reticle closed, or something was selected
     if not gate then conv.followGUID, conv.followToken = nil, nil end
   end
   if not conv.live then
-    conv.mode = gate and (UnitExists("mouseover") and "follow (no position and no nameplate to go by)" or "follow (nothing under the reticle)") or nil
+    conv.mode = gate and (c.heldGate and "follow (the game's soft target)"
+      or UnitExists("mouseover") and "follow (no position and no nameplate to go by)" or "follow (nothing under the reticle)") or nil
     conv.watch = not c.held and catchUp(c, facing, steered, offset, elapsed)
     return gate
   end
@@ -1519,7 +1543,10 @@ end
 -- Core's gate changes: the open reticle follows from this very call on.
 local function gateChanged()
   if not (Camera.active and cfg and cfg.converge.follow) then return end
-  if not gateOpen() then conv.followGUID, conv.followToken = nil, nil end
+  if not gateOpen() then
+    if cfg.converge.heldGate then endFocus() end
+    conv.followGUID, conv.followToken = nil, nil
+  end
   Camera:Wake()                     -- to follow, or for the catch-up to watch the facing
 end
 
@@ -1555,7 +1582,7 @@ driver:SetScript("OnUpdate", function(self, elapsed)
   elseif busy then Camera.quiet = 0
   else
     Camera.quiet = Camera.quiet + elapsed
-    if Camera.quiet > FOCUS_SETTLE then releaseFocus() end
+    if Camera.quiet > FOCUS_SETTLE and not cfg.converge.heldGate then releaseFocus() end
     if Camera.quiet > 0.5 and not conv.watch and not carrying then
       conv.steer = nil            -- the facing is not watched while asleep: no steering is read into the gap
       stopConverge()              -- the next gesture picks its distance afresh; offset changes made while asleep are not turned
@@ -2108,11 +2135,11 @@ function Camera:Command(command)
     :format(c.enabled and "on" or "off", tostring(c.distance), tostring(c.scale), c.focus and "on" or "off", tostring(c.strength),
       tostring(c.pitch), c.held and (", held now, yaw CVar " .. tostring(GetCVar(FOCUS[1]))) or "", tostring(GetCVar(FOCUS[3])), tostring(GetCVar(FOCUS[6]))))
   local offAxis = conv.home and conv.applied - convergeAngle(shoulderAt(zoom), c.distance) - conv.home
-  print(("Aim convergence yaw: %s; now=%s; last: unit=%s, distance=%s (%s); camera %.3f deg left of the character's facing%s; aim=%s (limit %s), follow=%s, zoom sticks=%s (%s deg), stay=%s, catch-up=%s; gate %s")
+  print(("Aim convergence yaw: %s; now=%s; last: unit=%s, distance=%s (%s); camera %.3f deg left of the character's facing%s; aim=%s (limit %s), follow=%s (other units by the game's soft target: %s), zoom sticks=%s (%s deg), stay=%s, catch-up=%s; gate %s")
     :format(conv.live and "zooming" or "idle", conv.mode or "none", conv.unit or "none",
       conv.distance and ("%.1f"):format(conv.distance) or "none", conv.source or "none", conv.applied,
       offAxis and (", %.3f of it from aiming"):format(offAxis) or "",
-      c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.stick and "on" or "off", tostring(c.stickAngle),
+      c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.softFollow and "on" or "off", c.stick and "on" or "off", tostring(c.stickAngle),
       c.stay and "on" or "off", c.catchUp and "on" or "off",
       gateOpen() and "open" or "closed"))
   print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s. Nameplate following: %s")
