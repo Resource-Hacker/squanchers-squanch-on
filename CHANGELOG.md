@@ -15,20 +15,18 @@
   enemy near the reticle", on by default, with a slider for how near).
   Nothing is held while you are not zooming.
 - Camera: the open reticle follows what is under it, selected or not, and
-  stays on it until you let go, also while it walks or you strafe. A unit
-  the game gives a position for is followed by that. Opened on your target,
-  the game's camera focus follows the target. With nothing selected, any
-  other enemy is followed through the game's own soft target, switched on
-  only while the reticle is held and put back when you let go (Camera page,
-  "Open reticle: other enemies by the game's soft target", on by default).
-  The game's focus is taken over as real turns while it follows, so the view
-  keeps up and stays where it is when the reticle closes.
-- Camera: with a target selected, the open reticle also follows a different
-  unit under it that the game gives no position for, from the mouseover
-  alone: your own turning and movement are taken out, and each time the
-  reticle slips off the unit a short search to either side finds it again
-  and corrects its estimated speed or distance. The same is used with
-  nothing selected when the soft target is switched off.
+  stays on it until you let go, also while it walks or you strafe; then the
+  view comes back to where it rests. A unit the game gives a position for is
+  followed by that. Opened on your target, the game's camera focus follows
+  the target. Anything else is followed from the mouseover alone: your own
+  turning and movement are taken out, and when the reticle slips off the
+  unit the view glides to either side until it is under it again and on
+  into it, learning the unit's speed and distance as it goes. Nothing of the
+  game's targeting is touched for that.
+- Camera: optional, off by default: with nothing selected the open reticle
+  can instead follow through the game's own soft target, switched on only
+  while the reticle is held (Camera page, "Open reticle: other enemies by
+  the game's soft target"). When what it held is gone the view comes back.
 - Camera: while the reticle is open, zooming no longer pulls the view to
   your target.
 - Camera: with nothing selected, a zoom also sticks to an enemy the game

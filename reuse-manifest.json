@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "SquanchOn/Camera.lua",
-          "sha256": "731b1259c9b1642bd6e968c4027ee842ae6ae1fb25efc731d39bd4ce077f84d0"
+          "sha256": "e52e068bcb5b0ca34e2c551dc127fe5bbd78eebe0a280529e1f351bd92c1794d"
         },
         {
           "path": "SquanchOn/LICENSES/DynamicCam-MIT.txt",
