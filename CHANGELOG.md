@@ -25,30 +25,33 @@
   soft target's cone starts at its narrowest and goes wider, step by step,
   until it has taken the unit under the reticle; nothing else it finds is
   followed. With nothing selected that is the only following. With
-  something else selected, a unit under the reticle is followed from the
-  mouseover alone, which is looser: the game's camera focus goes to your
-  target wherever you have one (tried: the game does soft-target the unit
-  under the reticle beside a selected target, and still turns the view to
-  the target). That following no longer judders while you move sideways
-  (the game reports your position in uneven steps; they are evened out),
-  nothing it turns lands in a single frame, and it no longer moves the
-  point the game picks at, which had shifted the reticle and its dot up
-  and down. The game does not let soft targeting be switched on in combat,
+  something else selected, the game's camera focus cannot be used (it goes
+  to your target wherever you have one; tried: the game does soft-target
+  the unit under the reticle beside a selected target, and still turns the
+  view to the target), so there the view is held on the place of the unit
+  under the reticle: it makes up for your own walking and strafing by the
+  unit's distance, and does nothing else. It does not go after a unit that
+  walks out from under the reticle and it never searches: the view only
+  moves as you move, or as your mouse turns it. (It used to look for a unit
+  that had slipped off, gliding to one side and the other; with only
+  "under the reticle or not" to go by that was a hunt and looked like one.)
+  The distance comes from the game's range checks, is kept up as you walk
+  towards the unit or away, and is set right whenever a check changes its
+  answer. The game reports your position in uneven steps; they are evened
+  out, nothing lands in a single frame, and the point the game picks at is
+  never moved (that had shifted the reticle and its dot up and down). The
+  game does not let soft targeting be switched on in combat,
   so it is switched on when you select an enemy and kept through the fight
   (for when your target is dead or gone), set so that nothing is
   soft-targeted while the reticle is closed and a target is selected; in a
   fight that began with nothing selected the reticle does not follow
-  without a target. Where the mouseover alone follows, the mouse still
-  moves the reticle within the unit,
-  so you can go after a unit that moves and put the reticle where you want
-  it; pushing on past the unit's edge turns your character and leaves the
-  view on the unit (Camera page, "Open reticle: the mouse moves the reticle
-  within the unit", on by default; off holds the view still on the unit
-  against the mouse). Your own movement is taken out by the unit's distance.
-  When the unit slips off, the point the game picks at looks up and down its
-  column first (a unit that walks nearer or further leaves the reticle that
-  way; the reticle itself stays where it is), and only then does the view
-  glide a degree or two to either side until the unit is under it again.
+  without a target. While a unit is held that way the mouse turns
+  the view as ever (Camera page, "Open reticle: the mouse still turns the
+  view on a held unit", on by default; off holds the view still on the unit
+  against the mouse while it is under the reticle). Off the unit for two
+  seconds, or taken well aside by the mouse, the hold rests until the unit
+  is under the reticle again; another unit that comes under the reticle and
+  stays is the one held from then on.
 - Camera: the view is no longer thrown about by the open reticle. A unit
   within ten yards is left to the game's own swivel instead of being turned
   after (every step of such a unit swings the view far round); when the
