@@ -1542,6 +1542,7 @@ local lock = {
   WAIT = 3,                         -- frames a step is given to show the unit under the reticle (and 0.03 s)
   ASKS = 8,                         -- steps in quick succession (they are forgotten at one and a half a second) after which the following gives up
   INTO = 0.3,                       -- yards inside an end of it that the view rides where its length is not known
+  BACK = 0.2,                       -- yards behind its middle that the view rides where its length is known
   WIDE = 0.4,                       -- a unit's width as a share of its length (a boar: about 0.9 by 2.4 yards)
   CALM = 0.25,                      -- seconds the hand has to have been still before a step is taken
   DWELL = 0.3,                      -- seconds another unit is under the reticle before that one is held
@@ -1572,6 +1573,7 @@ function lock.release()
   lock.mode, lock.ask, lock.way, lock.into, lock.gap, lock.calm, lock.towards, lock.handed, lock.handedFor = nil, nil, nil, nil, nil, nil, nil, nil, nil
   lock.slow, lock.inside, lock.margin, lock.walked, lock.asks, lock.tired = nil, nil, nil, nil, nil, nil
   lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind, lock.shift = nil, nil, nil, nil, nil, nil, nil, nil
+  lock.wide, lock.at = nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1649,12 +1651,72 @@ lock.sizes = {}                                           -- yards a kind of uni
 function lock.kind(guid)
   return type(guid) == "string" and (guid:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-") or guid:match("^(%a+)%-")) or nil
 end
--- Yards of the unit that lie across the view, from its length: nil where that is not known.
+-- Yards of the unit that lie across the view, from its length and width: nil where they are not known.
 function lock.extent(vel)
   local long = lock.long
   if not (long and vel and vel > 0) then return end
   local share = min(1, abs(lock.away or 0) / vel)         -- of its speed along the view
-  return long * (sqrt(1 - share * share) + lock.WIDE * share)
+  return long * sqrt(1 - share * share) + (lock.wide or long * lock.WIDE) * share
+end
+-- How big a kind of unit is, from the game itself (the owner asked for a database of sizes; this is one): a
+-- model scene's actor given the unit's model says what box is about it, and that box is what the reticle
+-- picks (read live 2026-11-24: 2.31 by 0.90 yards for the Dire Mottled Boar, against 2.3 to 2.5 yards walked
+-- across the view under a still reticle). Asked once per kind, hidden; the answer comes a frame or so later.
+function lock.measure(unit, kind)
+  if lock.asking or lock.boxless or not kind then return end
+  if not lock.actor then
+    local ok, scene = pcall(CreateFrame, "ModelScene", nil, UIParent)
+    local actor
+    if ok and scene then
+      pcall(function()
+        scene:SetSize(4, 4)
+        scene:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
+        scene:SetAlpha(0)
+        if scene.EnableMouse then scene:EnableMouse(false) end
+        actor = scene:CreateActor()
+      end)
+    end
+    if not (actor and actor.SetModelByUnit and actor.IsLoaded and actor.GetActiveBoundingBox) then lock.boxless = true; return end
+    lock.scene, lock.actor = scene, actor
+  end
+  local ok, took = pcall(lock.actor.SetModelByUnit, lock.actor, unit)
+  if ok and took ~= false then lock.asking = {kind = kind, t = 0} end
+end
+-- The answer, when it is there: the kind it is for.
+function lock.measured(elapsed)
+  local ask = lock.asking
+  if not ask then return end
+  ask.t = ask.t + elapsed
+  local actor = lock.actor
+  local ok, loaded = pcall(actor.IsLoaded, actor)
+  if not (ok and loaded) then
+    if ask.t > 2 then
+      lock.asking = nil
+      if actor.ClearModel then pcall(actor.ClearModel, actor) end
+    end
+    return
+  end
+  lock.asking = nil
+  local read, x1, y1, z1, x2, y2 = pcall(actor.GetActiveBoundingBox, actor)
+  if actor.ClearModel then pcall(actor.ClearModel, actor) end
+  if not read then return end
+  if type(x1) == "table" and type(y1) == "table" then     -- (as two corners, where the client gives it so)
+    x1, y1, x2, y2 = x1.x, x1.y, y1.x, y1.y
+  end
+  for _, value in ipairs({x1, y1, x2, y2}) do
+    if secret(value) or type(value) ~= "number" then return end
+  end
+  if x1 == nil or x2 == nil or y1 == nil or y2 == nil then return end
+  local long, wide = abs(x2 - x1), abs(y2 - y1)
+  if long < 0.2 or long > 40 or wide < 0.1 or wide > 40 then return end
+  lock.sizes[ask.kind] = {math.floor(long * 100 + 0.5) / 100, math.floor(wide * 100 + 0.5) / 100}
+  return ask.kind
+end
+-- What is known of the held unit's size is taken up.
+function lock.sized(kind)
+  local size = kind and lock.sizes[kind]
+  if type(size) == "table" then lock.long, lock.wide, lock.sure = tonumber(size[1]), tonumber(size[2]), true
+  elseif type(size) == "number" then lock.long, lock.sure = size, true end
 end
 -- A walk through measured, or half of one: the unit's length from it.
 function lock.learn(yards, vel, whole)
@@ -1666,12 +1728,9 @@ function lock.learn(yards, vel, whole)
   if whole then
     local kind = lock.kind(lock.guid)
     local known = kind and lock.sizes[kind]
+    if type(known) == "table" then return end              -- the game's own figure stands
     long = known and known + (long - known) * 0.5 or long -- a second look counts for half
-    if kind then
-      lock.sizes[kind] = long
-      local saved = cfg and cfg.converge and cfg.converge.sizes
-      if type(saved) == "table" then saved[kind] = math.floor(long * 100 + 0.5) / 100 end
-    end
+    if kind then lock.sizes[kind] = math.floor(long * 100 + 0.5) / 100 end
   end
   lock.long, lock.sure = long, whole or lock.sure
 end
@@ -1717,6 +1776,7 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
     lock.behind = lock.behind - elapsed
     if lock.behind <= 0 then lock.behind = nil end
   end
+  if lock.at and steered ~= 0 then lock.at = lock.at + rad(steered) * ahead end   -- the hand moves the reticle within it
   local mode = lock.mode
   if lock.tired then
     lock.mode, lock.ask = nil, nil
@@ -1724,11 +1784,15 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
   end
   -- To the unit's middle from an end of it that the reticle is at: `inside` yards in already, `towards` the
   -- side its body lies on. The glide that takes the view there.
+  -- (Not quite its middle: a little behind it, lock.BACK. Where in the unit the view rests is then known
+  -- (lock.at: yards to the left of its middle), and when it next walks out from under the reticle, how far
+  -- it walked before it was gone says which way it went: less than half its length, and the near end passed.)
   local function middle(inside, towards)
     local extent = lock.extent(vel)
-    local want = extent and extent / 2 or lock.INTO
+    local want = extent and extent / 2 + (towards == lock.way and -lock.BACK or lock.BACK) or lock.INTO
     lock.into = towards * deg(max(0, want - inside) / ahead)
     lock.inside = extent and towards == lock.way and inside or nil   -- (yards in from its tail, where that is the end)
+    lock.at = extent and -lock.way * lock.BACK or nil
   end
   if mode == "enter" then
     -- It walked into a reticle that stood still: its head is at the reticle.
@@ -1819,9 +1883,6 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       if spin then
         lock.mode = "follow"
         if ask.from ~= "follow" then lock.slow = 0.3 end
-        -- (Its length not known: half of it is about what it walked before its tail passed, the reticle
-        -- having been somewhere about its middle.)
-        if not lock.long and ask.walked then lock.learn(2 * ask.walked, vel, false) end
         middle(testYards, way)
       else
         lock.mode, lock.towards, lock.margin = nil, way, testYards   -- it had stopped: held where it is
@@ -1839,7 +1900,7 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       else
         -- Neither way: nothing more is done until it is under the reticle again.
         lock.mode, lock.ask, lock.rest, lock.flow, lock.owed, lock.left = nil, nil, true, nil, nil, nil
-        lock.towards, lock.margin = nil, nil
+        lock.towards, lock.margin, lock.at = nil, nil, nil
       end
     end
     return step
@@ -1848,6 +1909,7 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
     if not spin then
       -- It has stopped (or is no longer told of): held where it is. Stopped just as the reticle slipped
       -- off its tail: it is one step ahead.
+      if lock.at and lock.into then lock.at = lock.at - rad(lock.into) * ahead end
       lock.mode, lock.towards, lock.margin, lock.into, lock.slow = nil, lock.way, lock.inside, nil, nil
       if vel and not on and lock.calm > lock.CALM then
         lock.mode, lock.ask, lock.asks = "ask", {stage = 1, way = lock.way, wait = 0, t = 0, from = "follow"}, lock.asks + 1
@@ -1863,9 +1925,15 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
       slow = slow - elapsed
       lock.slow = slow > 0 and slow or nil
     end
-    local share = slow and 0.85 or 0.98
+    local share = slow and 0.85 or 1
     local step = lock.way * spin * share * elapsed
     local inside = lock.inside and lock.inside - (1 - share) * across * elapsed
+    if lock.at then lock.at = lock.at - lock.way * (1 - share) * across * elapsed end   -- falling back in it
+    -- Where in it the view is, is kept account of: it is drawn, gently, to its place a little behind the middle.
+    if lock.at and not lock.into and on then
+      local move = (-lock.way * lock.BACK - lock.at) * (1 - exp(-elapsed / 0.4))
+      step, lock.at = step + deg(move / ahead), lock.at + move
+    end
     local into = lock.into
     if into and on then
       local part = into * (1 - exp(-elapsed / 0.07))
@@ -1894,14 +1962,19 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
   if spin and on then
     lock.walked = (lock.walked or 0) + across * elapsed
   elseif on and lock.walked then
-    lock.walked, lock.margin = nil, nil                  -- it stopped again under the reticle: where in it the view rests is no longer known
+    lock.walked, lock.margin, lock.at = nil, nil, nil    -- it stopped again under the reticle: where in it the view rests is no longer known
   end
   -- It has just walked out from under the reticle.
   if lock.gap == 2 and spin and not lock.rest and lock.calm > lock.CALM then
-    local way = lock.handed
-    if not way and lock.towards and lock.margin then
-      way = (lock.walked or 0) <= lock.margin + 0.15 and lock.towards or -lock.towards
+    local way
+    local extent = lock.extent(vel)
+    if lock.at and extent and lock.walked and abs(lock.at) > 0.1 then
+      -- Where in it the view rested is known. Gone after less than half its length: the end on the view's
+      -- side of its middle has passed, so it walks away from that side; after more: the far end, the other way.
+      local side = lock.at > 0 and 1 or -1
+      way = lock.walked - 2 * across * elapsed < extent / 2 and -side or side
     end
+    way = way or lock.handed
     if not way then                                      -- nothing to go by: one side and the other by turns
       lock.entries = (lock.entries or 0) + 1
       way = lock.entries % 2 == 0 and 1 or -1
@@ -1938,8 +2011,8 @@ function lock.begin(c, offset, entered)
   lock.read = seen
   lock.off, lock.aside, lock.asked = 0, 0, 0
   local kind = lock.kind(guid)
-  lock.long = kind and lock.sizes[kind] or nil
-  lock.sure = lock.long and true or nil
+  lock.sized(kind)
+  if not lock.long or not lock.wide then lock.measure("mouseover", kind) end
   -- It came under a reticle that had been open and still, and it is walking: it walked in, head first.
   if entered and c.walks then
     local vel = lock.speed("mouseover")
@@ -2026,6 +2099,7 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   -- Its nameplate's reading, where there is one: what the character's own steps have changed of it since the
   -- plate last caught up is added, and the distance is drawn to it. (Read after the view was turned for this
   -- frame's steps: the distance is for the next.)
+  if lock.asking and lock.measured(elapsed) then lock.sized(lock.kind(guid)) end
   local token = on and "mouseover" or lock.token or lock.unit(false)
   local vel = token and lock.speed(token)
   local spin

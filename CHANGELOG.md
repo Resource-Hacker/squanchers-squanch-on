@@ -43,13 +43,18 @@
   left of its speed is what it moves across the view, and the view turns
   with it at exactly that rate, at the unit's middle. Two things are not
   told and are found out. How long a kind of unit is: what the reticle
-  picks of a walking boar is about 2.4 yards long along its path, so the
-  first time a kind of unit walks right through a reticle that stands
-  still it is let through and measured, and that is kept. Which way it
+  picks of a walking boar is about 2.4 yards long along its path, which is
+  the box about its model, and the game tells an addon that box (2.31 by
+  0.90 yards for the boar), so each kind of unit is asked for once and
+  kept; where the game does not tell, the first one that walks right
+  through a still reticle is let through and measured. Which way it
   walks: one small step when it walks into the reticle (the view is at its
   middle a fraction of a second after the reticle's dot lights) or out from
-  under it, and a second if the first was the wrong side; lost after it
-  turned, the view looks behind first. Steps in quick succession end the
+  under it. Out from under it the side is told beforehand where it can be:
+  the view rides a fifth of a yard behind the unit's middle, so a unit gone
+  after less than half its length has walked on as before, and one gone
+  after more has turned back. Lost after it turned, the view looks behind
+  first. Steps in quick succession end the
   following for that unit rather than hunt for it (Camera page, "Open
   reticle: follows a held unit that walks", on by default). While your
   mouse is turning the view nothing is asked.
