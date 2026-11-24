@@ -71,8 +71,12 @@
   walks straight at the camera or away from it is not turned for: what is
   left of its speed to go across the view is next to nothing then and not
   known (its speed along the view reads a tenth either side of its whole
-  speed from moment to moment), and what seemed left had the view drift a
-  degree or two a second to the side it had last gone. Steps in quick
+  speed from moment to moment, over uneven ground), and what seemed left
+  had the view drift a degree or two a second to the side it had last
+  gone. Where nine tenths of its speed or more seem to go along the view,
+  nothing is turned at first; if the unit then leaves the reticle and is
+  found ahead, it does move across, and half of what seemed left is turned
+  for, then all of it; found behind, less again. Steps in quick
   succession end the
   following for that unit rather than hunt for it (Camera page, "Open
   reticle: follows a held unit that walks", on by default). While your
