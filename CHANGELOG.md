@@ -14,6 +14,13 @@
   nearest the reticle and leaves it there (Camera page, "Zoom sticks to the
   enemy near the reticle", on by default, with a slider for how near).
   Nothing is held while you are not zooming.
+- Camera: the open reticle now follows any unit that has a nameplate, not
+  only those the game gives a position for: the unit's nameplate tells how
+  far off the reticle it stands.
+- Camera: a zoom with a target the game gives no position for takes the
+  game's focus over as a turn from the first moment and without pausing;
+  before, it waited, turned a little, waited again and then went on, which
+  showed as a jerky zoom.
 - Camera: soft targeting is no longer used by anything. The "Soft targeting
   while zooming" option is gone, and the open reticle no longer borrows the
   game's soft target. Following and sticking work for the units the game

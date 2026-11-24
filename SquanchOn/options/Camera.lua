@@ -200,7 +200,7 @@ Options:Add('camera', {
         desc = 'When the game\'s target focus is released it lets the view swing back. With this on, what it had turned is made a real turn at that moment, so the view stays on the unit. For a frame or two this borrows the map waypoint and puts yours back. Your character keeps its own facing.',
         keywords = 'aim convergence stay keep swing back hand over waypoint' }),
     converge('follow', { type = 'toggle', label = 'Open reticle follows the unit under it',
-        desc = 'With nothing selected, holding the reticle open keeps the view on the unit that comes under it, also while it walks, until you let go. Works for the units the game gives a position for.',
+        desc = 'With nothing selected, holding the reticle open keeps the view on the unit that comes under it, also while it walks, until you let go. Where the game gives no position for a unit, it is followed by its nameplate, so it needs one.',
         keywords = 'aim convergence reticle follow track mouseover' }),
     converge('stick', { type = 'toggle', label = 'Zoom sticks to the enemy near the reticle',
         desc = 'With nothing selected, zooming turns the view onto the enemy nearest the reticle and leaves it there. Nothing is held while you are not zooming, and no mouseover or soft targeting is involved. Works for the units the game gives a position for.',

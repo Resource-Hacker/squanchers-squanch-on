@@ -780,7 +780,8 @@ end
 -- * Aim: a zoom turns onto a unit with a position by a real turn and holds
 --   it there: the unit under the open reticle, else the target, else (zoom
 --   sticks) the enemy nearest the reticle among the nameplate units.
--- * Follow: the open reticle keeps turning onto the unit under it.
+-- * Follow: the open reticle keeps turning onto the unit under it: by its
+--   position, else by its nameplate (see plate, below).
 --   Nothing is ever held at rest with the reticle closed, and nothing here
 --   uses the client's soft targeting (the owner wants neither).
 -- * Focus and carry: a zoom with a target that gives no position is caught
@@ -799,9 +800,9 @@ end
 local FOCUS = {"test_cameraTargetFocusEnemyStrengthYaw", "test_cameraTargetFocusEnemyStrengthPitch", "test_cameraTargetFocusEnemyEnable",
   "test_cameraTargetFocusInteractStrengthYaw", "test_cameraTargetFocusInteractStrengthPitch", "test_cameraTargetFocusInteractEnable"}
 local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom stops
-local CARRY_TIME = 0.25             -- seconds: time constant of taking the engine's swivel over as a turn
-local CARRY_RATE = 20               -- degrees per second at most: the engine needs time to follow each turn
-local PROBE = {rate = 15, turn = 0.25, wait = 0.2}         -- a first slow turn (degrees per second, seconds), and the wait for the engine's answer
+local CARRY_TIME = 0.3              -- seconds: time constant of taking the engine's swivel over as a turn
+local CARRY_RATE = 12               -- degrees per second at most: the engine trails each turn, and the unit strays that much meanwhile
+local CARRY_LAG = 0.14              -- seconds by which the engine's answer trails a turn (twice its spring's time)
 local AWAY_LIMIT = 75               -- degrees the view is ever turned away from the character's own line
 local CARRY_REST = 0.6              -- degrees of swivel a release may still find
 local CARRY_PATIENCE = 1.3          -- seconds a release waits for the swivel to come down to that
@@ -1058,7 +1059,7 @@ local function beginFocus()
       setCVar(name, kind == 1 and c.strength or kind == 2 and c.pitch or 1)
     end
   end
-  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.calm = 0, nil, 0, 0, nil, nil, nil, nil
+  carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail = 0, nil, 0, 0, nil, nil, nil, nil, nil
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 -- The zoom is over. A swivel that is still large is carried a moment longer
@@ -1077,10 +1078,12 @@ end
 -- a real turn. The engine sees each turn and swivels that much less, keeping
 -- the unit on the reticle throughout. How much less tells how near the unit
 -- is: one degree per degree for a far unit, a fraction for a near one, which
--- would take a turn right around the character to stay on the reticle. So a
--- zoom first waits for the swivel to settle, turns a little, and reads the
--- answer: it then carries the rest at that ratio, or leaves the swivel as
--- it is and only keeps the view's direction at the release.
+-- would take a turn right around the character to stay on the reticle. The
+-- taking over starts with the first swivel read and never pauses (pauses
+-- showed as a jerky zoom); the answer is read off the turns already made,
+-- once the zoom stands still, and the rest is then carried at that ratio,
+-- or the swivel is left as it is and only the view's direction is kept at
+-- the release.
 local function stepCarry(zoom, elapsed)
   local c = cfg.converge
   local release = carry.release
@@ -1128,24 +1131,27 @@ local function stepCarry(zoom, elapsed)
     local offset = shoulderAt(zoom)
     leaveHome(offset)
     local rate, ratio = CARRY_RATE, carry.ratio or 1
-    if not carry.stage then               -- settle: until the zoom and the swivel stand still
-      carry.calm = was and conv.quiet > 0.05 and abs(psi - was) < 12 * elapsed and (carry.calm or 0) + elapsed or 0
-      if carry.calm > 0.1 then carry.stage, carry.mark, carry.from, carry.at = "probe", psi, carry.total, carry.time end
-      rate = 0
-    elseif carry.stage == "probe" then    -- a little, slowly; then the engine's answer
-      local since = carry.time - carry.at
-      rate = since < PROBE.turn and PROBE.rate or 0
-      if conv.quiet == 0 then             -- the zoom moves again: its own shift of the unit would spoil the answer
-        carry.stage, carry.calm, rate = nil, 0, 0
-      elseif since >= PROBE.turn + PROBE.wait then
-        local turned = carry.total - carry.from
-        local gain = abs(turned) > 1 and (carry.mark - psi) / turned or 1
+    -- The engine's answer trails the turns by its spring: they are compared
+    -- through a copy that trails alike. Only while the zoom stands still,
+    -- its own shift of the unit would spoil the answer; and once per hold.
+    local trail = carry.trail or carry.total
+    trail = trail + (carry.total - trail) * (1 - exp(-elapsed / CARRY_LAG))
+    carry.trail = trail
+    if not carry.stage and was and conv.quiet > 0.05 then
+      local mark = carry.mark
+      if not mark then
+        mark = {psi, trail}
+        carry.mark = mark
+      end
+      local turned = trail - mark[2]
+      if abs(turned) > 1.5 then
+        local gain = (mark[1] - psi) / turned
         -- All of it at this ratio: more than the owner allows per zoom means a unit too near (or out of the focus's reach).
         if gain < 0.12 or abs(carry.total) + abs(psi) / gain > c.aimLimit then carry.stage = "given"
         else carry.stage, carry.ratio = "go", 1 / max(0.34, min(1, gain)) end
         ratio = carry.ratio or 1
       end
-    end
+    elseif not carry.stage then carry.mark = nil end
     -- A release that is due: no more turns, so that the swivel read at the end is where the engine has settled.
     if carry.still then rate = 0 end
     local step = carry.stage == "given" and 0 or psi * ratio * (1 - exp(-elapsed / CARRY_TIME))
@@ -1161,7 +1167,7 @@ local function stepCarry(zoom, elapsed)
     carry.since = carry.since + elapsed
     local left = gauge.saved and carry.psi or 0
     local given = carry.stage == "given"
-    local due = given or (carry.stage == "go" and abs(left) <= CARRY_REST) or carry.since > CARRY_PATIENCE
+    local due = given or abs(left) <= (carry.still and 2 or 1) * CARRY_REST or carry.since > CARRY_PATIENCE
     if due and not given and gauge.saved and carry.psi then
       carry.still = (carry.still or 0) + elapsed
       due = carry.still > CARRY_SETTLE
@@ -1215,6 +1221,160 @@ local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   conv.bias = conv.applied - convergeAngle(offset, distance)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the holding itself
 end
+-- Follow without a position. The client will not say where a nameplate is
+-- (every measurement of one, and of anything anchored to one, is refused),
+-- but it does tell a frame that the cursor is over it. While the open
+-- reticle follows a unit, screen-high strips hang on that unit's nameplate:
+-- one on its centre line and a row to either side, each a known angle wide.
+-- The strip under the centred cursor tells how far off the reticle the unit
+-- stands, and the view turns until it is the middle one. The strips take
+-- mouse motion only and pass it on: clicks and the world's own picking are
+-- untouched.
+local plate = {
+  EDGES = {0.25, 0.6, 1.2, 2.4, 4.8, 9, 16, 26},   -- degrees from the centre line at which one strip ends and the next begins
+  TIME = 0.08,                      -- seconds: time constant of the turn toward the middle strip
+  LEARN = 20,                       -- how fast the unit's own rate across the screen is picked up (per second squared)
+  LOST = 0.6,                       -- seconds with no strip under the cursor and the unit not under it either: let go
+  strips = {},
+}
+function plate.build()
+  if plate.ready ~= nil then return plate.ready end
+  if InCombatLockdown() then return false end       -- passing motion on cannot be set in combat: built after it
+  local holder
+  local ok, problem = pcall(function()
+    holder = CreateFrame("Frame", nil, UIParent)
+    holder:SetSize(1, 1)
+    holder:Hide()
+    for side = -1, 1 do                               -- 1: right of the centre line
+      for index = 1, side == 0 and 1 or #plate.EDGES - 1 do
+        local strip = CreateFrame("Frame", nil, holder)
+        strip.side, strip.index = side, index
+        strip.angle = side * (plate.EDGES[index] + plate.EDGES[index + 1]) / 2
+        strip:SetFrameStrata("BACKGROUND")
+        strip:EnableMouse(true)
+        strip:SetMouseClickEnabled(false)
+        strip:SetPropagateMouseMotion(true)
+        strip:SetScript("OnEnter", function(self) self.over = true end)
+        strip:SetScript("OnLeave", function(self) self.over = nil end)
+        strip:SetScript("OnHide", function(self) self.over = nil end)
+        plate.strips[#plate.strips + 1] = strip
+      end
+    end
+  end)
+  plate.holder, plate.ready, plate.problem = holder, ok, not ok and tostring(problem) or nil
+  return ok
+end
+function plate.attach(token)
+  local found, frame = pcall(C_NamePlate.GetNamePlateForUnit, token)
+  if not (found and frame) or not plate.build() then return false end
+  local holder = plate.holder
+  -- Screen units per unit of tangent (see gaugeRead), in the strips' own scale.
+  local focal = WorldFrame:GetHeight() * WorldFrame:GetEffectiveScale() / 2
+    / tan(rad(0.6263 * (tonumber(GetCVar("cameraFov")) or 90) + 0.52) / 2) / holder:GetEffectiveScale()
+  local ok, problem = pcall(function()
+    for _, strip in ipairs(plate.strips) do
+      strip:ClearAllPoints()
+      strip.over = nil
+      if strip.side == 0 then
+        strip:SetSize(2 * focal * tan(rad(plate.EDGES[1])), 4000)
+        strip:SetPoint("CENTER", frame, "CENTER")
+      else
+        local near, far = focal * tan(rad(plate.EDGES[strip.index])), focal * tan(rad(plate.EDGES[strip.index + 1]))
+        strip:SetSize(far - near, 4000)
+        if strip.side > 0 then strip:SetPoint("LEFT", frame, "CENTER", near, 0) else strip:SetPoint("RIGHT", frame, "CENTER", -near, 0) end
+      end
+    end
+    holder:Show()
+  end)
+  if not ok then
+    plate.problem = tostring(problem)
+    holder:Hide()
+    return false
+  end
+  plate.frame = frame
+  return true
+end
+function plate.release()
+  plate.guid, plate.token, plate.frame, plate.rate, plate.lost, plate.last, plate.since, plate.age = nil, nil, nil, nil, nil, nil, nil, nil
+  if plate.holder then plate.holder:Hide() end
+end
+-- Degrees the unit stands left of the reticle, by the strip the cursor is
+-- over; nil when it is over none. A strip right of the nameplate's centre
+-- line under the cursor: the unit is left of the reticle.
+function plate.read()
+  local best
+  for _, strip in ipairs(plate.strips) do
+    local over = strip.over
+    if not over and plate.poll ~= false then        -- a strip that slid under a resting cursor
+      local ok, focus = pcall(strip.IsMouseMotionFocus, strip)
+      if ok and not secret(focus) then over = focus == true else plate.poll = false end
+    end
+    if over and (not best or strip.index < best.index or strip.side == 0) then best = strip end
+  end
+  return best and best.angle
+end
+-- One frame of following the open reticle's unit by its nameplate. False
+-- when there is nothing to follow that way.
+function plate.step(c, elapsed, offset)
+  local guid = plate.guid
+  if not guid then
+    local ok, found = pcall(UnitGUID, "mouseover")    -- the unit that has come under the reticle
+    if not ok or secret(found) or type(found) ~= "string" then return false end
+    local token
+    for index = 1, 40 do
+      if sameUnit("nameplate" .. index, found) then token = "nameplate" .. index; break end
+    end
+    if not (token and plate.attach(token)) then return false end
+    plate.guid, plate.token, plate.rate, plate.lost, plate.age, plate.hid, plate.seen = found, token, 0, 0, 0, 0, 0
+    guid = found
+  end
+  local ok, frame = pcall(C_NamePlate.GetNamePlateForUnit, plate.token)
+  if not (ok and frame == plate.frame and sameUnit(plate.token, guid)) then      -- the nameplate went, or passed to another unit
+    plate.release()
+    return false
+  end
+  local off = plate.read()
+  local under = sameUnit("mouseover", guid)
+  -- The unit was under the cursor when the strips went up. If from then on
+  -- the game no longer sees it there whenever a strip is, the strips are
+  -- keeping the mouse from the world (motion is not passed on in this
+  -- client): they must go, for good, or mouseover casting would suffer.
+  if plate.age < 0.3 then
+    plate.age = plate.age + elapsed
+    if off then
+      plate.seen = plate.seen + 1
+      if not under then plate.hid = plate.hid + 1 end
+    end
+    if plate.age >= 0.3 and plate.seen >= 8 and plate.hid >= plate.seen * 0.8 then
+      plate.problem, plate.ready = "the strips hid the unit from the game's own picking", false
+      plate.release()
+      return false
+    end
+  end
+  plate.lost = (off or under) and 0 or plate.lost + elapsed
+  if plate.lost > plate.LOST then plate.release(); return false end
+  off = off or 0
+  -- A strip that goes on answering while the view turns well past what it
+  -- spans is not telling where the unit is: no more of this until a reload.
+  if off ~= plate.last then plate.last, plate.since = off, conv.applied end
+  if off ~= 0 and abs(conv.applied - plate.since) > 8 * abs(off) + 2 then
+    plate.problem, plate.ready = "a strip kept answering while the view turned past it", false
+    plate.release()
+    return false
+  end
+  if off * plate.rate < 0 then plate.rate = 0 end     -- it stopped or turned back: no carrying on past it
+  plate.rate = plate.rate + off * plate.LEARN * elapsed
+  local limit = CONVERGE_MAX_RATE * elapsed
+  local step = max(-limit, min(limit, (plate.rate + off / plate.TIME) * elapsed))
+  leaveHome(offset)
+  -- Never far off the character's own line.
+  if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step, plate.rate = 0, 0 end
+  turn(step)
+  conv.mode, conv.unit, conv.distance, conv.source, conv.followed = "follow", plate.token, c.distance, "nameplate", guid
+  conv.bias = conv.applied - convergeAngle(offset, c.distance)
+  conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the following itself
+  return true
+end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)
   local c = cfg.converge
@@ -1263,6 +1423,7 @@ local function stepConverge(zoom, elapsed)
   if not c.enabled or transFn or #turns > 0 then
     if conv.live then stopConverge() end
     conv.steer, conv.watch, conv.followGUID, conv.followToken = nil, nil, nil, nil
+    if plate.guid then plate.release() end
     return false
   end
   local facing = readFacing()
@@ -1284,12 +1445,18 @@ local function stepConverge(zoom, elapsed)
     if unit then wanted, distance = aimAngle(unit, facing, zoom) end
     -- Never far off the character's own line: beyond that the view goes with the mouse again.
     if wanted and abs(wanted) <= AWAY_LIMIT then
+      if plate.guid then plate.release() end
       hold(unit, wanted, distance, offset, elapsed, "follow", conv.followGUID)
       return true
     end
-  elseif not gate then conv.followGUID, conv.followToken = nil, nil end
+    -- The game gives no position for it: by its nameplate.
+    if not wanted and (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset) then return true end
+  else
+    if plate.guid then plate.release() end
+    if not gate then conv.followGUID, conv.followToken = nil, nil end
+  end
   if not conv.live then
-    conv.mode = gate and (UnitExists("mouseover") and "follow (the game gives no position for this unit)" or "follow (nothing under the reticle)") or nil
+    conv.mode = gate and (UnitExists("mouseover") and "follow (no position and no nameplate to go by)" or "follow (nothing under the reticle)") or nil
     conv.watch = not c.held and catchUp(c, facing, steered, offset)
     return gate
   end
@@ -1776,7 +1943,8 @@ function Camera:SettingsChanged()
   if not cfg then return end
   normalize(cfg)
   if not self.active then return end
-  gaugeEnd(); endFocus(); stopConverge()
+  gaugeEnd(); endFocus(); stopConverge(); plate.release()
+  if cfg.converge.enabled and cfg.converge.follow then plate.build() end
   if current and not current.enabled then change(current, nil) end
   compile()
   rebuild()
@@ -1789,7 +1957,7 @@ end
 function Camera:Disable(restore)
   if self.active then
     stopEase(); cancelTurns(); flushTransition()
-    gaugeEnd(); stopConverge()
+    gaugeEnd(); stopConverge(); plate.release()
     if faded then fadeUI(1, 0) end
     current = nil
     driver:Hide()
@@ -1940,10 +2108,11 @@ function Camera:Command(command)
       c.aim and "on" or "off", tostring(c.aimLimit), c.follow and "on" or "off", c.stick and "on" or "off", tostring(c.stickAngle),
       c.stay and "on" or "off", c.catchUp and "on" or "off",
       gateOpen() and "open" or "closed"))
-  print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s")
+  print(("Positions: yours %s, target %s, under the reticle %s. Game focus: %s; last: %s. Nameplate following: %s")
     :format(position("player") and "given" or "not given", UnitExists("target") and (position("target") and "given" or "not given") or "-",
       UnitExists("mouseover") and (position("mouseover") and "given" or "not given") or "-",
       c.held and ("on, swivel %s"):format(carry.psi and ("%.2f"):format(carry.psi) or "not read") or "off",
-      conv.handed or "none yet"))
+      conv.handed or "none yet",
+      plate.problem and ("failed: " .. plate.problem) or plate.guid and "on a unit now" or plate.ready and "ready" or "not used yet"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end
