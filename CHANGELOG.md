@@ -15,12 +15,14 @@
   enemy near the reticle", on by default, with a slider for how near).
   Nothing is held while you are not zooming.
 - Camera: the open reticle follows any enemy again. Where the game gives a
-  position it goes by that; for every other enemy the game's own soft target
-  and camera focus do the following, switched on only while the reticle is
-  held open and put back when you let go, with the game's selection disc
-  hidden meanwhile (Camera page, "Open reticle: other enemies by the game's
-  soft target", on by default). With that off, the unit's nameplate is gone
-  by instead, where the game reports the cursor over it.
+  position it goes by that. Otherwise the unit's nameplate is gone by, read
+  from which of a row of unseen strips the centred cursor is over (the game
+  is told to report hover while mouselooking for as long as that lasts).
+  Where no strip answers, the game's own soft target and camera focus do the
+  following, switched on only while the reticle is held open and put back
+  when you let go, with the game's selection disc hidden meanwhile (Camera
+  page, "Open reticle: other enemies by the game's soft target", on by
+  default).
 - Camera: a zoom with a target the game gives no position for takes the
   game's focus over as a turn from the first moment and without pausing;
   before, it waited, turned a little, waited again and then went on, which

@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "Camera.lua",
-          "sha256": "cd8d8d09c2c79b1655d379aa1ec4cffffb678a5ce4ac3703e86799eb866a2b20"
+          "sha256": "4350e00266fa51d45c6f13bfd81e41ba40387400026ac02c26d2ec26c3e94147"
         },
         {
           "path": "LICENSES/DynamicCam-MIT.txt",

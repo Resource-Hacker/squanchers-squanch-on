@@ -1245,7 +1245,12 @@ end
 -- The strip under the centred cursor tells how far off the reticle the unit
 -- stands, and the view turns until it is the middle one. The strips take
 -- mouse motion only and pass it on: clicks and the world's own picking are
--- untouched.
+-- untouched. While mouselooking the client keeps hover from frames unless
+-- told otherwise (C_GamePad.SetAllowHoverEventsWithFreeLook, which needs
+-- no gamepad); that is switched on for as long as the strips hang.
+-- plate.works: nil until a strip has answered (true), or until the strips
+-- hung a while with the unit under the cursor and none did (false: not
+-- tried again this session).
 local plate = {
   EDGES = {0.25, 0.6, 1.2, 2.4, 4.8, 9, 16, 26},   -- degrees from the centre line at which one strip ends and the next begins
   TIME = 0.08,                      -- seconds: time constant of the turn toward the middle strip
@@ -1308,11 +1313,21 @@ function plate.attach(token)
     return false
   end
   plate.frame = frame
+  local pad = C_GamePad
+  if pad and pad.SetAllowHoverEventsWithFreeLook and plate.hover == nil then
+    local got, was = pcall(pad.GetAllowHoverEventsWithFreeLook)
+    plate.hover = got and not secret(was) and was == true
+    pcall(pad.SetAllowHoverEventsWithFreeLook, true)
+  end
   return true
 end
 function plate.release()
   plate.guid, plate.token, plate.frame, plate.rate, plate.lost, plate.last, plate.since, plate.age = nil, nil, nil, nil, nil, nil, nil, nil
   if plate.holder then plate.holder:Hide() end
+  if plate.hover ~= nil then                        -- hover while mouselooking: as the owner had it
+    pcall(C_GamePad.SetAllowHoverEventsWithFreeLook, plate.hover)
+    plate.hover = nil
+  end
 end
 -- Degrees the unit stands left of the reticle, by the strip the cursor is
 -- over; nil when it is over none. A strip right of the nameplate's centre
@@ -1341,7 +1356,7 @@ function plate.step(c, elapsed, offset)
       if sameUnit("nameplate" .. index, found) then token = "nameplate" .. index; break end
     end
     if not (token and plate.attach(token)) then return false end
-    plate.guid, plate.token, plate.rate, plate.lost, plate.age, plate.hid, plate.seen = found, token, 0, 0, 0, 0, 0
+    plate.guid, plate.token, plate.rate, plate.lost, plate.age, plate.hid, plate.seen, plate.mute = found, token, 0, 0, 0, 0, 0, 0
     guid = found
   end
   local ok, frame = pcall(C_NamePlate.GetNamePlateForUnit, plate.token)
@@ -1363,6 +1378,16 @@ function plate.step(c, elapsed, offset)
     end
     if plate.age >= 0.3 and plate.seen >= 8 and plate.hid >= plate.seen * 0.8 then
       plate.problem, plate.ready = "the strips hid the unit from the game's own picking", false
+      plate.release()
+      return false
+    end
+  end
+  if off then plate.works = true
+  elseif plate.works == nil and under then
+    -- The unit is under the cursor, so the cursor is within the strips: one of them should be answering.
+    plate.mute = plate.mute + elapsed
+    if plate.mute > 0.4 then
+      plate.works, plate.problem = false, "no strip answers while mouselooking"
       plate.release()
       return false
     end
@@ -1473,12 +1498,15 @@ local function stepConverge(zoom, elapsed)
       return true
     end
     if not wanted then
-      -- The game gives no position for what is there: its own soft target
-      -- and focus follow until the reticle closes; or, with that switched
-      -- off, the unit's nameplate is gone by.
-      if c.softFollow then
-        if not c.held then beginFocus(true) end
-      elseif (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset) then return true end
+      -- The game gives no position for what is there: its nameplate is gone
+      -- by where the strips answer; where they do not, the game's own soft
+      -- target and focus follow until the reticle closes (if allowed).
+      if plate.works ~= false and (plate.guid or UnitExists("mouseover")) and plate.step(c, elapsed, offset)
+        and (plate.works or not c.softFollow) then
+        if c.heldGate then endFocus() end              -- the strips answer: the soft target is not needed
+        return true
+      end
+      if c.softFollow and not c.held and not plate.works then beginFocus(true) end
     end
   else
     if plate.guid then plate.release() end
@@ -2147,6 +2175,6 @@ function Camera:Command(command)
       UnitExists("mouseover") and (position("mouseover") and "given" or "not given") or "-",
       c.held and ("on, swivel %s"):format(carry.psi and ("%.2f"):format(carry.psi) or "not read") or "off",
       conv.handed or "none yet",
-      plate.problem and ("failed: " .. plate.problem) or plate.guid and "on a unit now" or plate.ready and "ready" or "not used yet"))
+      plate.problem and ("failed: " .. plate.problem) or plate.guid and "on a unit now" or plate.works and "works" or plate.ready and "ready" or "not used yet"))
   print("/sqms camera status | on | off | restore | capture | options | takeover | release")
 end
