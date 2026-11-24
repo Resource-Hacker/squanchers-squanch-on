@@ -21,11 +21,12 @@
   the target. With nothing selected, the game's own soft target and camera
   focus keep the enemy in front on the reticle; they are switched on only
   while the reticle is held and put back when you let go (Camera page, "Open
-  reticle: other enemies by the game's soft target", on by default). What
-  the soft target does not take, anything under the reticle while something
-  else is selected, and everything in combat (the game does not let its soft
-  targeting be switched on there) is followed from the mouseover alone,
-  which is looser. There the mouse still moves the reticle within the unit,
+  reticle: other enemies by the game's soft target", on by default). With
+  nothing selected that is the only following: what the soft target does not
+  take is not followed, and nothing is in combat, where the game does not
+  let its soft targeting be switched on. A unit under the reticle while
+  something else is selected is followed from the mouseover alone, which is
+  looser. There the mouse still moves the reticle within the unit,
   so you can go after a unit that moves and put the reticle where you want
   it; pushing on past the unit's edge turns your character and leaves the
   view on the unit (Camera page, "Open reticle: the mouse moves the reticle

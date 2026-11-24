@@ -1094,8 +1094,8 @@ local function beginFocus(reticle)
   if c.held then return end
   local want, soft = {}, nil
   if reticle == "soft" then
-    -- The client does not let its soft targeting be switched on in combat: nothing is held then, and the
-    -- reticle follows by the mouseover alone.
+    -- The client does not let its soft targeting be switched on in combat: nothing is held then, and with
+    -- nothing selected the reticle does not follow.
     if GetCVar("SoftTargetEnemy") ~= "3" and InCombatLockdown and InCombatLockdown() then return false end
     want.SoftTargetEnemy, want.SoftTargetEnemyArc, soft = 3, 0, true
   elseif reticle == "target" then
@@ -1358,10 +1358,11 @@ local function hold(unit, wanted, distance, offset, elapsed, mode, key)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the holding itself
 end
 -- Follow by the mouseover alone. For a unit the client gives no position
--- for, and on which its own focus cannot be put (something else is
--- selected: the client then has no soft target at all, whatever its
--- settings, tried live; or the soft target does not take the unit, or is
--- not wanted), all that is known is whether the unit is under the reticle.
+-- for, and on which its own focus cannot be put because something else is
+-- selected (the client then has no soft target at all, whatever its
+-- settings, tried live), all that is known is whether the unit is under the
+-- reticle. (With nothing selected this is not used: the soft target follows
+-- there or nothing does, the owner's choice of 2026-11-24.)
 -- The reticle is made to stick to the unit with that:
 -- * While the unit is under the reticle the owner's hand moves the reticle
 --   within it as ever. (It used to be taken out, to hold the view still on
@@ -1735,11 +1736,15 @@ local function stepConverge(zoom, elapsed)
         local ok, same = pcall(UnitIsUnit, "mouseover", "target")
         if target and over and ok and not secret(same) and same then
           beginFocus("target")                         -- opened on the target: the engine's focus follows it
-        elseif not target and c.softFollow and not lock.alone and not conv.spent and beginFocus("soft") ~= false then
-          -- Nothing selected: what the engine's soft target takes. Not again in a press whose unit has
-          -- died: the view goes back to where it rests instead of on to the next enemy in front.
+        elseif not target then
+          -- Nothing selected: what the engine's soft target takes, and nothing else. Followed by the
+          -- mouseover alone a unit was held worse than by the soft target, and the owner would rather have
+          -- no following than that one here (2026-11-24). Not again in a press whose unit has died: the
+          -- view goes back to where it rests instead of on to the next enemy in front.
+          if c.softFollow and not conv.spent then beginFocus("soft") end
         elseif over then
-          -- Something else is selected (or no soft target is wanted): by the mouseover alone.
+          -- Something else is selected: by the mouseover alone, the only sign the client gives of a unit
+          -- that is neither the target nor the soft target.
           if lock.begin(c, offset) then return true end
           lock.close = lock.near() or nil              -- close by: nothing is turned, and nothing is turned back while it is there
         end
@@ -1749,17 +1754,6 @@ local function stepConverge(zoom, elapsed)
           releaseGate()
           conv.spent = true
         end
-      elseif c.heldGate and c.heldSoft then
-        -- It takes only what stands straight ahead of the character, and not every kind of unit. What is
-        -- under the reticle and is not taken within a moment is followed by the mouseover alone, until the
-        -- reticle closes.
-        lock.wait = not UnitExists("softenemy") and UnitExists("mouseover") and not carry.dead("mouseover")
-          and (lock.wait or 0) + elapsed or nil
-        if lock.wait and lock.wait > 0.3 then
-          releaseGate()
-          lock.alone, lock.wait = true, nil
-          if lock.begin(c, offset) then return true end
-        end
       end
     end
   else
@@ -1768,7 +1762,7 @@ local function stepConverge(zoom, elapsed)
     lock.settle()
     if not gate then
       conv.followGUID, conv.followToken = nil, nil
-      lock.alone, lock.wait, conv.spent = nil, nil, nil
+      conv.spent = nil
     end
   end
   -- The reticle's following has ended (closed, or the unit is gone): back to where the view rests.
