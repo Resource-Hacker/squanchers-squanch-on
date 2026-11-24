@@ -1546,6 +1546,7 @@ local lock = {
   ASKS = 8,                         -- steps in quick succession (they are forgotten at one and a half a second) after which the following gives up
   INTO = 0.3,                       -- yards inside an end of it that the view rides where its length is not known
   BACK = 0.2,                       -- yards behind its middle that the view rides where its length is known
+  THROUGH = 0.05,                   -- yards a glide to a unit's middle must have gone through it before its going out counts as having crossed it
   WIDE = 0.4,                       -- a unit's width as a share of its length (a boar: about 0.9 by 2.4 yards)
   CALM = 0.25,                      -- seconds the hand has to have been still before a step is taken
   DWELL = 0.3,                      -- seconds another unit is under the reticle before that one is held
@@ -1579,6 +1580,8 @@ function lock.release()
   lock.wide, lock.at = nil, nil
   lock.yaw, lock.yawEased, lock.stepped, lock.busy, lock.due, lock.settling, lock.pushed, lock.paying = nil, nil, nil, nil, nil, nil, nil, nil
   lock.trim, lock.straightFor = nil, nil
+  lock.pick, lock.span, lock.past, lock.spanning, lock.spanEnd, lock.spanFrom, lock.spanOn, lock.outGliding = nil, nil, nil, nil, nil, nil, nil, nil
+  lock.spanWay, lock.pickSeen, lock.crossed = nil, nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -1657,11 +1660,18 @@ function lock.kind(guid)
   return type(guid) == "string" and (guid:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-") or guid:match("^(%a+)%-")) or nil
 end
 -- Yards of the unit that lie across the view, from its length and width: nil where they are not known.
-function lock.extent(vel)
+-- (lock.pick: the share of that which the reticle was seen to pick when it went right through the unit,
+-- where the model's box is much bigger than its body: a scorpid's claws and legs. raw: without it.)
+function lock.extent(vel, raw)
   local long = lock.long
   if not (long and vel and vel > 0) then return end
   local share = min(1, abs(lock.away or 0) / vel)         -- of its speed along the view
-  return long * lock.SNUG * sqrt(1 - share * share) + (lock.wide or long * lock.WIDE) * share
+  return (long * lock.SNUG * sqrt(1 - share * share) + (lock.wide or long * lock.WIDE) * share) * (raw and 1 or lock.pick or 1)
+end
+-- Yards behind its middle that the view rides: lock.BACK, less in a narrow unit.
+function lock.back(vel)
+  local extent = lock.extent(vel)
+  return extent and min(lock.BACK, 0.15 * extent) or lock.BACK
 end
 -- How big a kind of unit is, from the game itself (the owner asked for a database of sizes; this is one): a
 -- model scene's actor given the unit's model says what box is about it, and that box is what the reticle
@@ -1720,7 +1730,7 @@ end
 -- What is known of the held unit's size is taken up.
 function lock.sized(kind)
   local size = kind and lock.sizes[kind]
-  if type(size) == "table" then lock.long, lock.wide, lock.sure = tonumber(size[1]), tonumber(size[2]), true
+  if type(size) == "table" then lock.long, lock.wide, lock.sure, lock.pick = tonumber(size[1]), tonumber(size[2]), true, tonumber(size[3])
   elseif type(size) == "number" then lock.long, lock.sure = size / lock.SNUG, true end   -- (measured by a walk through: what the reticle picks of it)
 end
 -- A walk through measured, or half of one: the unit's length from it.
@@ -1794,10 +1804,15 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
   -- it walked before it was gone says which way it went: less than half its length, and the near end passed.)
   local function middle(inside, towards)
     local extent = lock.extent(vel)
-    local want = extent and extent / 2 + (towards == lock.way and -lock.BACK or lock.BACK) or lock.INTO
+    local back = lock.back(vel)
+    local want = extent and extent / 2 + (towards == lock.way and -back or back) or lock.INTO
     lock.into = towards * deg(max(0, want - inside) / ahead)
     lock.inside = extent and towards == lock.way and inside or nil   -- (yards in from its tail, where that is the end)
-    lock.at = extent and -lock.way * lock.BACK or nil
+    lock.at = extent and -lock.way * back or nil
+    -- (How far it goes through the unit from here is kept account of, lock.walk: should it go out at the far
+    -- end, the unit was narrower than taken.)
+    lock.span, lock.past, lock.spanning, lock.spanEnd, lock.spanFrom, lock.spanOn, lock.outGliding = 0, 0, towards, 0, inside, true, nil
+    lock.spanWay = lock.way
   end
   if mode == "enter" then
     -- It walked into a reticle that stood still: its head is at the reticle.
@@ -1955,7 +1970,7 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
     if lock.at then lock.at = lock.at - lock.way * (1 - share) * across * elapsed end   -- falling back in it
     -- Where in it the view is, is kept account of: it is drawn, gently, to its place a little behind the middle.
     if lock.at and not lock.into and on then
-      local move = (-lock.way * lock.BACK - lock.at) * (1 - exp(-elapsed / 0.4))
+      local move = (-lock.way * lock.back(vel) - lock.at) * (1 - exp(-elapsed / 0.4))
       step, lock.at = step + deg(move / ahead), lock.at + move
     end
     local into = lock.into
@@ -1967,7 +1982,42 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
     end
     lock.inside = inside
     if lock.gap == 2 then
-      if lock.calm > lock.CALM then
+      local span = lock.span or 0
+      -- (Not where it has turned meanwhile: then it walked out at whichever end, and which is not known.)
+      local through = lock.spanning and lock.outGliding and not lock.turned and lock.way == lock.spanWay and span * lock.spanning > lock.THROUGH
+      if lock.calm > lock.CALM and through then
+        -- Gone right through it: the glide to where its middle was taken to be went out at its far end. In the
+        -- owner's log of 14:49 a Clattering Scorpid, whose model's box is 2.93 by 2.13 yards, was picked over
+        -- some 0.3 yards, and a boar seen half end-on over 0.9 against 2.7 taken; the glide went out, the
+        -- question that followed went the wrong way or not far enough, and the hand had to bring it back. Its
+        -- body is just behind: back to the middle of what the reticle went through, which is also what is
+        -- taken from now on as what of it lies across the view (for this kind of unit too, saved).
+        through = abs(span) + (lock.spanFrom or 0)         -- (it was that far in already when the glide set out)
+        -- One crossing is not believed: the unit may have veered just then, or the reading of its going been
+        -- out, and a body taken narrower than it is keeps the reticle at one end of it (in a simulated run, a
+        -- boar's 2.4 yards taken as 0.9 rode its end from then on). A second crossing that agrees settles it.
+        local whole = lock.extent(vel, true)
+        if whole and whole > 0 then
+          local seen, before = max(0.1, min(1, through / whole)), lock.pickSeen
+          if before and abs(seen - before) <= 0.3 * max(seen, before) then
+            local pick = (seen + before) / 2
+            if lock.pick then pick = lock.pick + (pick - lock.pick) * 0.5 end
+            lock.pick, lock.pickSeen = pick, nil
+            local kind = lock.kind(lock.guid)
+            local size = kind and lock.sizes[kind]
+            if type(size) == "table" then size[3] = math.floor(pick * 100 + 0.5) / 100 end
+          else
+            lock.pickSeen = seen
+          end
+        end
+        local turn = -deg(((span > 0 and 1 or -1) * through / 2 + (lock.past or 0)) / ahead)
+        -- (Where in it the view then is, is not taken as known: were it no crossing after all, a place in it
+        -- believed known would mislead what comes after; in a simulated run it lost a unit that turned round.)
+        lock.into, lock.inside, lock.spanning, lock.at = nil, nil, nil, nil
+        lock.gap = -math.ceil(abs(turn) / max(lock.PACE * elapsed, 0.01)) - 1   -- (the way back is given its frames)
+        lock.asks, lock.crossed = lock.asks + 1, (lock.crossed or 0) + 1   -- (counted: the probe logs it)
+        step = step + turn
+      elseif lock.calm > lock.CALM then
         -- Lost while following. Its going along the view changed a moment ago: it has turned, and a unit that
         -- turned and is lost walks the other way across now (had it kept its side, the view would have kept
         -- it): behind first. Else the view fell behind, as it is made to: ahead first.
@@ -2032,6 +2082,24 @@ function lock.walk(on, steered, zoom, elapsed, vel, spin, ahead)
   lock.due = due - out
   -- (Brisker than the even turning: the plate's reading is not taken meanwhile, see lock.step.)
   if abs(out) > even + lock.BRISK * elapsed then lock.busy = 0.2 end
+  -- How far the reticle has gone through the unit since a glide set out from an end of it (lock.span, yards,
+  -- by the view's turning against the unit's going) and since the dot last went out (lock.past). Some time
+  -- after the glide has come to rest on the unit, that account is closed.
+  if lock.spanning then
+    local moved = rad(out + steered - (lock.way or 0) * (spin or 0) * elapsed) * ahead
+    -- (Gone out at the far end only if the dot went out while the glide was still under way.)
+    if lock.spanOn and not on then lock.outGliding = lock.into ~= nil or lock.settling or nil end
+    lock.spanOn = on
+    if on then
+      lock.span, lock.past = (lock.span or 0) + (lock.past or 0) + moved, 0
+      if not lock.into and not lock.settling then
+        lock.spanEnd = (lock.spanEnd or 0) + elapsed
+        if lock.spanEnd > 0.15 then lock.spanning = nil end
+      end
+    else
+      lock.past = (lock.past or 0) + moved
+    end
+  end
   return out
 end
 -- The unit to ask: under the reticle it is the mouseover, else its nameplate.
