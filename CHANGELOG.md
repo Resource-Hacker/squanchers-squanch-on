@@ -10,6 +10,14 @@
   next mouse turns lines the two up again.
 - Camera: with nothing selected, holding the reticle open follows the unit
   that comes under it, also while it walks, until you let go.
+- Camera: with the reticle closed and nothing selected, the view sticks to an
+  enemy you bring the reticle near and stays on it while it walks; steer away
+  to let go (Camera page, "Closed reticle sticks to a nearby enemy", on by
+  default). It uses no mouseover and no soft targeting.
+- Camera: soft targeting is no longer used by anything. The "Soft targeting
+  while zooming" option is gone, and the open reticle no longer borrows the
+  game's soft target. Following and sticking work for the units the game
+  gives a position for; a zoom with any other target still turns onto it.
 - Camera: quick wheel zooming no longer flickers the shoulder offset and field
   of view. The game reports a false zoom distance for a frame or two while a
   quick zoom is corrected; those readings are now ignored.
@@ -54,9 +62,7 @@
   character sheet's height instead of being shrunk to the chat's width.
 - Camera: "Aim convergence" (Camera page, off by default). Zooming between
   first person and third person turns the camera with the shoulder offset so
-  what the reticle is on stays under it. With a target the game's own target
-  focus does the turning for the length of the zoom; "Soft targeting while
-  zooming" does the same for the unit in front of you with nothing selected.
+  what the reticle is on stays under it.
 - The click pulse on a selected target resizes the ring itself, so a ring
   split by the health bar shrinks and returns as a plain circle.
 - The world map shows its terrain on the first open after a reload (a loaded
