@@ -1,6 +1,9 @@
 -- SPDX-License-Identifier: MIT
 -- Original Squancher target-marker implementation. See PROVENANCE.md.
 local addonName, suite = ...
+-- The unit the marker is for: the target, or while the reticle's hold keeps the target in the focus
+-- (Core.lua), the focus, which to the owner is still the target.
+local function subject() return suite.ReticleSwapped and suite:ReticleSwapped() and "focus" or "target" end
 
 local baseline = {
   enabled = true, showLines = false, size = 64, alpha = 0.65,
@@ -50,8 +53,8 @@ local function spellRange(spellID, fallbackName)
   -- Resolve the localized name so native range queries select the learned
   -- rank. Unknown spells/invalid targets return nil, not an inferred distance.
   local name = publicQuery(C_Spell and C_Spell.GetSpellName, spellID) or fallbackName
-  local result = publicQuery(_G.IsSpellInRange, name, "target")
-  if result == nil then result = publicQuery(C_Spell and C_Spell.IsSpellInRange, name or spellID, "target") end
+  local result = publicQuery(_G.IsSpellInRange, name, subject())
+  if result == nil then result = publicQuery(C_Spell and C_Spell.IsSpellInRange, name or spellID, subject()) end
   return result == true or result == 1
 end
 
@@ -114,11 +117,11 @@ local function knownRange(kind)
   for _, spell in ipairs(knownRanges()[kind]) do
     local result
     if C_SpellBook and C_SpellBook.IsSpellBookItemInRange then
-      result = publicQuery(C_SpellBook.IsSpellBookItemInRange, spell.slot, spell.bank, "target")
+      result = publicQuery(C_SpellBook.IsSpellBookItemInRange, spell.slot, spell.bank, subject())
     elseif C_Spell and C_Spell.IsSpellInRange then
-      result = publicQuery(C_Spell.IsSpellInRange, spell.spellID, "target")
+      result = publicQuery(C_Spell.IsSpellInRange, spell.spellID, subject())
     else
-      result = publicQuery(_G.IsSpellInRange, spell.name, "target")
+      result = publicQuery(_G.IsSpellInRange, spell.name, subject())
     end
     -- An invalid/restricted result does not become an interaction-distance check.
     if result == true or result == 1 then return true end
@@ -128,10 +131,10 @@ local function knownRange(kind)
 end
 
 local function healingRange()
-  if publicQuery(UnitCanAssist, "player", "target") ~= true
-    or publicQuery(UnitIsDeadOrGhost, "target") ~= false then return false end
+  if publicQuery(UnitCanAssist, "player", subject()) ~= true
+    or publicQuery(UnitIsDeadOrGhost, subject()) ~= false then return false end
   if knownRange("healing") then return true end
-  return publicQuery(UnitIsUnit, "target", "pet") == true and knownRange("petHealing")
+  return publicQuery(UnitIsUnit, subject(), "pet") == true and knownRange("petHealing")
 end
 
 local function meleeRange()
@@ -139,15 +142,15 @@ local function meleeRange()
   -- melee Auto Attack has no range verdict. The shared Range module answers
   -- from the five-yard hostile check; no answer leaves these markers hidden.
   local range = suite.Range
-  return range ~= nil and range:Melee("target") == true
+  return range ~= nil and range:Melee(subject()) == true
 end
 
 -- Melee has priority: Auto Shot's minimum range must not hide melee artwork.
 -- Check actual abilities, independently of cooldown/resources/proc readiness.
 local function targetRangeMode()
   local _, class = UnitClass("player")
-  local attackable = publicQuery(UnitCanAttack, "player", "target")
-  local dead = publicQuery(UnitIsDead, "target")
+  local attackable = publicQuery(UnitCanAttack, "player", subject())
+  local dead = publicQuery(UnitIsDead, subject())
   if (attackable ~= true and attackable ~= 1) or (dead ~= false and dead ~= 0) then return end
   if meleeRange() then return "melee" end
   if class == "HUNTER" then
@@ -156,8 +159,8 @@ local function targetRangeMode()
 end
 
 local function plainFraction()
-  local ok, hp = pcall(UnitHealth, "target")
-  local fine, maximum = pcall(UnitHealthMax, "target")
+  local ok, hp = pcall(UnitHealth, subject())
+  local fine, maximum = pcall(UnitHealthMax, subject())
   if not (ok and fine) or (issecretvalue and (issecretvalue(hp) or issecretvalue(maximum))) then return end
   if type(hp) == "number" and type(maximum) == "number" and maximum > 0 then
     return math.min(1, math.max(0, hp / maximum))
@@ -484,10 +487,10 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- NPCs of either side keep the plain ring and its white-to-red health colour
     -- unless asked otherwise; players wear their plate bar's look.
     if marker.friendly then
-      if publicQuery(UnitIsPlayer, "target") == true then return settings.friendlyBarLook ~= false end
+      if publicQuery(UnitIsPlayer, subject()) == true then return settings.friendlyBarLook ~= false end
       return settings.friendlyNpcBarLook == true
     end
-    if publicQuery(UnitIsPlayer, "target") == true then return settings.hostilePlayerBarLook ~= false end
+    if publicQuery(UnitIsPlayer, subject()) == true then return settings.hostilePlayerBarLook ~= false end
     return settings.hostileNpcBarLook == true
   end
   local faceOf = {}
@@ -646,7 +649,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     local generation = clickGeneration
     C_Timer.After(0, function()
       if generation ~= clickGeneration or not settings.enabled
-        or publicQuery(UnitGUID, "target") ~= guid then return end
+        or publicQuery(UnitGUID, subject()) ~= guid then return end
       self:RefreshTarget()
       if not display:IsVisible() then return end
       clearClick()
@@ -744,7 +747,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     return icon, fitSize(kind, width, height, scale, own, nestedIn)
   end
   local function iconFit(plate)
-    if not marker.friendly or publicQuery(UnitCanAttack, "player", "target") ~= false then return end
+    if not marker.friendly or publicQuery(UnitCanAttack, "player", subject()) ~= false then return end
     if settings.friendlyFit == false then return end
     local icons = plateIcons[plate]
     local class, faction = icons and icons.class, icons and icons.faction
@@ -769,8 +772,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   marker.ShiftCurve = shiftCurve
   local function playerShift()
     if not (barLook and settings.healthColor and settings.hostilePlayerHealthShift ~= false)
-      or marker.friendly or publicQuery(UnitIsPlayer, "target") ~= true then return end
-    local ok, _, class = pcall(UnitClass, "target")
+      or marker.friendly or publicQuery(UnitIsPlayer, subject()) ~= true then return end
+    local ok, _, class = pcall(UnitClass, subject())
     local color = ok and not (issecretvalue and issecretvalue(class)) and type(class) == "string" and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
     if color then return class, color.r, color.g, color.b end
     local found, red, green, blue, secret = barColor(boundPlate)
@@ -827,11 +830,11 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     if self.friendly then
       if healingRange() then
         mode = "healing"
-      elseif publicQuery(UnitIsDeadOrGhost, "target") == false then
+      elseif publicQuery(UnitIsDeadOrGhost, subject()) == false then
         local range = Plater and Plater.RangeCheckRangeFriendly
           or suite.Nameplates and suite.Nameplates:FriendlyRange() or 40
         -- Keep friendly/NPC proximity separate: it never lights healing arrows.
-        local result = suite.Range and suite.Range:Within("target", range)
+        local result = suite.Range and suite.Range:Within(subject(), range)
         if result == true or result == 1 then mode = "friendly" end
       end
     else
@@ -860,8 +863,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     -- Owner: on a friendly player the ring takes the player's class colour.
     local ringRed, ringGreen, ringBlue = red, green, blue
     if marker.friendly and settings.friendlyClassColor ~= false
-      and publicQuery(UnitIsPlayer, "target") == true then
-      local _, class = UnitClass("target")
+      and publicQuery(UnitIsPlayer, subject()) == true then
+      local _, class = UnitClass(subject())
       local color = class and not (issecretvalue and issecretvalue(class)) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
       if color then ringRed, ringGreen, ringBlue = color.r, color.g, color.b end
     end
@@ -896,15 +899,15 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local function curvePaint(key, startRed, startGreen, startBlue)
     local shiftRed, shiftGreen, shiftBlue
     if key then
-      shiftRed, shiftGreen, shiftBlue = UnitHealthPercent("target", true, shiftCurve(key, startRed, startGreen, startBlue)):GetRGB()
+      shiftRed, shiftGreen, shiftBlue = UnitHealthPercent(subject(), true, shiftCurve(key, startRed, startGreen, startBlue)):GetRGB()
     end
     local red, green, blue = 1, 1, 1
-    if settings.healthColor then red, green, blue = UnitHealthPercent("target", true, maps.color):GetRGB() end
-    local opacity = UnitHealthPercent("target", true, maps.guides)
+    if settings.healthColor then red, green, blue = UnitHealthPercent(subject(), true, maps.color):GetRGB() end
+    local opacity = UnitHealthPercent(subject(), true, maps.guides)
     -- Keep secret colors and alpha out of Lua comparisons and arithmetic.
     applyColor(red, green, blue, opacity, key ~= nil, shiftRed, shiftGreen, shiftBlue)
     if settings.showKillShotPulse then
-      warningState(true, UnitHealthPercent("target", true, maps.execute))
+      warningState(true, UnitHealthPercent(subject(), true, maps.execute))
     else
       warningState(false)
     end
@@ -1008,14 +1011,14 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   function marker:RefreshTarget()
     self:SyncTargetFade()
     if not settings.enabled then self:HideTarget(); return end
-    if clickGUID and publicQuery(UnitGUID, "target") ~= clickGUID then clearClick() end
-    self.friendly = publicQuery(UnitIsFriend, "player", "target") == true
+    if clickGUID and publicQuery(UnitGUID, subject()) ~= clickGUID then clearClick() end
+    self.friendly = publicQuery(UnitIsFriend, "player", subject()) == true
     local lines = settings.showLines and not self.friendly or false
     if lines ~= guidesShown then
       guidesShown = lines
       for index = 1, #guides do guides[index]:SetShown(lines) end
     end
-    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit("target")
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit(subject())
     if not available(plate) then self:HideTarget(); return end
     idle = false
     if boundPlate ~= plate then bound, anchored = nil, nil end
@@ -1208,7 +1211,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
     SlashCmdList.SQMSTARGETCROSSHAIRS = function(message) marker:SlashCommand(message) end
   end
 
-  local function targetPlate() return C_NamePlate and C_NamePlate.GetNamePlateForUnit("target") end
+  local function targetPlate() return C_NamePlate and C_NamePlate.GetNamePlateForUnit(subject()) end
   local function plateOf(unit) return type(unit) == "string" and publicQuery(C_NamePlate.GetNamePlateForUnit, unit) or nil end
   local checking = false
   local function checkBound()
@@ -1218,7 +1221,7 @@ function suite:InitializeTargetCrosshairs(database, legacy)
   local events = CreateFrame("Frame")
   events:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-      -- Registered for the target only.
+      -- Registered for the target (and the focus, which stands in for it while the reticle's hold has it).
       marker:RefreshHealth()
     elseif event == "NAME_PLATE_UNIT_ADDED" then
       -- Another unit's plate changes nothing for the ring.
@@ -1241,8 +1244,8 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       -- The merchant UI can already own mouse focus when native click hooks
       -- run. The opened shop's own unit token is authoritative for this cue.
       local guid = publicQuery(UnitGUID, "npc")
-      if type(guid) == "string" and publicQuery(UnitGUID, "target") == guid
-        and publicQuery(UnitIsFriend, "player", "target") == true then
+      if type(guid) == "string" and publicQuery(UnitGUID, subject()) == guid
+        and publicQuery(UnitIsFriend, "player", subject()) == true then
         marker:QueueWorldClick(guid, "merchant")
       end
     elseif event == "GLOBAL_MOUSE_DOWN" then
@@ -1270,16 +1273,17 @@ function suite:InitializeTargetCrosshairs(database, legacy)
       marker:QueueRefresh()
     end
   end)
-  for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED",
+  for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "GLOBAL_MOUSE_DOWN", "MERCHANT_SHOW",
     "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED", "UPDATE_SHAPESHIFT_FORM"}) do events:RegisterEvent(event) end
   pcall(events.RegisterEvent, events, "CVAR_UPDATE")
   -- Unit events are heard for the units that matter, not for every unit in the world.
-  events:RegisterUnitEvent("UNIT_HEALTH", "target")
-  events:RegisterUnitEvent("UNIT_MAXHEALTH", "target")
+  events:RegisterUnitEvent("UNIT_HEALTH", "target", "focus")
+  events:RegisterUnitEvent("UNIT_MAXHEALTH", "target", "focus")
   events:RegisterUnitEvent("UNIT_FACTION", "target", "player")
   applyRange(nil)
   marker:ApplyStyle()
+  suite.targetMarker = marker                    -- (the reticle's hold refreshes it: Core.lua)
   return marker
 end

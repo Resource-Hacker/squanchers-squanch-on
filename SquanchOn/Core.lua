@@ -397,13 +397,58 @@ function addon:ApplyMouselookOverrideBindings()
   end
   state.overrideBindingsPending = false
   if not self.mouseoverHoldButton then
-    local hold = CreateFrame("Button", "SQMSHoldMouseoverButton", UIParent)
+    -- A secure button (2026-11-24, the owner: "make our original target the focus target ... then the mouseover
+    -- reticle can be tracked via the same soft-targeting that we already do"). Target and focus can only be set
+    -- inside a key press, and this press is one: with a living enemy selected it hands that unit to the focus
+    -- and clears the target, so that the game's soft target and camera focus follow what comes under the
+    -- reticle as they do with nothing selected; the release takes the focus back as the target (where nothing
+    -- else was selected meanwhile) and clears the focus. The target frames show the focus meanwhile.
+    local hold = CreateFrame("Button", "SQMSHoldMouseoverButton", UIParent, "SecureActionButtonTemplate")
     hold:RegisterForClicks("AnyDown", "AnyUp")
-    hold:SetScript("OnClick", function(_, _, down)
+    hold:SetAttribute("useOnKeyDown", true)              -- (the press acts on the way down ...)
+    hold:SetAttribute("pressAndHoldAction", true)        -- (... and the release on the way up: "typerelease")
+    hold:SetAttribute("downbutton", "sqpress")
+    hold:SetAttribute("macrotext-sqpress", "/focus\n/cleartarget")
+    hold:SetAttribute("macrotext", "/target [noexists] focus\n/clearfocus")
+    local header = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+    SecureHandlerWrapScript(hold, "OnClick", header, [[
+      if down then
+        if self:GetAttribute("sq-swapped") then
+          -- The last release never came here (the mouse was let go out of mouselook): the target back first.
+          self:SetAttribute("macrotext-sqpress", "/target [noexists] focus\n/clearfocus")
+          self:SetAttribute("type-sqpress", "macro")
+          self:SetAttribute("sq-swapped", nil)
+        else
+          local swap = self:GetAttribute("sq-swap-on") and SecureCmdOptionParse("[harm,nodead] 1")
+          self:SetAttribute("macrotext-sqpress", "/focus\n/cleartarget")
+          self:SetAttribute("type-sqpress", swap and "macro" or nil)
+          self:SetAttribute("sq-swapped", swap and 1 or nil)
+        end
+      else
+        self:SetAttribute("typerelease", self:GetAttribute("sq-swapped") and "macro" or nil)
+      end
+      return nil, "after"
+    ]], [[
+      local frame, other = self:GetFrameRef("sq-target"), self:GetFrameRef("sq-targettarget")
+      if down and self:GetAttribute("sq-swapped") then
+        if frame then frame:SetAttribute("unit", "focus") end
+        if other then other:SetAttribute("unit", "focustarget") end
+      elseif not down then
+        if frame and frame:GetAttribute("unit") ~= "target" then frame:SetAttribute("unit", "target") end
+        if other and other:GetAttribute("unit") ~= "targettarget" then other:SetAttribute("unit", "targettarget") end
+        self:SetAttribute("sq-swapped", nil)
+      end
+    ]])
+    hold:SetScript("PostClick", function(_, _, down)
       addon:SetMouseoverHeld(down and true or false)
+      local marks = addon.NameplateIndicators
+      if marks and marks.QueueRefresh then marks:QueueRefresh() end
+      local cross = addon.targetMarker
+      if cross and cross.RefreshTarget then cross:RefreshTarget(); if cross.QueueRefresh then cross:QueueRefresh() end end
     end)
     self.mouseoverHoldButton = hold
   end
+  self:ApplyReticleSwap()
   -- The full application always writes the left-button bindings again.
   leftBinding.command = nil
   if self.db and self.db.useMouselookOverrideBindings then
@@ -548,6 +593,27 @@ function addon:ApplyCursorCentering(centered)
     state.centeringApplied = centered
   end
   if self.MouseoverInteractIcon then self.MouseoverInteractIcon:Refresh() end
+end
+
+-- Whether the reticle's hold may hand the target to the focus (Camera page), and the target frames it shows the
+-- focus in meanwhile. Attributes of a secure button cannot be written in combat: then after it.
+function addon:ApplyReticleSwap()
+  local hold = self.mouseoverHoldButton
+  if not hold then return end
+  if InCombatLockdown() then state.reticleSwapPending = true; return end
+  state.reticleSwapPending = false
+  local camera = self.Camera
+  local wanted = camera and camera.SwapWanted and camera:SwapWanted() and true or nil
+  if hold:GetAttribute("sq-swap-on") ~= wanted then hold:SetAttribute("sq-swap-on", wanted) end
+  for label, name in pairs({["sq-target"] = "SquanchOnUF_Target", ["sq-targettarget"] = "SquanchOnUF_TargetTarget"}) do
+    local frame = _G[name]
+    if frame and hold:GetAttribute("frameref-" .. label) == nil then SecureHandlerSetFrameRef(hold, label, frame) end
+  end
+end
+-- True while the reticle's hold has the target in the focus.
+function addon:ReticleSwapped()
+  local hold = self.mouseoverHoldButton
+  return hold and hold:GetAttribute("sq-swapped") and true or false
 end
 
 function addon:SetMouseoverHeld(held)
@@ -1364,6 +1430,7 @@ function addon:OnEvent(event, ...)
     if state.pendingBindings then
       self:ApplySafeBindings()
     end
+    if state.reticleSwapPending then self:ApplyReticleSwap() end
     -- The update loop applies binding writes that combat lockdown deferred.
     state.bindingCombatHold = false
     self:RequestMouselookRematch()

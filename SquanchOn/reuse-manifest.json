@@ -27,7 +27,7 @@
       "files": [
         {
           "path": "NameplateIndicators.lua",
-          "sha256": "9d98962d8fecc9053a6b1af8ac7f8714ec953f1ec768bf997982fdcc944faf46"
+          "sha256": "216f1dc1074d232b334ddacc42ac979cba10e2c302c47b5770e72230bf67f6b0"
         },
         {
           "path": "LICENSES/TargetNameplateIndicator-LICENSE.txt",
@@ -43,7 +43,7 @@
       "files": [
         {
           "path": "Camera.lua",
-          "sha256": "1fb1a0c30d4f605b6689888d98023407a8b389341c0465dff95ca0c9ccadb3a0"
+          "sha256": "4bb63b52a803506e0311a43750ab8e20af7b29100fc7695c3bdb96a5e2cb742c"
         },
         {
           "path": "LICENSES/DynamicCam-MIT.txt",
@@ -366,7 +366,7 @@
       "files": [
         {
           "path": "HordeReticle.lua",
-          "sha256": "d65e30ebb118b52b9894fa372b5a465c53526c6762d10b30cb9d33d9e37c2dbd"
+          "sha256": "2ae660edb4a1a557844ca9f2587a034c3ab3d0e98d964ae22a3ec96c5bcbd154"
         },
         {
           "path": "HordeReticleData.lua",

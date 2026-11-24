@@ -186,6 +186,7 @@ local function comparisonBlocked(unit)
 end
 
 local function reactionFor(unit)
+  if unit == "target" and addon.ReticleSwapped and addon:ReticleSwapped() then unit = "focus" end
   local isSelf = safe(UnitIsUnit, "player", unit)
   if isSelf == nil then return nil end
   if isSelf then return "self" end
@@ -200,6 +201,17 @@ local function plateUnit(plate)
 end
 
 local function resolve(unit)
+  -- While the reticle's hold has the target in the focus (Core.lua), the target's marker goes on the focus,
+  -- and the focus's own is not shown: to you it is still your target.
+  if addon.ReticleSwapped and addon:ReticleSwapped() then
+    if unit == "focus" then return nil, "the target, held in the focus" end
+    if unit == "target" then
+      if not safe(UnitExists, "focus") then return nil, "absent" end
+      local plate = C_NamePlate and safe(C_NamePlate.GetNamePlateForUnit, "focus")
+      if not plate or not safe(plate.IsShown, plate) then return nil, "offscreen" end
+      return plate
+    end
+  end
   if comparisonBlocked(unit) then return nil, "restricted" end
   if not safe(UnitExists, unit) then return nil, "absent" end
   if not C_NamePlate or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then return nil, "API unavailable" end

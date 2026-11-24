@@ -296,7 +296,7 @@ local function build(profile, defaults)
     -- unit of shoulder offset, negative to turn the other way. pitch: target
     -- focus pitch strength while a zoom is in progress.
     converge = {enabled = false, focus = true, strength = 1, distance = 25, scale = 1.11, pitch = 0, rev = 13, follow = true,
-      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = false, firstPersonStep = false}}
+      aim = true, aimLimit = 30, catchUp = true, stay = true, stick = true, stickAngle = 6, softFollow = true, softStick = true, handSteers = true, walks = true, interact = false, firstPersonStep = false, swapFocus = true}}
   local ids, seen = {}, {}
   for id in pairs(BUILTIN) do ids[#ids + 1] = id; seen[id] = true end
   for id in pairs(profile.situations or {}) do if not seen[id] then ids[#ids + 1] = tostring(id) end end
@@ -1106,8 +1106,11 @@ function carry.rearm(off)
   if type(c) ~= "table" or c.held then return end   -- a hold is on: seen to when it ends
   local locked = InCombatLockdown and InCombatLockdown() and true or false
   local enemy = false
-  if not off and UnitExists("target") and not carry.dead("target") then
-    local ok, can = pcall(UnitCanAttack, "player", "target")
+  -- (While the reticle's hold has the target in the focus, Core.lua, the focus counts: the press cleared the
+  -- target so that the soft target can follow what comes under the reticle, and needs soft targeting on.)
+  local unit = addon.ReticleSwapped and addon:ReticleSwapped() and "focus" or "target"
+  if not off and UnitExists(unit) and not carry.dead(unit) then
+    local ok, can = pcall(UnitCanAttack, "player", unit)
     enemy = ok and not secret(can) and can and true or false
   end
   local want = not off and Camera.active and c.enabled and c.follow and c.softFollow
@@ -3044,6 +3047,12 @@ events:SetScript("OnEvent", function(self, event, unit)
   Camera:Wake()
 end)
 
+-- For Core.lua: whether the reticle's hold may hand a selected enemy to the focus for its length, so that
+-- the game's soft target follows the unit under the reticle as with nothing selected (Camera page).
+function Camera:SwapWanted()
+  local c = cfg and cfg.converge
+  return self.active and c and c.enabled and c.follow and c.softFollow and c.swapFocus and true or false
+end
 -- For Nameplates.lua: the sizing of nameplates by distance that the reticle's hold reads (lock.plate), or
 -- nothing while the reticle follows nothing.
 function Camera:Rangefinder()
@@ -3060,6 +3069,7 @@ function Camera:SettingsChanged()
   normalize(cfg)
   lock.sizes = cfg.converge.sizes
   lock.plates()
+  if addon.ApplyReticleSwap then addon:ApplyReticleSwap() end
   if not self.active then return end
   gaugeEnd(); endFocus(); stopConverge(); lock.release()
   carry.rearm()

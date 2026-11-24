@@ -2,6 +2,8 @@
 -- Standalone rendering of the author's exported The Terminator aura group.
 -- See THIRD_PARTY_NOTICES.md and LICENSES/GPL-2.0.txt for data/media provenance.
 local addonName, addon = ...
+-- The target, or while the reticle's hold keeps it in the focus (Core.lua), the focus.
+local function subject() return addon.ReticleSwapped and addon:ReticleSwapped() and "focus" or "target" end
 local data = assert(addon.HordeReticleData, "Load HordeReticleData.lua before HordeReticle.lua")
 local module = {frames = {}, source = data, enabled = true}
 addon.HordeReticle = module
@@ -210,7 +212,7 @@ local function updatePet()
   -- mob is on me, pulsing orange for any other pet combat.
   local state
   if plate and yes(_G.UnitAffectingCombat, "pet") then
-    local mob = yes(_G.UnitCanAttack, "pet", "pettarget") and "pettarget" or "target"
+    local mob = yes(_G.UnitCanAttack, "pet", "pettarget") and "pettarget" or subject()
     local pet = number(_G.UnitThreatSituation, "pet", mob)
     local me = number(_G.UnitThreatSituation, "player", mob)
     state = pet == 3 and "holds" or pet == 2 and "losing" or me and me >= 2 and "onMe" or "combat"
@@ -227,7 +229,7 @@ function module:Refresh()
   local _, class = _G.UnitClass("player")
   active(self.frames["No Combat"], self.enabled)
   active(self.frames.Combat, self.enabled and combat)
-  active(self.frames.Target, self.enabled and yes(_G.UnitExists, "target"))
+  active(self.frames.Target, self.enabled and yes(_G.UnitExists, subject()))
   active(self.frames["Cursor GCD "], self.enabled and combat)
   local power = number(_G.UnitPower, "player")
   local maximum = number(_G.UnitPowerMax, "player")
@@ -252,12 +254,12 @@ function module:Refresh()
   active(self.frames["Mouseover Dot"], mouseHostile)
   self.frames["Mouseover Glow"].inRange = mouseInRange
   self.frames["Mouseover Dot"].inRange = mouseInRange
-  local targetHostile = self.enabled and class == "HUNTER" and hostile("target")
-  local targetInRange = targetHostile and autoShotRange("target")
+  local targetHostile = self.enabled and class == "HUNTER" and hostile(subject())
+  local targetInRange = targetHostile and autoShotRange(subject())
   if self.test then targetHostile, targetInRange = true, true end
   active(self.frames["Target Range"], targetHostile)
   self.frames["Target Range"].inRange = targetInRange
-  self.targetAttackable = yes(_G.UnitCanAttack, "player", "target")
+  self.targetAttackable = yes(_G.UnitCanAttack, "player", subject())
   if self.enabled then updatePet() else active(self.frames["Pet Tracker"], false) end
 end
 

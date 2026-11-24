@@ -1136,6 +1136,8 @@ function UF:CreateAndUpdateUF(key)
         oUF:SetActiveStyle('SquanchOn_'..key)
         frame=oUF:Spawn(key,'SquanchOnUF_'..unitNames[key])
         self.frames[key]=frame
+        -- (the reticle's hold shows the focus in these while it has the target there: Core.lua)
+        if (key=='target' or key=='targettarget') and ns.ApplyReticleSwap then ns:ApplyReticleSwap() end
     end
     self:ConfigureFrame(frame);place(key,frame)
 end
