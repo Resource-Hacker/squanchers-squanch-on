@@ -1578,6 +1578,7 @@ function lock.release()
   lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind, lock.shift = nil, nil, nil, nil, nil, nil, nil, nil
   lock.wide, lock.at = nil, nil
   lock.yaw, lock.yawEased, lock.stepped, lock.busy, lock.due, lock.settling, lock.pushed, lock.paying = nil, nil, nil, nil, nil, nil, nil, nil
+  lock.straight, lock.straightFor = nil, nil
 end
 -- Close by, a unit is wide under the reticle and every step it or the character takes would swing the view
 -- far round: it is not followed. Nor is one of which the range checks cannot say that it is further off
@@ -2174,7 +2175,10 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
         lock.pushed = lock.pushed - elapsed
         if lock.pushed <= 0 then lock.pushed = nil end
       end
-      if rate and lock.busy and vel and abs(rate) > vel + 0.5 then lock.pushed = 4 end
+      -- (Judged only while the character itself stands: its own steps come into the reading unevenly, and
+      -- in the owner's log of the afternoon that alone set it for most of a hold spent strafing.)
+      local afoot = abs(lock.flow or 0) > 1 or abs(lock.pace or 0) > 0.5
+      if rate and lock.busy and vel and not afoot and abs(rate) > vel + 0.5 then lock.pushed = 4 end
       local spoilt = lock.busy and lock.pushed
       local steady = rate and (abs(rate) <= (vel or 9) + 3 or spoilt and lock.ranged)
       if steady and not spoilt then lock.away = (lock.away or rate) + (rate - (lock.away or rate)) * (1 - exp(-elapsed / 0.06)) end
@@ -2204,8 +2208,30 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
         lock.ranged = true
       end
       -- Across the view: what is left of its speed. Degrees a second about the pivot.
+      -- A unit that walks straight at the camera or away from it has next to nothing left, and that little
+      -- is not known: its speed along the view reads a tenth either side of its whole speed from one moment
+      -- to the next (the owner's log of 2026-11-24: 2.30 to 2.70 yards a second for a boar walking off at
+      -- 2.49), and what seemed left of it turned the view by a degree or two a second to the side the unit
+      -- had last gone ("looking at the back of a mob walking in a straight line away it drifts right"). So:
+      -- along the view by more than 0.95 of its speed for a moment, nothing is turned for it; again once that
+      -- has been below 0.88 for a moment. The moment is counted only while the view itself is all but still:
+      -- where the ground pushes the camera in, the view's turning shifts the reading (see above), and a unit
+      -- followed across the view must not be taken for one walking straight because of that. (Tried offline
+      -- at nine tenths and eight: a unit walking at a slant lost its following.)
       if steady and vel and vel > lock.MOVING and lock.ranged then
-        spin = deg(sqrt(max(0, vel * vel - lock.away * lock.away)) / sqrt(max(1, lock.dist * lock.dist - beside * beside)))
+        local along = abs(lock.away) / vel
+        if not lock.straight then
+          if along <= 0.95 then
+            lock.straightFor = nil
+          elseif abs(turned) < rad(2.5) * dt then
+            lock.straightFor = (lock.straightFor or 0) + dt
+          end
+          if lock.straightFor and lock.straightFor > 0.15 then lock.straight, lock.straightFor = true, nil end
+        else
+          lock.straightFor = along < 0.88 and (lock.straightFor or 0) + dt or nil
+          if lock.straightFor and lock.straightFor > 0.1 then lock.straight, lock.straightFor = nil, nil end
+        end
+        spin = lock.straight and 0 or deg(sqrt(max(0, vel * vel - lock.away * lock.away)) / sqrt(max(1, lock.dist * lock.dist - beside * beside)))
       end
     else
       lock.seen, lock.read = nil, nil

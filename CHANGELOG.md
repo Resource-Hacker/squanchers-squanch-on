@@ -67,8 +67,13 @@
   jump in the owner's log, which made the unit seem to rush at the camera,
   stopped the following and brought the next jump: seven in five seconds).
   Where the reading says the unit moves faster than it can while the view
-  turns briskly, the reading is left out during such turning. Steps in
-  quick succession end the
+  turns briskly, the reading is left out during such turning. A unit that
+  walks straight at the camera or away from it is not turned for: what is
+  left of its speed to go across the view is next to nothing then and not
+  known (its speed along the view reads a tenth either side of its whole
+  speed from moment to moment), and what seemed left had the view drift a
+  degree or two a second to the side it had last gone. Steps in quick
+  succession end the
   following for that unit rather than hunt for it (Camera page, "Open
   reticle: follows a held unit that walks", on by default). While your
   mouse is turning the view nothing is asked.
