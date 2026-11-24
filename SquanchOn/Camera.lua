@@ -1880,6 +1880,11 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
     if on then
       local way = ask.way
       lock.ask = nil
+      -- (Where it is found is the dot's word on which way it goes, and outranks the guess that a unit come
+      -- round through walking straight along the view goes the other way: in the owner's log of 14:46:59 a
+      -- boar that had walked straight at the camera and turned aside was found at the first step, and a
+      -- tenth of a second later that guess turned the following about and lost it.)
+      lock.radial = nil
       if ask.stage ~= 1 and ask.from == "follow" and not lock.turned and not lock.behind then
         -- Found behind where the view was following, and nothing says it turned: the view had run ahead.
         -- It walks on as before; the reticle is at its head. (Found behind again soon after: it had turned.)
