@@ -1312,35 +1312,43 @@ end
 -- Follow by the mouseover alone. For a unit the client gives no position
 -- for, and on which its own focus cannot be put (something else is
 -- selected, or the soft target is not wanted), all that is known is whether
--- the unit is under the reticle. That is enough to stay on it. What the
--- owner turns is taken out exactly (the character turns, the view stays);
--- what the character moves, by the unit's estimated distance; a zoom, by
--- the shoulder's convergence. What the unit does itself is learnt: when the
--- reticle slips off it, the view glides to one side and, if need be, back
--- past to the other until the unit is under it again, then on into the
--- unit, well clear of its edge. How far it had gone corrects its rate (or,
--- while the character moves sideways, its distance). Everything here is a
--- glide: steps showed as a stutter.
+-- the unit is under the reticle. That is enough to stay on it, if it is
+-- done calmly: seen live, a unit 25 yards off is half a degree wide to
+-- either side, its picking flickers, and a tracker that answers every slip
+-- with a search and a new estimate throws the view about.
+-- * While the unit is under the reticle, what the owner turns is taken out
+--   exactly (the character turns, the view stays), what the character
+--   moves by the unit's distance (its range bracket), a zoom by the
+--   shoulder's convergence, and what the unit itself does by its learnt
+--   rate.
+-- * Off it for a moment is let pass: a flicker, or the view a frame behind
+--   fast turning.
+-- * Off it for longer, the owner has the mouse again, and the view glides
+--   a little to one side and the other of where the unit was; no further.
+--   Found, it goes a little on into the unit.
+-- * The unit's rate is learnt from finds that agree: half of what one find
+--   suggests, all of it once two in a row are on the same side. Found
+--   behind where the view was heading, the unit has stopped or turned: its
+--   rate is dropped. While the unit is not under the reticle its rate is
+--   not acted on.
 local lock = {
-  SPEED = 22,                       -- degrees a second, as seen on screen, of the glide that looks for the unit
-  LEGS = {1.5, -3, 4.5, -6},        -- degrees as seen, from where it was lost: how far each sweep goes (likelier side first)
-  MISS = 2,                         -- frames off the unit before the glide begins (one frame can be a flicker)
-  DEPTH = 1,                        -- degrees as seen that the view goes on into the unit once it is found (learnt down for a narrow one)
-  EASE = 0.07,                      -- seconds: time constant of going in, and of the glide picking up speed
-  LOST = 0.8,                       -- seconds off the unit before it is let go
+  GRACE = 0.12,                     -- seconds off the unit that are let pass
+  SPEED = 15,                       -- degrees a second, as seen on screen, of the glide that looks for the unit
+  LEGS = {1.5, -2},                 -- degrees as seen, from where it was lost: the likelier side, then the other; then back and wait
+  DEPTH = 0.25,                     -- degrees as seen that the view goes on into the unit once it is found
+  EASE = 0.06,                      -- seconds: time constant of the glide picking up and losing speed
+  LOST = 0.9,                       -- seconds off the unit before it is let go
+  LIMIT = 40,                       -- degrees a second at most for the unit's learnt rate
 }
 function lock.release()
-  lock.guid, lock.sweep, lock.push, lock.north, lock.west, lock.conv, lock.drift, lock.speed = nil, nil, nil, nil, nil, nil, nil, nil
+  lock.guid, lock.sweep, lock.push, lock.north, lock.west, lock.conv, lock.speed = nil, nil, nil, nil, nil, nil, nil
 end
 function lock.begin(c, offset)
   local ok, guid = pcall(UnitGUID, "mouseover")
   if not ok or secret(guid) or type(guid) ~= "string" then return false end
   local _, yards = reticleUnit()
   lock.release()
-  yards = yards or c.distance
-  lock.guid, lock.rate, lock.dist, lock.miss, lock.off, lock.span, lock.sway, lock.first = guid, 0, yards, 0, 0, 0, 0, true
-  lock.least, lock.most = max(3, yards * 0.4), min(80, yards * 2.5)      -- the distance is never taken far from the first estimate
-  lock.depth, lock.speed = lock.DEPTH, 0
+  lock.guid, lock.rate, lock.dist, lock.off, lock.span, lock.trust, lock.side, lock.speed = guid, 0, yards or c.distance, 0, 0, 0.5, nil, 0
   return true
 end
 -- One frame. False once the unit is let go.
@@ -1348,91 +1356,72 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   local guid = lock.guid
   local seen = max(0.33, lock.dist / (lock.dist + zoom))    -- degrees seen on screen per degree turned about the character
   local on = sameUnit("mouseover", guid)
-  local step = -steered                               -- the owner's own turning
+  lock.off = on and 0 or lock.off + elapsed
+  if lock.off > lock.LOST then
+    lock.release()
+    return false
+  end
+  local held = lock.off < lock.GRACE                  -- under the reticle, or off it only for a moment
+  local step = held and -steered or 0                 -- the owner's own turning: taken out while held, theirs again otherwise
   local north, west = position("player")
-  local sway = 0
   if north and lock.north then                        -- the character's own movement: yards to the left of the view
     local heading = rad(facing + conv.applied)
-    sway = -(north - lock.north) * sin(heading) + (west - lock.west) * cos(heading)
-    if abs(sway) < 5 then step = step - deg(sway / lock.dist) else sway = 0 end     -- a jump is no movement
+    local sway = -(north - lock.north) * sin(heading) + (west - lock.west) * cos(heading)
+    if abs(sway) < 5 then step = step - deg(sway / lock.dist) end     -- a jump is no movement
   end
   lock.north, lock.west = north, west
-  lock.drift = (lock.drift or 0) + (sway / max(elapsed, 0.001) - (lock.drift or 0)) * min(1, elapsed / 0.1)   -- yards a second, smoothed
   local angle = convergeAngle(offset, lock.dist)      -- a zoom shifts the unit by the shoulder's convergence
   if lock.conv then step = step + angle - lock.conv end
   lock.conv = angle
-  step = step + lock.rate * elapsed                   -- the unit's own going
-  lock.span, lock.sway = lock.span + elapsed, lock.sway + sway
+  if held then step = step + lock.rate * elapsed end  -- the unit's own going, while it is there to go by
+  lock.span = lock.span + elapsed
   local glide = 0                                     -- degrees a second, as seen, wanted of the search or of going in
+  local sweep = lock.sweep
   if on then
-    local sweep = lock.sweep
     if sweep then
-      -- Found: it had gone this far (as seen) beyond where the reticle was thought to sit inside it.
-      local way = sweep.way
-      local gone = (sweep.at + way * (lock.first and 0 or lock.depth)) / seen       -- in turn
-      local fed = -deg(lock.sway / lock.dist)         -- what the character's movement was taken to call for
-      if abs(lock.sway) > 1 and fed * (fed + gone) > 0 then
-        -- While moving sideways the miss is the distance's: nearer than thought needs more turn, further less.
-        lock.dist = max(lock.least, min(lock.most, lock.dist * max(0.6, min(1.6, fed / (fed + gone)))))
+      -- Found, this far (in turn) from where it was lost: what that says of the unit's rate counts for a
+      -- quarter, doubling while finds stay on one side.
+      local way = sweep.at >= 0 and 1 or -1
+      if way * lock.rate < 0 then
+        lock.rate, lock.trust = 0, 0.5                -- behind where the view was heading: it has stopped or turned
       else
-        if gone * lock.rate < 0 then lock.rate = lock.rate * 0.3 end       -- the view had run on ahead: it slowed or turned back
-        lock.rate = max(-90, min(90, lock.rate + 0.7 * gone / max(0.15, lock.span)))
+        lock.trust = way == lock.side and 1 or 0.5
+        local gone = (sweep.at + way * lock.DEPTH) / seen
+        lock.rate = max(-lock.LIMIT, min(lock.LIMIT, lock.rate + lock.trust * gone / max(0.25, lock.span)))
       end
-      -- Lost again on the far side so soon after going in: a narrow unit, the view went through it.
-      if lock.side and way ~= lock.side and lock.span < 0.4 then lock.depth = max(0.3, lock.depth * 0.5) end
-      lock.push, lock.side, lock.sweep, lock.first = way * lock.depth, way, nil, nil
-      lock.span, lock.sway = 0, 0
+      lock.push, lock.side, lock.sweep, lock.span = way * lock.DEPTH, way, nil, 0
     end
-    lock.miss, lock.off = 0, 0
     local push = lock.push
-    if push then                                      -- on into the unit
+    if push then                                      -- a little on into the unit
       local part = push * (1 - exp(-elapsed / lock.EASE))
       glide, push = part / elapsed, push - part
       lock.push = abs(push) > 0.02 and push or nil
     end
-  else
-    lock.miss, lock.off = lock.miss + 1, lock.off + elapsed
-    if lock.off > lock.LOST then
-      lock.release()
-      return false
+  elseif not held then
+    if not sweep then
+      -- The likelier side first. Followed steadily until now: the view has run on ahead of a unit that
+      -- stopped or turned, so behind. Else where it was found last.
+      local toward = lock.side or 1
+      if abs(lock.rate) > 1 and lock.span > 0.5 then toward = lock.rate > 0 and -1 or 1 end
+      sweep = {at = 0, leg = 1, way = toward}
+      lock.sweep, lock.push = sweep, nil
     end
-    if lock.miss >= lock.MISS then
-      local sweep = lock.sweep
-      if not sweep then
-        -- Where it most likely went. The character moves sideways: the view lags what that calls for (a unit
-        -- nearer than thought). Lost soon after it was found: the way it was going. Lost late: the view ran
-        -- on ahead of a unit that slowed or turned back.
-        local toward
-        if abs(lock.drift) > 1 then toward = lock.drift > 0 and -1 or 1
-        elseif lock.span < 0.5 or abs(lock.rate) <= 1 then toward = lock.side or 1
-        else toward = lock.rate > 0 and -1 or 1 end
-        sweep = {at = 0, leg = 1, way = toward, toward = toward}
-        lock.sweep, lock.push = sweep, nil
-      end
-      local reach = lock.LEGS[sweep.leg]
-      if reach then
-        -- Faster where much is going on: the unit may be running on at about the rate that is being followed.
-        local busy = (abs(deg(lock.drift / lock.dist)) + abs(lock.rate)) * seen
-        glide = sweep.way * (lock.SPEED + 1.5 * busy)
-        -- This sweep's end: round, and out further on the other side.
-        if (sweep.at + glide * elapsed) * sweep.way >= abs(reach) then
-          sweep.leg, sweep.way = sweep.leg + 1, -sweep.way
-        end
-      elseif abs(sweep.at) > 0.05 then                -- nowhere: back to where it was lost, and wait there
-        sweep.way = sweep.at > 0 and -1 or 1
-        glide = sweep.way * min(lock.SPEED, abs(sweep.at) / max(elapsed, 0.001))
-        if abs(sweep.at) < 0.1 then glide = 0 end
-      end
+    local reach = lock.LEGS[sweep.leg]
+    if reach then
+      local way = reach * sweep.way > 0 and 1 or -1
+      glide = way * lock.SPEED
+      if sweep.at * way >= abs(reach) then sweep.leg = sweep.leg + 1 end
+    elseif abs(sweep.at) > 0.05 then                  -- nowhere near: back to where it was lost, and wait there
+      glide = (sweep.at > 0 and -1 or 1) * min(lock.SPEED, abs(sweep.at) / max(elapsed, 0.001))
     end
   end
   -- The glide picks up and loses speed over a few frames: nothing jumps.
-  local speed = lock.speed + (glide - lock.speed) * (1 - exp(-elapsed / (lock.sweep and lock.EASE * 0.5 or lock.EASE)))
+  local speed = lock.speed + (glide - lock.speed) * (1 - exp(-elapsed / lock.EASE))
   if on and not lock.push then speed = 0 end           -- found and in: nothing more is wanted
   lock.speed = speed
   if lock.sweep then lock.sweep.at = lock.sweep.at + speed * elapsed end
   step = step + speed * elapsed / seen
   leaveHome(offset)
-  step = -steered + max(-5, min(5, step + steered))   -- never a wild turn in one frame (the owner's own turning apart)
   -- Never far off the character's own line: beyond that the view goes with the mouse again.
   if abs(conv.applied + step - convergeAngle(offset, c.distance) - conv.home) > AWAY_LIMIT then step = 0 end
   turn(step)

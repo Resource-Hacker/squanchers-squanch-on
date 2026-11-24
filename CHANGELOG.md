@@ -18,11 +18,12 @@
   stays on it until you let go, also while it walks or you strafe; then the
   view comes back to where it rests. A unit the game gives a position for is
   followed by that. Opened on your target, the game's camera focus follows
-  the target. Anything else is followed from the mouseover alone: your own
-  turning and movement are taken out, and when the reticle slips off the
-  unit the view glides to either side until it is under it again and on
-  into it, learning the unit's speed and distance as it goes. Nothing of the
-  game's targeting is touched for that.
+  the target. Anything else is followed from the mouseover alone: while the
+  unit is under the reticle your own turning and movement are taken out;
+  when it slips off for more than a moment you have the mouse again and the
+  view glides a degree or two to either side until it is under it again,
+  learning the unit's speed from finds that agree. Nothing of the game's
+  targeting is touched for that.
 - Camera: optional, off by default: with nothing selected the open reticle
   can instead follow through the game's own soft target, switched on only
   while the reticle is held (Camera page, "Open reticle: other enemies by
