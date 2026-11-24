@@ -1437,7 +1437,10 @@ function lock.level(on, narrow)
 end
 -- The picking is back at the owner's height.
 function lock.settle()
-  if lock.own then setCVar(lock.HEIGHT, lock.own) end
+  if lock.own then
+    setCVar(lock.HEIGHT, lock.own)
+    lock.settled = GetTime()
+  end
   lock.own, lock.base, lock.at, lock.probes, lock.way, lock.flat, lock.rest = nil, nil, nil, nil, nil, nil, nil
 end
 function lock.release()
@@ -1550,6 +1553,11 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   conv.live, conv.aim, conv.watch = nil, nil, nil    -- a zoom meanwhile is carried by the following itself
   conv.gateFollow = true
   return true
+end
+-- For whatever draws at the picking point (the reticle): true while the point is not at the owner's own
+-- height, and a moment longer for the client to have it back there. The reticle then stays where it was.
+function Camera:PickBorrowed()
+  return lock.own ~= nil or (lock.settled ~= nil and GetTime() - lock.settled < 0.2)
 end
 -- A zoom gesture begins; its choices stay until it settles.
 local function beginConverge(zoom, from)

@@ -312,6 +312,11 @@ local function render(now, elapsed)
   local x, y = GetCursorPosition()
   if addon.IsNativeLockCentered and addon:IsNativeLockCentered() and _G.GetCursorCenterPosition then
     x, y = GetCursorCenterPosition()
+    -- While the camera follows a unit by the mouseover it moves the point the game picks at up and down
+    -- its column (the cursor is hidden). The reticle does not go with it: it stays at the height it had.
+    local camera = addon.Camera
+    if camera and camera.PickBorrowed and camera:PickBorrowed() and module.restY then y = module.restY
+    else module.restY = y end
   end
   local scale = UIParent:GetEffectiveScale()
   mouseAnchor:ClearAllPoints()
