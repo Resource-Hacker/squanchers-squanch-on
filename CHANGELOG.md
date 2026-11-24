@@ -30,11 +30,18 @@
   the unit under the reticle beside a selected target, and still turns the
   view to the target), so there the view is held on the place of the unit
   under the reticle: it makes up for your own walking and strafing by the
-  unit's distance, and does nothing else. It does not go after a unit that
-  walks out from under the reticle and it never searches: the view only
-  moves as you move, or as your mouse turns it. (It used to look for a unit
-  that had slipped off, gliding to one side and the other; with only
-  "under the reticle or not" to go by that was a hunt and looked like one.)
+  unit's distance, and it follows a unit that walks. For that it does not
+  search (it used to glide to one side and the other looking for a unit
+  that had slipped off; with only "under the reticle or not" to go by that
+  was a hunt and looked like one). The game tells how fast a unit moves,
+  and its nameplate how fast it comes nearer or goes further off; what is
+  left of its speed is what it moves across the view, and the view turns
+  with it at exactly that rate. Only the side is not told: when a unit
+  walks out from under the reticle the view takes one small step to one
+  side, and one to the other if the unit is not there, then follows without
+  steps until the unit stops, riding at the place in it where you had the
+  reticle (Camera page, "Open reticle: follows a held unit that walks", on
+  by default). While your mouse is turning the view nothing is asked.
   The distance is read from the unit's nameplate: the game sizes a
   nameplate by its distance from the camera and lets an addon read that
   size, though not where the plate is, so the addon keeps that sizing on at
@@ -44,7 +51,8 @@
   secret) the distance comes from the game's range checks instead (five
   yards wide, counted between the two units' hit areas, which is allowed
   for), is kept up as you walk towards the unit or away, and is set right
-  whenever a check changes its answer. The game reports your position in uneven steps; they are evened
+  whenever a check changes its answer. The game reports your position in
+  uneven steps; they are evened
   out, nothing lands in a single frame, and the point the game picks at is
   never moved (that had shifted the reticle and its dot up and down). The
   game does not let soft targeting be switched on in combat,
