@@ -21,15 +21,20 @@
   the target. With nothing selected, the game's own soft target and camera
   focus keep the enemy in front on the reticle; they are switched on only
   while the reticle is held and put back when you let go (Camera page, "Open
-  reticle: other enemies by the game's soft target", on by default). With
-  nothing selected that is the only following: what the soft target does not
-  take is not followed, and nothing is in combat, where the game does not
-  let its soft targeting be switched on. With something else selected, the
-  soft target is tried on the unit under the reticle first: where the game
-  takes it, that unit is followed as exactly and your target stays your
-  target; where it does not, and in combat, the unit is followed from the
-  mouseover alone, which is looser. There the mouse still moves the reticle
-  within the unit,
+  reticle: other enemies by the game's soft target", on by default). The
+  soft target's cone starts at its narrowest and goes wider, step by step,
+  until it has taken the unit under the reticle; nothing else it finds is
+  followed. With nothing selected that is the only following. With
+  something else selected, the soft target is tried on the unit under the
+  reticle in the same way: where the game takes it, that unit is followed
+  as exactly and your target stays your target; where it does not, the unit
+  is followed from the mouseover alone, which is looser. The game does not
+  let soft targeting be switched on in combat, so it is switched on when
+  you select an enemy and kept through the fight, set so that nothing is
+  soft-targeted while the reticle is closed and a target is selected; in a
+  fight that began with nothing selected the reticle follows by the
+  mouseover alone (with a target) or not at all (without). Where the
+  mouseover alone follows, the mouse still moves the reticle within the unit,
   so you can go after a unit that moves and put the reticle where you want
   it; pushing on past the unit's edge turns your character and leaves the
   view on the unit (Camera page, "Open reticle: the mouse moves the reticle
