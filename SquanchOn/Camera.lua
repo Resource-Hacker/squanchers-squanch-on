@@ -840,7 +840,7 @@ local conv = {applied = 0, quiet = huge}
 local gauge, carry = {}, {
   LAG = 0.14,                       -- seconds by which the engine's answer trails a turn (twice its spring's time)
   FOLLOW_RATE = 120,                -- degrees per second at most while the open reticle's hold is taken over
-  NEAR = 10,                        -- yards within which the reticle's hold is left to the engine's own swivel
+  NEAR = 5,                         -- yards within which the reticle's hold is left to the engine's own swivel
   FIRST_PERSON_STEP = 0.5,          -- yards the view steps out of first person while the reticle's hold is on (setting)
   SEEK = 0.1,                       -- seconds the soft target is given at each width of its cone to take the unit under the reticle
   BARE = 0.15,                      -- seconds without a unit under the reticle before nothing is taken to be under it
@@ -2526,7 +2526,13 @@ local function stepConverge(zoom, elapsed)
     end
   end
   -- The reticle's following has ended (closed, or the unit is gone): back to where the view rests.
-  if gate and (c.heldGate or lock.close) then conv.gateFollow = true
+  -- (A unit that came close stopped the following, lock.near: the view then stays where it is until the reticle
+  -- closes, also once the unit has left the reticle. Turned home at once, the view swung off a unit running in to
+  -- melee, up to three degrees a frame; the owner, 2026-11-24: "pushes the reticle off it when its running closer
+  -- to melee, we need this to track better or pvp will be a mess".)
+  if lock.close then conv.closeHeld = true end
+  if not gate then conv.closeHeld = nil end
+  if gate and (c.heldGate or lock.close or conv.closeHeld) then conv.gateFollow = true
   elseif conv.gateFollow then
     conv.gateFollow = nil
     if conv.home ~= nil then conv.homing = true end

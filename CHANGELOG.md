@@ -88,7 +88,13 @@
   gone. Where nine tenths of its speed or more seem to go along the view,
   nothing is turned at first; if the unit then leaves the reticle and is
   found ahead, it does move across, and half of what seemed left is turned
-  for, then all of it; found behind, less again. Where a model's box is
+  for, then all of it; found behind, less again. A unit that runs in
+  close used to be let go at ten yards (by the range checks, about twelve
+  from centre to centre), and the view then swung back to where it rests
+  at up to three degrees a frame the moment the unit left the reticle: it
+  pushed the reticle off a unit running in to melee. It is let go at five
+  yards now, and the view then stays where it is until the reticle closes.
+  Where a model's box is
   much bigger than what the reticle picks (a Clattering Scorpid's box is
   2.93 by 2.13 yards for its claws and legs, its picked body under a
   yard), the glide to the box's middle went out at the unit's far end and
