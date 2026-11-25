@@ -2308,7 +2308,9 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
       -- reticle. If it then leaves and is found ahead, it does move across: half of what seems left is
       -- turned for, then all of it (lock.wants, where it is found). Found behind, the view had run ahead of
       -- it: less again. Below eight tenths what is left is taken as it is.
-      if steady and vel and vel > lock.MOVING and lock.ranged then
+      -- (Not before the first clean reading of its going: a hold begun with the camera pushed in while the view
+      -- turns has none yet, and the line below then failed on every frame until there was one.)
+      if steady and vel and vel > lock.MOVING and lock.ranged and lock.away then
         local along = abs(lock.away) / vel
         if along < 0.8 then
           lock.trim, lock.straightFor = nil, nil
