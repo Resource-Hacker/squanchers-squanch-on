@@ -1544,6 +1544,8 @@ local lock = {
   SLACK = 1.5,                      -- yards a plate's reading may lie outside the range bracket and still be believed
   -- Following a unit that walks (lock.walk).
   MOVING = 0.3,                     -- yards a second from which the unit is taken to walk
+  RUN = 7,                          -- yards a second a unit whose speed is hidden is taken to run at (a run)
+  HIDDEN = 1.0,                     -- yards a second along the view from which a unit whose speed is hidden is taken to move
   TEST = 0.14,                      -- degrees as seen: the one step that asks which way the unit went
   WAIT = 3,                         -- frames a step is given to show the unit under the reticle (and 0.03 s)
   ASKS = 8,                         -- steps in quick succession (they are forgotten at one and a half a second) after which the following gives up
@@ -1582,7 +1584,7 @@ function lock.release()
   lock.long, lock.sure, lock.turned, lock.awayWas, lock.awayAt, lock.radial, lock.behind, lock.shift = nil, nil, nil, nil, nil, nil, nil, nil
   lock.wide, lock.at = nil, nil
   lock.yaw, lock.yawEased, lock.stepped, lock.busy, lock.due, lock.settling, lock.pushed, lock.paying = nil, nil, nil, nil, nil, nil, nil, nil
-  lock.trim, lock.straightFor = nil, nil
+  lock.trim, lock.straightFor, lock.going, lock.hidden = nil, nil, nil, nil
   lock.pick, lock.span, lock.past, lock.spanning, lock.spanEnd, lock.spanFrom, lock.spanOn, lock.outGliding = nil, nil, nil, nil, nil, nil, nil, nil
   lock.spanWay, lock.pickSeen, lock.crossed = nil, nil, nil
 end
@@ -1623,10 +1625,40 @@ function lock.plate(unit, zoom)
   return span.far * (1 - scale) / (1 - span.least) - zoom, scale
 end
 -- How fast the unit moves, as the game tells it (it does not tell which way), or nothing.
+-- Its speed, or nil and true where the game hides it.
 function lock.speed(unit)
   if not GetUnitSpeed then return end
   local ok, speed = pcall(GetUnitSpeed, unit)
-  if ok and not secret(speed) and type(speed) == "number" then return speed end
+  if not ok then return end
+  if secret(speed) then return nil, true end
+  if type(speed) == "number" then return speed end
+end
+-- In a fight the game hides every other unit's speed from addons (the owner's presses of 2026-11-24: in combat
+-- 203 samples of 203, out of it none), and without it nothing that moved was followed: in the simulation, on
+-- the unit 92 per cent of the time with its speed told, 30 to 40 with it hidden. Still told: how fast it comes
+-- nearer or goes off (its plate). In a fight what moves runs. So a unit whose plate says it moves along the
+-- view faster than lock.HIDDEN is taken to run (lock.RUN, or faster where the plate says so) for as long as it
+-- is followed or asked for, and for half a second more; and to stand again once found behind a view that ran
+-- on ahead of it (it stopped, or runs slower). One that runs straight across the view does not come nearer and
+-- is not noticed: a unit slipping off the reticle could also be a standing one the hold slipped off, and taken
+-- for running that cost a standing unit up to a quarter of its time while the character strafed to and fro.
+function lock.guess(elapsed)
+  local away = lock.away
+  -- (Not while the character's own steps come into the reading: at 60 frames a second its wobble while the
+  -- character strafed to and fro was taken for running now and then, and a standing unit was followed off.)
+  local afoot = abs(lock.flow or 0) > 1 or abs(lock.pace or 0) > 0.5
+  if away and abs(away) > lock.HIDDEN and not afoot then lock.going = 0.5 end
+  local m = lock.mode
+  local busy = m == "follow" or m == "ask" or m == "enter" or m == "pass"
+  if lock.going and not busy then
+    lock.going = lock.going - elapsed
+    if lock.going <= 0 then lock.going = nil end
+  end
+  -- (Not seen to move: its speed stays unknown, as the game left it, not nought. A speed of nought makes a
+  -- reading that changes faster than three yards a second untrustworthy, and while the character strafed to and
+  -- fro that cost a standing unit an eighth of its time on the reticle.)
+  if not lock.going then return nil end
+  return max(lock.RUN, abs(away or 0))
 end
 -- A unit that walks is followed (the owner, 2026-11-24: "it should follow the mob"), and without looking for
 -- it. The game tells how fast a unit moves; its nameplate tells how fast it comes nearer or goes further off;
@@ -1908,6 +1940,7 @@ function lock.wants(on, steered, zoom, elapsed, vel, spin, ahead)
         -- It walks on as before; the reticle is at its head. (Found behind again soon after: it had turned.)
         way = -ask.way
         lock.way, lock.behind = way, 1.5
+        if lock.hidden then lock.going = nil end       -- its speed hidden: it stopped, or runs slower than its kind
         -- (Where little of its speed seemed left to go across the view, less of that is turned for: lock.step.)
         if vel and vel > 0 and abs(lock.away or 0) > 0.8 * vel then
           local trim = (lock.trim or 1) * 0.4
@@ -2220,7 +2253,10 @@ function lock.step(c, facing, steered, zoom, offset, elapsed)
   -- frame's steps: the distance is for the next.)
   if lock.asking and lock.measured(elapsed) then lock.sized(lock.kind(guid)) end
   local token = on and "mouseover" or lock.token or lock.unit(false)
-  local vel = token and lock.speed(token)
+  local vel, hidden
+  if token then vel, hidden = lock.speed(token) end
+  lock.hidden = hidden
+  if hidden then vel = lock.guess(elapsed) end
   local spin
   do
     local dt = max(elapsed, 0.001)

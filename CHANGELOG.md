@@ -94,6 +94,15 @@
   at up to three degrees a frame the moment the unit left the reticle: it
   pushed the reticle off a unit running in to melee. It is let go at five
   yards now, and the view then stays where it is until the reticle closes.
+  In a fight the game hides every other unit's speed from addons (in
+  combat 203 samples of 203; out of it none), and without it nothing
+  that moved was followed. Now a unit whose plate says it comes nearer or
+  goes off faster than a yard a second, while the character itself stands,
+  is taken to run (seven yards a second, or faster where the plate says
+  so) until it is found behind a view that ran on ahead of it. A mob
+  running in at an angle stays on the reticle 76 to 97 per cent of the time
+  in the simulation (was 4 to 12); one crossing straight across the view
+  while the character strafes is still not followed.
   Where a model's box is
   much bigger than what the reticle picks (a Clattering Scorpid's box is
   2.93 by 2.13 yards for its claws and legs, its picked body under a
