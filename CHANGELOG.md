@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.4 — 2026-11-24
 
 - Camera: zooming with a target selected turns the view onto it, and the view
   now stays there when the zoom stops instead of swinging back. Where the game

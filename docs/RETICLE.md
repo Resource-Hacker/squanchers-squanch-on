@@ -48,6 +48,43 @@ helper (interact on left-down, target on left-up while right is held) is not
 bundled or required for these features; that historical chord is not an advertised
 portable feature of this release.
 
+## The camera follows what you hold
+
+Hold right mouse on a unit and the view stays on it until you let go, also
+while it walks or runs and while you strafe. Opened on your selected target,
+the game's own camera focus follows the target. With nothing selected, the
+game's soft target and camera focus follow the enemy in front of the reticle;
+they are switched on only while you hold and put back when you let go. Beside
+a selected target (the case no other addon covers) Squanch-On follows the unit
+itself, and your target stays your target, so auto-attack and Auto Shot keep
+shooting it.
+
+WoW gives addons a position for group members and a few starter-zone
+creatures only, and refuses to say where a nameplate is on screen. So the
+follower measures:
+
+- **Distance** from the size of the unit's nameplate. The game sizes plates by
+  their distance from the camera; Squanch-On sets that curve so it is nearly
+  invisible (a plate 30 yards off is about 1% smaller) and reads it back.
+- **Speed** from the game while it says it: with how fast the plate says the
+  unit comes nearer or goes off, that leaves what it moves across the view,
+  and the view turns at that rate. In a fight the game hides every unit's
+  speed; a unit whose plate shows it coming nearer or going off while you
+  stand is then taken to run.
+- **Which way** it went by one small step to one side when it leaves the
+  reticle; the view then glides after it, never sweeping.
+- **Your own movement** paid out by the unit's distance, so a standing unit
+  stays on the reticle while you strafe.
+- **Its body** from the game's own 3D model box, so the view rests on its
+  middle; a unit's real outline, where it is smaller than the box, is learnt
+  from the first two crossings.
+
+Limits: it is a measured estimate, not a lock. In the author's simulation
+(ten runs per case) a unit stays on the reticle about 90% of the time out of
+combat and about half the time in fights, where speeds are hidden; a unit
+running straight across the view while you strafe is the weakest case.
+Units with a position are followed exactly.
+
 ## Target range feedback
 
 The screen-center reticle and selected-target nameplate marker have different

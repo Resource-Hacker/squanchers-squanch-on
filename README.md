@@ -38,7 +38,7 @@ It is made by a Horde Hunter for that character, and it shows:
 · [Changelog](CHANGELOG.md)
 · [Report an issue](https://github.com/Resource-Hacker/squanchers-squanch-on/issues/new?template=bug_report.md)
 
-**1.0.2 · Forever interface 16001 · partly verified in game.**
+**1.0.4 · Forever interface 16001 · partly verified in game.**
 Everything is in one `SquanchOn/` folder: mouselook and reticle, camera, unit
 frames, nameplates, buff and debuff bars, chat, drawers, a bag window, a damage
 meter, tooltip presentation, one settings window, profiles, fonts and textures.
@@ -67,6 +67,7 @@ way it does:
 | --- | --- |
 | **The dot is the game's own pick point.** | While the camera is locked, WoW picks the mouseover unit at one exact spot on screen. The reticle's red dot is drawn on that spot (measured in game to within a quarter of a pixel), and the Horde emblem is built around the dot. What is under the dot is what you will hit: no cone, no guess. |
 | **Mouseover is closed until you ask for it.** | Normal steering never feeds a mouseover ability. Hold right mouse and true mouseover opens at the dot; release and it closes at once. The camera stays locked either way. |
+| **The camera follows what you hold.** | Hold right mouse on a unit and the view stays on it until you let go: while it walks or runs, while you strafe, and beside a selected target (auto-attack keeps shooting your target). WoW does not tell addons where most units are, so Squanch-On measures: distance from the size of the unit's nameplate, speed from the game, the body from its 3D model. [How it follows](docs/RETICLE.md#the-camera-follows-what-you-hold) |
 | **It tells you before you press.** | On a hostile unit under the open gate, the dot lights; within Auto Shot range it glows. The selected target's ring shows melee reach as blocks and ranged or healing reach as rotating triangles, and a friendly ring lights up under the reticle. |
 | **Pure addon, ordinary keyboard and mouse.** | Native bindings only. No key remapper, virtual controller, gamepad mode or helper program. |
 | **The cursor comes home.** | Hold Caps Lock (or Up) for the hardware cursor; release it and the cursor returns to the dot and mouselook relocks, without turning the camera. |
