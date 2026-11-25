@@ -817,7 +817,6 @@ local FOCUS = {"test_cameraTargetFocusEnemyStrengthYaw", "test_cameraTargetFocus
 local FOCUS_SETTLE = 0.3            -- seconds the focus stays on after the zoom stops
 local CARRY_TIME = 0.3              -- seconds: time constant of taking the engine's swivel over as a turn
 local CARRY_RATE = 12               -- degrees per second at most: the engine trails each turn, and the unit strays that much meanwhile
-local CARRY_FRESH = 0.35            -- seconds after the view leaves first person in which nothing of the swivel is taken over
 local AWAY_LIMIT = 75               -- degrees the view is ever turned away from the character's own line
 local CARRY_REST = 0.6              -- degrees of swivel a release may still find
 local CARRY_PATIENCE = 1.3          -- seconds a release waits for the swivel to come down to that
@@ -1211,7 +1210,6 @@ local function beginFocus(reticle)
   carry.total, carry.psi, carry.blind, carry.time, carry.release, carry.stage, carry.ratio, carry.mark, carry.trail, carry.wide, carry.peak = 0, nil, 0, 0, nil, nil, nil, nil, nil, nil, nil
   carry.guid, carry.gone, carry.narrow = nil, nil, nil
   carry.live, carry.arc, carry.seek, carry.seekOff, carry.bare = nil, nil, nil, nil, nil
-  carry.inside, carry.fresh = GetCameraZoom() < 0.5 or nil, nil   -- (a zoom that starts just out of first person counts as leaving it)
   Camera:Wake()                     -- the driver ends the hold, also when the zoom is already at its limit
 end
 -- The zoom is over. A swivel that is still large is carried a moment longer
@@ -1381,17 +1379,6 @@ local function stepCarry(zoom, elapsed)
     end
   end
   carry.facing = facing
-  -- Just out of first person (where the game's focus does not act and the view looks along the character) the
-  -- focus swings the view back onto the target within a tenth of a second, and past it: in the owner's zooms of
-  -- 2026-11-24 16:01-16:02 a swivel of 7 degrees rose in 0.11 s, and taken over meanwhile, the overshoot stayed in
-  -- the view: the reticle stood left of the target, up to a hundred pixels, until it came round (screenshots and
-  -- log lined up). The engine's own spring settles it first; then the taking over goes on as before.
-  if zoom < 0.05 then carry.inside, carry.fresh = true, nil
-  elseif carry.inside then carry.inside, carry.fresh = nil, 0
-  elseif carry.fresh then
-    carry.fresh = carry.fresh + elapsed
-    if carry.fresh > CARRY_FRESH then carry.fresh = nil end
-  end
   if psi then
     local was = carry.psi
     carry.psi = psi
@@ -1408,7 +1395,7 @@ local function stepCarry(zoom, elapsed)
     local trail = carry.trail or carry.total
     trail = trail + (carry.total - trail) * (1 - exp(-elapsed / carry.LAG))
     carry.trail = trail
-    if not carry.stage and was and conv.quiet > 0.05 and not c.heldGate and not carry.fresh then
+    if not carry.stage and was and conv.quiet > 0.05 and not c.heldGate then
       local mark = carry.mark
       if not mark then
         mark = {psi, trail}
@@ -1430,7 +1417,7 @@ local function stepCarry(zoom, elapsed)
     if not carry.stage and not c.heldGate and abs(carry.total) > 2.5 * carry.peak + 3 then carry.stage = "given" end
     -- A release that is due: no more turns, so that the swivel read at the end is where the engine has settled.
     if carry.still then rate = 0 end
-    local step = (carry.stage == "given" or carry.fresh) and 0 or psi * ratio * (1 - exp(-elapsed / CARRY_TIME))
+    local step = carry.stage == "given" and 0 or psi * ratio * (1 - exp(-elapsed / CARRY_TIME))
     if c.heldGate and step ~= 0 and addon.Range then
       -- A unit close by is left to the engine's own swivel, which turns the view in place. Taken over, the
       -- view would have to swing right round the character for every step such a unit takes (seen live: a
